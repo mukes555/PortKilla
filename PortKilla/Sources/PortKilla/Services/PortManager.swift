@@ -74,6 +74,14 @@ class PortManager: ObservableObject {
     func killPort(_ portInfo: PortInfo, force: Bool = false) {
         do {
             try killer.killProcess(pid: portInfo.pid, force: force)
+
+            // Log to history
+            HistoryManager.shared.addEntry(
+                port: portInfo.port,
+                processName: portInfo.processName,
+                action: .killed
+            )
+
             NotificationManager.shared.showSuccess(
                 "Killed process on port \(portInfo.port)"
             )
@@ -100,6 +108,15 @@ class PortManager: ObservableObject {
         }.count
 
         if successCount > 0 {
+            // Log bulk kill
+            for port in portsToKill {
+                 HistoryManager.shared.addEntry(
+                    port: port.port,
+                    processName: port.processName,
+                    action: .killed
+                )
+            }
+
             NotificationManager.shared.showSuccess(
                 "Killed \(successCount) of \(pids.count) processes"
             )

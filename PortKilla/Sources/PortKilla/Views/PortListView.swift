@@ -3,13 +3,44 @@ import SwiftUI
 struct PortListView: View {
     @StateObject private var portManager = PortManager()
     @State private var hoverId: UUID?
-    
+    @State private var searchText = ""
+
     // Commands for keyboard shortcuts
-    // Note: Global shortcuts are handled by AppDelegate/Menu, 
+    // Note: Global shortcuts are handled by AppDelegate/Menu,
     // but view-specific ones can be here if focused.
-    
+
+    var filteredPorts: [PortInfo] {
+        if searchText.isEmpty {
+            return portManager.activePorts
+        } else {
+            return portManager.activePorts.filter { port in
+                String(port.port).contains(searchText) ||
+                port.processName.localizedCaseInsensitiveContains(searchText) ||
+                (port.projectName?.localizedCaseInsensitiveContains(searchText) ?? false)
+            }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
+            // Search Bar
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                TextField("Search ports, processes...", text: $searchText)
+                    .textFieldStyle(PlainTextFieldStyle())
+                if !searchText.isEmpty {
+                    Button(action: { searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(8)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .overlay(Rectangle().frame(height: 1).foregroundColor(Color(nsColor: .separatorColor)), alignment: .bottom)
+
             // Header
             HStack {
                 Text("Port")
@@ -26,18 +57,18 @@ struct PortListView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(Color(nsColor: .controlBackgroundColor))
-            
+
             Divider()
-            
+
             // List
-            if portManager.activePorts.isEmpty {
+            if filteredPorts.isEmpty {
                 VStack {
                     Spacer()
-                    Image(systemName: "checkmark.circle")
+                    Image(systemName: searchText.isEmpty ? "checkmark.circle" : "magnifyingglass")
                         .font(.system(size: 32))
                         .foregroundColor(.secondary)
                         .padding(.bottom, 8)
-                    Text("No active ports found")
+                    Text(searchText.isEmpty ? "No active ports found" : "No results found")
                         .foregroundColor(.secondary)
                     Spacer()
                 }
@@ -45,7 +76,7 @@ struct PortListView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(portManager.activePorts) { port in
+                        ForEach(filteredPorts) { port in
                             PortRowView(port: port, manager: portManager)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
@@ -58,9 +89,9 @@ struct PortListView: View {
                     }
                 }
             }
-            
+
             Divider()
-            
+
             // Footer Controls
             HStack(spacing: 12) {
                 Button(action: {
@@ -74,9 +105,9 @@ struct PortListView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .help("Kill all Node.js processes (Cmd+K)")
-                
+
                 Spacer()
-                
+
                 Button(action: {
                     portManager.refresh()
                 }) {
@@ -84,7 +115,15 @@ struct PortListView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Refresh (Cmd+R)")
-                
+
+                Button(action: {
+                    openHistory()
+                }) {
+                    Image(systemName: "clock")
+                }
+                .buttonStyle(.borderless)
+                .help("History")
+
                 Button(action: {
                     openPreferences()
                 }) {
@@ -92,7 +131,7 @@ struct PortListView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Settings (Cmd+,)")
-                
+
                 Button(action: {
                     NSApplication.shared.terminate(nil)
                 }) {
@@ -106,7 +145,7 @@ struct PortListView: View {
         }
         .frame(width: 400, height: 500)
     }
-    
+
     private func killAllNode() {
         let alert = NSAlert()
         alert.messageText = "Kill All Node.js Processes?"
@@ -114,16 +153,22 @@ struct PortListView: View {
         alert.addButton(withTitle: "Kill")
         alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .warning
-        
+
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
             portManager.killAllPorts(ofType: .nodejs)
         }
     }
-    
+
     private func openPreferences() {
         if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
             appDelegate.showPreferences()
+        }
+    }
+
+    private func openHistory() {
+        if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+            appDelegate.showHistory()
         }
     }
 }
@@ -132,21 +177,21 @@ struct PortRowView: View {
     let port: PortInfo
     @ObservedObject var manager: PortManager
     @State private var showConfirmation = false
-    
+
     var body: some View {
         HStack {
             // Port
-            Text(":\(port.port)")
+            Text(":\(String(port.port))")
                 .font(.system(.body, design: .monospaced))
                 .foregroundColor(Color(nsColor: port.type.color))
                 .frame(width: 60, alignment: .leading)
-            
+
             // Process
             VStack(alignment: .leading, spacing: 2) {
                 Text(port.processName)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.primary)
-                
+
                 if let project = port.projectName {
                     Text(project)
                         .font(.system(size: 11))
@@ -155,13 +200,13 @@ struct PortRowView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .help("PID: \(port.pid)\nCommand: \(port.command)")
-            
+
             // Memory
             Text(port.memoryUsage)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(.secondary)
                 .frame(width: 70, alignment: .trailing)
-            
+
             // Action
             Button(action: {
                 // Check for Option key (Force Kill)

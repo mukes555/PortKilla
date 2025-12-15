@@ -7,6 +7,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
     var popover: NSPopover!
     var preferencesWindowController: PreferencesWindow?
+    var historyWindowController: NSWindowController?
 
     static func main() {
         let app = NSApplication.shared
@@ -59,6 +60,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             preferencesWindowController = PreferencesWindow()
         }
         preferencesWindowController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func showHistory() {
+        if historyWindowController == nil {
+            let historyView = HistoryView()
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 350, height: 400),
+                styleMask: [.titled, .closable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Port History"
+            window.contentViewController = NSHostingController(rootView: historyView)
+            window.center()
+            historyWindowController = NSWindowController(window: window)
+        }
+        historyWindowController?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 

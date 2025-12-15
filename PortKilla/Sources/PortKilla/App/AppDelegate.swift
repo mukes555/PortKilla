@@ -1,12 +1,12 @@
 import Cocoa
+import SwiftUI
 
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
 
     var statusItem: NSStatusItem!
     var popover: NSPopover!
-    // Hold a strong reference to the view controller
-    var contentViewController: PortListViewController!
+    var preferencesWindowController: PreferencesWindow?
 
     static func main() {
         let app = NSApplication.shared
@@ -29,14 +29,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Create popover
         popover = NSPopover()
-        contentViewController = PortListViewController()
-        popover.contentViewController = contentViewController
+        let contentView = PortListView()
+        popover.contentViewController = NSHostingController(rootView: contentView)
         popover.behavior = .transient
         popover.animates = true
+        popover.contentSize = NSSize(width: 400, height: 500)
 
         // Request permissions
         requestAccessibilityPermissions()
-        
+
         // Hide dock icon (make it a background agent / menu bar app only)
         NSApp.setActivationPolicy(.accessory)
     }
@@ -51,6 +52,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 NSApp.activate(ignoringOtherApps: true)
             }
         }
+    }
+
+    func showPreferences() {
+        if preferencesWindowController == nil {
+            preferencesWindowController = PreferencesWindow()
+        }
+        preferencesWindowController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     func requestAccessibilityPermissions() {

@@ -17,7 +17,19 @@ class PortManager: ObservableObject {
     }
 
     init() {
+        // Load initial preference
+        refreshInterval = UserPreferences.shared.refreshInterval
         startAutoRefresh()
+
+        // Listen for changes
+        NotificationCenter.default.addObserver(self, selector: #selector(preferencesChanged), name: .preferencesChanged, object: nil)
+    }
+
+    @objc private func preferencesChanged() {
+        let newInterval = UserPreferences.shared.refreshInterval
+        if abs(refreshInterval - newInterval) > 0.1 {
+            refreshInterval = newInterval
+        }
     }
 
     /// Starts automatic port refreshing

@@ -147,10 +147,25 @@ struct PortListView: View {
     }
 
     private func killAllNode() {
+        let nodePorts = portManager.activePorts.filter { $0.type == .nodejs }
+        let count = nodePorts.count
+
+        if count == 0 {
+            let alert = NSAlert()
+            alert.messageText = "No Node.js Processes Found"
+            alert.informativeText = "There are no active Node.js processes to kill."
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+            return
+        }
+
+        let processList = nodePorts.map { "• \($0.processName) (:\($0.port))" }.joined(separator: "\n")
+
         let alert = NSAlert()
-        alert.messageText = "Kill All Node.js Processes?"
-        alert.informativeText = "This will terminate all running Node.js development servers."
-        alert.addButton(withTitle: "Kill")
+        alert.messageText = "Kill \(count) Node.js Processes?"
+        alert.informativeText = "This will terminate the following processes:\n\n\(processList)\n\nAre you sure?"
+        alert.addButton(withTitle: "Kill All")
         alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .warning
 
@@ -177,6 +192,7 @@ struct PortRowView: View {
     let port: PortInfo
     @ObservedObject var manager: PortManager
     @State private var showConfirmation = false
+    @ObservedObject var watchlistManager = WatchlistManager.shared
 
     var body: some View {
         HStack {
@@ -208,18 +224,31 @@ struct PortRowView: View {
                 .frame(width: 70, alignment: .trailing)
 
             // Action
-            Button(action: {
-                // Check for Option key (Force Kill)
-                if NSEvent.modifierFlags.contains(.option) {
-                    manager.killPort(port, force: true)
-                } else {
-                    showConfirmation = true
+            HStack(spacing: 4) {
+                // Watch Button
+                Button(action: {
+                    watchlistManager.toggleWatch(port.port)
+                }) {
+                    Image(systemName: watchlistManager.isWatched(port.port) ? "eye.fill" : "eye")
+                        .foregroundColor(watchlistManager.isWatched(port.port) ? .blue : .secondary.opacity(0.5))
                 }
-            }) {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.secondary)
+                .buttonStyle(.plain)
+                .help(watchlistManager.isWatched(port.port) ? "Unwatch port" : "Watch port")
+
+                // Kill Button
+                Button(action: {
+                    // Check for Option key (Force Kill)
+                    if NSEvent.modifierFlags.contains(.option) {
+                        manager.killPort(port, force: true)
+                    } else {
+                        showConfirmation = true
+                    }
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             .frame(width: 60, alignment: .trailing)
             .alert(isPresented: $showConfirmation) {
                 Alert(

@@ -64,68 +64,144 @@ class PortManager: ObservableObject {
             let ports = self.scanner.scanActivePorts()
 
             DispatchQueue.main.async {
+                self.checkWatchlist(newPorts: ports)
                 self.activePorts = ports
                 self.isRefreshing = false
             }
         }
     }
 
+    /// Checks for watched ports and notifies if they appear
+    private func checkWatchlist(newPorts: [PortInfo]) {
+        let watched = WatchlistManager.shared.watchedPorts
+        guard !watched.isEmpty else { return }
+
+        let previousPorts = Set(activePorts.map { $0.port })
+
+        for portInfo in newPorts {
+            // If port is watched AND it wasn't active before
+            if watched.contains(portInfo.port) && !previousPorts.contains(portInfo.port) {
+                NotificationManager.shared.showSuccess(
+                    "Watched port \(portInfo.port) is now active (\(portInfo.processName))"
+                )
+                // Log detected
+                HistoryManager.shared.addEntry(
+                    port: portInfo.port,
+                    processName: portInfo.processName,
+                    action: .detected
+                )
+            }
+        }
+    }
+
     /// Kills a specific port
     func killPort(_ portInfo: PortInfo, force: Bool = false) {
-        do {
-            try killer.killProcess(pid: portInfo.pid, force: force)
+        // Run on background thread to prevent UI freeze
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            do {
+                try self.killer.killProcess(pid: portInfo.pid, force: force)
 
-            // Log to history
-            HistoryManager.shared.addEntry(
-                port: portInfo.port,
-                processName: portInfo.processName,
-                action: .killed
-            )
+                // Verify death
+                var isDead = false
+                for _ in 0..<10 { // Wait up to 1 second
+                    if !self.killer.isProcessRunning(portInfo.pid) {
+                        isDead = true
+                        break
+                    }
+                    Thread.sleep(forTimeInterval: 0.1)
+                }
 
-            NotificationManager.shared.showSuccess(
-                "Killed process on port \(portInfo.port)"
-            )
-            // Wait a bit and refresh
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                self.refresh()
+                if isDead {
+                    DispatchQueue.main.async {
+                        // Optimistically remove from list for instant feedback
+                        self.activePorts.removeAll { $0.id == portInfo.id }
+
+                        // Log to history
+                        HistoryManager.shared.addEntry(
+                            port: portInfo.port,
+                            processName: portInfo.processName,
+                            action: .killed
+                        )
+
+                        NotificationManager.shared.showSuccess(
+                            "Killed process on port \(portInfo.port)"
+                        )
+
+                        // Schedule a real refresh just to be safe/sync with system
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            self.refresh()
+                        }
+                    }
+                } else {
+                     throw ProcessKiller.KillError.unknownError("Process did not terminate.")
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    NotificationManager.shared.showError(
+                        "Failed to kill port \(portInfo.port): \(error.localizedDescription)"
+                    )
+                }
             }
-        } catch {
-            NotificationManager.shared.showError(
-                "Failed to kill port \(portInfo.port): \(error.localizedDescription)"
-            )
         }
     }
 
     /// Kills all ports of a specific type
     func killAllPorts(ofType type: PortInfo.PortType) {
-        let portsToKill = activePorts.filter { $0.type == type }
-        let pids = portsToKill.map { $0.pid }
+        // Run on background thread
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let portsToKill = self.activePorts.filter { $0.type == type }
+            let pids = portsToKill.map { $0.pid }
 
-        let results = killer.killProcesses(pids: pids)
-        let successCount = results.values.filter {
-            if case .success = $0 { return true }
-            return false
-        }.count
+            let results = self.killer.killProcesses(pids: pids)
 
-        if successCount > 0 {
-            // Log bulk kill
-            for port in portsToKill {
-                 HistoryManager.shared.addEntry(
-                    port: port.port,
-                    processName: port.processName,
-                    action: .killed
-                )
+            // Verify death for successful kills
+            var deadPids: [Int] = []
+
+            for _ in 0..<10 { // Wait up to 1 second
+                for pid in pids {
+                    if !deadPids.contains(pid) && !self.killer.isProcessRunning(pid) {
+                        deadPids.append(pid)
+                    }
+                }
+                if deadPids.count == pids.count {
+                    break
+                }
+                Thread.sleep(forTimeInterval: 0.1)
             }
 
-            NotificationManager.shared.showSuccess(
-                "Killed \(successCount) of \(pids.count) processes"
-            )
-        } else if !pids.isEmpty {
-            NotificationManager.shared.showError("Failed to kill processes")
-        }
+            let successCount = deadPids.count
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.refresh()
+            DispatchQueue.main.async {
+                if successCount > 0 {
+                    // Remove verified dead ports instantly
+                    self.activePorts.removeAll { port in
+                        deadPids.contains(port.pid)
+                    }
+
+                    // Log bulk kill
+                    for port in portsToKill {
+                         if deadPids.contains(port.pid) {
+                             HistoryManager.shared.addEntry(
+                                port: port.port,
+                                processName: port.processName,
+                                action: .killed
+                            )
+                         }
+                    }
+
+                    NotificationManager.shared.showSuccess(
+                        "Killed \(successCount) of \(pids.count) processes"
+                    )
+                } else if !pids.isEmpty {
+                    NotificationManager.shared.showError("Failed to kill processes")
+                }
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    self.refresh()
+                }
+            }
         }
     }
 }

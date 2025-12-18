@@ -11,7 +11,7 @@ permissions:
 jobs:
   build-and-release:
     runs-on: macos-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,8 +21,9 @@ jobs:
 
       - name: Build and Package
         run: |
-          chmod +x PortKilla/scripts/*.sh
-          ./PortKilla/scripts/create_release.sh
+          cd PortKilla
+          chmod +x scripts/*.sh
+          ./scripts/create_release.sh
 
       - name: Create Release
         uses: softprops/action-gh-release@v1

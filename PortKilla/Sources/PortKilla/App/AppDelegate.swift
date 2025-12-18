@@ -44,13 +44,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Start toggle timer (every 3 seconds)
-        displayTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            self.showMemoryState.toggle()
-            self.updateMenuBar()
-        }
-
         // Create popover
         popover = NSPopover()
         let contentView = PortListView(portManager: portManager)

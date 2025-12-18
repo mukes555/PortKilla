@@ -65,6 +65,10 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 </plist>
 EOF
 
+# 5. Ad-hoc Sign (Crucial for moving the app)
+echo "🔏 Signing App..."
+codesign --force --deep --sign - "$APP_BUNDLE"
+
 echo "✨ Build Complete!"
 echo "✅ App is ready at: $APP_BUNDLE"
 open "$BUILD_DIR"

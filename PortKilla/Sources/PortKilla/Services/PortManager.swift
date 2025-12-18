@@ -5,6 +5,7 @@ import Combine
 class PortManager: ObservableObject {
     @Published var activePorts: [PortInfo] = []
     @Published var isRefreshing = false
+    @Published var lastUpdated: Date = Date()
 
     private let scanner = PortScanner()
     private let killer = ProcessKiller()
@@ -66,6 +67,7 @@ class PortManager: ObservableObject {
             DispatchQueue.main.async {
                 self.checkWatchlist(newPorts: ports)
                 self.activePorts = ports
+                self.lastUpdated = Date()
                 self.isRefreshing = false
             }
         }
@@ -154,7 +156,7 @@ class PortManager: ObservableObject {
             let portsToKill = self.activePorts.filter { $0.type == type }
             let pids = portsToKill.map { $0.pid }
 
-            let results = self.killer.killProcesses(pids: pids)
+            let _ = self.killer.killProcesses(pids: pids)
 
             // Verify death for successful kills
             var deadPids: [Int] = []

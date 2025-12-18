@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PortListView: View {
-    @StateObject private var portManager = PortManager()
+    @ObservedObject var portManager: PortManager
     @State private var hoverId: UUID?
     @State private var searchText = ""
 
@@ -23,6 +23,23 @@ struct PortListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Header Title
+            HStack {
+                Image(systemName: "bolt.fill")
+                    .foregroundColor(.yellow)
+                Text("PortKilla")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                Spacer()
+                Text("v1.0.0")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(12)
+            .background(Color(nsColor: .windowBackgroundColor))
+
+            Divider()
+
             // Search Bar
             HStack {
                 Image(systemName: "magnifyingglass")
@@ -41,10 +58,10 @@ struct PortListView: View {
             .background(Color(nsColor: .controlBackgroundColor))
             .overlay(Rectangle().frame(height: 1).foregroundColor(Color(nsColor: .separatorColor)), alignment: .bottom)
 
-            // Header
+            // Column Headers (Optional, kept for clarity but made subtler)
             HStack {
                 Text("Port")
-                    .frame(width: 60, alignment: .leading)
+                    .frame(width: 80, alignment: .leading)
                 Text("Process")
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text("Memory")
@@ -52,10 +69,10 @@ struct PortListView: View {
                 Text("Action")
                     .frame(width: 60, alignment: .trailing)
             }
-            .font(.system(size: 12, weight: .medium))
+            .font(.system(size: 10, weight: .medium))
             .foregroundColor(.secondary)
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, 4)
             .background(Color(nsColor: .controlBackgroundColor))
 
             Divider()
@@ -93,57 +110,89 @@ struct PortListView: View {
             Divider()
 
             // Footer Controls
-            HStack(spacing: 12) {
-                Button(action: {
-                    killAllNode()
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "trash")
-                        Text("Kill Node")
+            VStack(spacing: 0) {
+                // Status Bar
+                HStack {
+                    Text("📊 \(portManager.activePorts.count) ports active")
+                    Spacer()
+                    Text("Last updated: \(timeAgo(from: portManager.lastUpdated))")
+                }
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background(Color(nsColor: .controlBackgroundColor))
+
+                Divider()
+
+                HStack(spacing: 12) {
+                    Button(action: {
+                        killAllNode()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "trash")
+                            Text("Kill All Dev")
+                        }
                     }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Kill all Node.js processes (Cmd+K)")
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("Kill all Node.js processes (Cmd+K)")
 
-                Spacer()
+                    Spacer()
 
-                Button(action: {
-                    portManager.refresh()
-                }) {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .buttonStyle(.borderless)
-                .help("Refresh (Cmd+R)")
+                    Button(action: {
+                        portManager.refresh()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.clockwise")
+                            Text("Refresh")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("Refresh (Cmd+R)")
 
-                Button(action: {
-                    openHistory()
-                }) {
-                    Image(systemName: "clock")
-                }
-                .buttonStyle(.borderless)
-                .help("History")
+                    Button(action: {
+                        openPreferences()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "gearshape")
+                            Text("Prefs")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("Settings (Cmd+,)")
 
-                Button(action: {
-                    openPreferences()
-                }) {
-                    Image(systemName: "gearshape")
-                }
-                .buttonStyle(.borderless)
-                .help("Settings (Cmd+,)")
+                    // History Button (Icon only)
+                    Button(action: {
+                        openHistory()
+                    }) {
+                        Image(systemName: "clock")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("History")
 
-                Button(action: {
-                    NSApplication.shared.terminate(nil)
-                }) {
-                    Image(systemName: "power")
+                    // Quit Button (Icon only)
+                    Button(action: {
+                        NSApplication.shared.terminate(nil)
+                    }) {
+                        Image(systemName: "power")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Quit PortKilla")
                 }
-                .buttonStyle(.borderless)
-                .help("Quit PortKilla")
+                .padding(12)
+                .background(Color(nsColor: .windowBackgroundColor))
             }
-            .padding(12)
-            .background(Color(nsColor: .windowBackgroundColor))
         }
         .frame(width: 400, height: 500)
+    }
+
+    private func timeAgo(from date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     private func killAllNode() {
@@ -197,22 +246,42 @@ struct PortRowView: View {
     var body: some View {
         HStack {
             // Port
-            Text(":\(String(port.port))")
-                .font(.system(.body, design: .monospaced))
-                .foregroundColor(Color(nsColor: port.type.color))
-                .frame(width: 60, alignment: .leading)
+            HStack(spacing: 4) {
+                Image(systemName: port.type.icon)
+                    .foregroundColor(Color(nsColor: port.type.color))
+                Text(":\(String(port.port))")
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundColor(.primary)
+            }
+            .frame(width: 80, alignment: .leading)
 
             // Process
             VStack(alignment: .leading, spacing: 2) {
-                Text(port.processName)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.primary)
+                HStack {
+                    Text(port.processName)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.primary)
 
-                if let project = port.projectName {
-                    Text(project)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                    if let project = port.projectName {
+                        Text(project)
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 4)
+                            .background(Color.secondary.opacity(0.1))
+                            .cornerRadius(4)
+                    }
                 }
+
+                // Command Line
+                HStack(spacing: 4) {
+                    Text("└─")
+                        .foregroundColor(.secondary)
+                    Text(port.command)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .help("PID: \(port.pid)\nCommand: \(port.command)")

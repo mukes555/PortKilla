@@ -36,7 +36,16 @@ struct PortInfo: Identifiable, Codable {
             case .nodejs: return .systemGreen
             case .database: return .systemYellow
             case .webserver: return .systemOrange
-            case .other: return .systemRed
+            case .other: return .systemGray
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .nodejs: return "hexagon.fill"
+            case .database: return "cylinder.split.1x2.fill"
+            case .webserver: return "globe"
+            case .other: return "gearshape.fill"
             }
         }
     }

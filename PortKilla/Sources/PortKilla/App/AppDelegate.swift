@@ -1,5 +1,6 @@
 import Cocoa
 import SwiftUI
+import Combine
 
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -8,6 +9,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var popover: NSPopover!
     var preferencesWindowController: PreferencesWindow?
     var historyWindowController: NSWindowController?
+
+    let portManager = PortManager()
+    var cancellables = Set<AnyCancellable>()
 
     static func main() {
         let app = NSApplication.shared
@@ -23,14 +27,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "PortKilla")
+            button.image = NSImage(systemSymbolName: "bolt", accessibilityDescription: "PortKilla")
+            button.imagePosition = .imageLeft
             button.action = #selector(togglePopover)
             button.target = self
         }
 
+        // Observe port changes to update icon
+        portManager.$activePorts
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] ports in
+                self?.updateMenuBarIcon(count: ports.count)
+            }
+            .store(in: &cancellables)
+
         // Create popover
         popover = NSPopover()
-        let contentView = PortListView()
+        let contentView = PortListView(portManager: portManager)
         popover.contentViewController = NSHostingController(rootView: contentView)
         popover.behavior = .transient
         popover.animates = true
@@ -41,6 +54,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Hide dock icon (make it a background agent / menu bar app only)
         NSApp.setActivationPolicy(.accessory)
+    }
+
+    func updateMenuBarIcon(count: Int) {
+        guard let button = statusItem.button else { return }
+
+        if count > 0 {
+            // Active state
+            button.image = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Active Ports")
+            button.title = "\(count)"
+        } else {
+            // Idle state
+            button.image = NSImage(systemSymbolName: "bolt", accessibilityDescription: "No Active Ports")
+            button.title = ""
+        }
     }
 
     @objc func togglePopover() {

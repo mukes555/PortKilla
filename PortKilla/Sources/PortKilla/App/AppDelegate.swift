@@ -3,15 +3,18 @@ import SwiftUI
 import Combine
 
 @main
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     var statusItem: NSStatusItem!
     var popover: NSPopover!
-    var preferencesWindowController: PreferencesWindow?
-    var historyWindowController: NSWindowController?
+    var historyWindow: NSWindow?
 
     let portManager = PortManager()
     var cancellables = Set<AnyCancellable>()
+
+    // Toggle state for menu bar display
+    var showMemoryState = false
+    var displayTimer: Timer?
 
     static func main() {
         let app = NSApplication.shared
@@ -36,14 +39,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Observe port changes to update icon
         portManager.$activePorts
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] ports in
-                self?.updateMenuBarIcon(count: ports.count)
+            .sink { [weak self] _ in
+                self?.updateMenuBar()
             }
             .store(in: &cancellables)
+
+        // Start toggle timer (every 3 seconds)
+        displayTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            self.showMemoryState.toggle()
+            self.updateMenuBar()
+        }
 
         // Create popover
         popover = NSPopover()
         let contentView = PortListView(portManager: portManager)
+            .environmentObject(self)
         popover.contentViewController = NSHostingController(rootView: contentView)
         popover.behavior = .transient
         popover.animates = true
@@ -56,8 +67,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
     }
 
-    func updateMenuBarIcon(count: Int) {
+    func updateMenuBar() {
         guard let button = statusItem.button else { return }
+        let count = portManager.activePorts.count
 
         if count > 0 {
             // Active state
@@ -82,29 +94,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func showPreferences() {
-        if preferencesWindowController == nil {
-            preferencesWindowController = PreferencesWindow()
-        }
-        preferencesWindowController?.showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
     func showHistory() {
-        if historyWindowController == nil {
+        if historyWindow == nil {
             let historyView = HistoryView()
-            let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 350, height: 400),
-                styleMask: [.titled, .closable],
+            historyWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+                styleMask: [.titled, .closable, .resizable],
                 backing: .buffered,
                 defer: false
             )
-            window.title = "Port History"
-            window.contentViewController = NSHostingController(rootView: historyView)
-            window.center()
-            historyWindowController = NSWindowController(window: window)
+            historyWindow?.center()
+            historyWindow?.title = "PortKilla History"
+            historyWindow?.contentViewController = NSHostingController(rootView: historyView)
+            historyWindow?.isReleasedWhenClosed = false
         }
-        historyWindowController?.showWindow(nil)
+
+        historyWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 

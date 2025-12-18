@@ -19,9 +19,10 @@ class PortScanner {
 
         do {
             try task.run()
-            task.waitUntilExit()
 
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            task.waitUntilExit()
+
             guard let output = String(data: data, encoding: .utf8) else {
                 return []
             }
@@ -57,7 +58,7 @@ class PortScanner {
             let addressComponents = components[8].split(separator: ":")
             guard let portString = addressComponents.last,
                   let port = Int(portString) else { continue }
-            
+
             // Filter out duplicate ports if multiple processes share it (rare but possible)
             // or if the same process listens on IPv4 and IPv6
             if ports.contains(where: { $0.port == port }) {
@@ -66,7 +67,7 @@ class PortScanner {
 
             // Get process details
             let command = getProcessCommand(pid: pid)
-            let memory = getProcessMemory(pid: pid)
+            let (memory, memoryKb) = getProcessMemory(pid: pid)
             let type = determinePortType(processName: processName, command: command)
             let projectName = extractProjectName(command: command)
 
@@ -77,6 +78,7 @@ class PortScanner {
                 command: command,
                 user: user,
                 memoryUsage: memory,
+                memorySizeKB: memoryKb,
                 type: type,
                 projectName: projectName
             )
@@ -89,20 +91,92 @@ class PortScanner {
 
     /// Determines port type based on process information
     private func determinePortType(processName: String, command: String) -> PortInfo.PortType {
-        let nodeProcesses = ["node", "npm", "yarn", "pnpm", "next", "vite", "webpack", "bun", "deno"]
-        let databases = ["postgres", "mysql", "mongod", "redis-server", "mariadb", "mysqld"]
-        let webServers = ["apache", "nginx", "httpd", "caddy"]
-
         let lowerProcess = processName.lowercased()
         let lowerCommand = command.lowercased()
 
+        // Node.js & JS Ecosystem
+        let nodeProcesses = ["node", "npm", "yarn", "pnpm", "next", "vite", "webpack", "bun", "deno"]
         if nodeProcesses.contains(where: { lowerProcess.contains($0) }) ||
            lowerCommand.contains("npm") || lowerCommand.contains("node") {
             return .nodejs
-        } else if databases.contains(where: { lowerProcess.contains($0) }) {
+        }
+
+        // Databases
+        let databases = ["postgres", "mysql", "mongod", "redis-server", "mariadb", "mysqld", "docker-proxy"]
+        if databases.contains(where: { lowerProcess.contains($0) }) {
             return .database
-        } else if webServers.contains(where: { lowerProcess.contains($0) }) {
+        }
+
+        // Web Servers
+        let webServers = ["apache", "nginx", "httpd", "caddy"]
+        if webServers.contains(where: { lowerProcess.contains($0) }) {
             return .webserver
+        }
+
+        // Python
+        if lowerProcess.contains("python") || lowerCommand.contains("python") || lowerCommand.contains("gunicorn") || lowerCommand.contains("uvicorn") {
+            return .python
+        }
+
+        // Java
+        if lowerProcess.contains("java") || lowerCommand.contains("java") || lowerCommand.contains("gradle") || lowerCommand.contains("mvn") {
+            return .java
+        }
+
+        // Ruby
+        if lowerProcess.contains("ruby") || lowerCommand.contains("rails") || lowerCommand.contains("bundle") {
+            return .ruby
+        }
+
+        // PHP
+        if lowerProcess.contains("php") || lowerCommand.contains("php") || lowerCommand.contains("laravel") {
+            return .php
+        }
+
+        // Go
+        if lowerProcess.contains("go") || lowerCommand.contains("go run") || lowerCommand.contains("air") {
+            return .go
+        }
+
+        // Docker
+        if lowerProcess.contains("docker") || lowerProcess.contains("com.docker") {
+            return .docker
+        }
+
+        // IDEs & Tools
+        let ideTools = [
+            "antigravi", // Google's internal tool
+            "cursor",
+            "trae",
+            "code helper", // VS Code
+            "xcode",
+            "electron",
+            "google chrome",
+            "slack",
+            "intellij", // IntelliJ IDEA
+            "idea",     // IntelliJ IDEA process name often 'idea'
+            "pycharm",
+            "webstorm",
+            "phpstorm",
+            "goland",
+            "rider",
+            "rubymine",
+            "datagrip",
+            "appcode",
+            "clion",
+            "android studio",
+            "sublime text",
+            "atom",
+            "nova",
+            "bbedit",
+            "coteditor",
+            "textmate",
+            "zed",      // Zed Editor
+            "fleet",    // Fleet Editor
+            "windsurf"  // Windsurf
+        ]
+        if ideTools.contains(where: { lowerProcess.contains($0) }) {
+            return .ide
         }
 
         return .other
@@ -129,7 +203,7 @@ class PortScanner {
     }
 
     /// Gets memory usage for a process
-    private func getProcessMemory(pid: Int) -> String {
+    private func getProcessMemory(pid: Int) -> (String, Int) {
         let task = Process()
         let pipe = Pipe()
 
@@ -144,13 +218,13 @@ class PortScanner {
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             if let output = String(data: data, encoding: .utf8),
                let kb = Int(output.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                return formatMemory(kilobytes: kb)
+                return (formatMemory(kilobytes: kb), kb)
             }
         } catch {
-            return "N/A"
+            return ("N/A", 0)
         }
 
-        return "N/A"
+        return ("N/A", 0)
     }
 
     /// Formats memory size
@@ -171,7 +245,7 @@ class PortScanner {
         // This is tricky because `ps` command output might not show CWD.
         // `lsof -p PID -F n` might give open files including CWD but that's expensive.
         // We can try to guess from the command arguments if they contain paths.
-        
+
         let components = command.components(separatedBy: "/")
         for (index, component) in components.enumerated() {
             if ["projects", "workspace", "dev", "code"].contains(component.lowercased()) {

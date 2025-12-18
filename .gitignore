@@ -1,0 +1,21 @@
+# System Files
+.DS_Store
+**/*.DS_Store
+.netrc
+
+# Swift & Xcode Build Artifacts
+.build/
+.swiftpm/
+Packages/
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+
+# Custom Build Outputs (PortKilla)
+Release/
+Dist/
+
+# Local/Temporary Files
+plan.md
+*.log

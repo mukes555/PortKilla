@@ -11,16 +11,30 @@ class ProcessKiller {
 
     /// Kills a process by PID
     func killProcess(pid: Int, force: Bool = false) throws {
+        // Log attempt
+        print("ProcessKiller: Attempting to kill PID \(pid) (force: \(force))")
+        
         // Try the C-level kill function first, as it's more direct and reliable than spawning a Process
         let signal = force ? SIGKILL : SIGTERM
 
         // kill(pid, signal) returns 0 on success, -1 on error
         if kill(pid_t(pid), signal) == 0 {
+            print("ProcessKiller: Successfully sent signal \(signal) to PID \(pid)")
+            return
+        }
+        
+        let errorCode = errno
+        print("ProcessKiller: C-level kill failed with error code: \(errorCode)")
+
+        // If process not found (ESRCH), it's effectively dead
+        if errorCode == ESRCH {
+            print("ProcessKiller: Process \(pid) not found (already dead)")
             return
         }
 
         // If SIGTERM failed and we haven't forced yet, try forcing
-        if !force && errno != ESRCH { // ESRCH means process not found
+        if !force { 
+            print("ProcessKiller: SIGTERM failed, escalating to SIGKILL for PID \(pid)")
             if kill(pid_t(pid), SIGKILL) == 0 {
                 return
             }
@@ -28,6 +42,7 @@ class ProcessKiller {
 
         // If C-level kill failed, let's try the shell command as a fallback
         // This is useful if there are weird environment/path issues
+        print("ProcessKiller: Falling back to shell command for PID \(pid)")
         let task = Process()
         task.launchPath = "/bin/kill"
         task.arguments = ["-9", "\(pid)"] // Force kill
@@ -43,7 +58,9 @@ class ProcessKiller {
             if task.terminationStatus != 0 {
                 throw KillError.unknownError("Failed to kill process \(pid).")
             }
+            print("ProcessKiller: Shell kill command succeeded for PID \(pid)")
         } catch {
+            print("ProcessKiller: Shell kill command failed: \(error)")
             throw KillError.unknownError(error.localizedDescription)
         }
     }

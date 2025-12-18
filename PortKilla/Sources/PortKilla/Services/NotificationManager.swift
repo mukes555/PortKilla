@@ -10,12 +10,12 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         super.init()
         // We defer requesting permissions until needed, or check if we have a bundle ID.
         // Running via 'swift run' often lacks a proper bundle ID, causing UNUserNotificationCenter to crash.
-
+        
         if Bundle.main.bundleIdentifier != nil {
             setupNotifications()
         }
     }
-
+    
     private func setupNotifications() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
             if let error = error {
@@ -31,7 +31,7 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             print("[Success] \(message)")
             return
         }
-
+        
         let content = UNMutableNotificationContent()
         content.title = "PortKilla"
         content.body = message
@@ -46,7 +46,7 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             print("[Error] \(message)")
             return
         }
-
+        
         let content = UNMutableNotificationContent()
         content.title = "PortKilla Error"
         content.body = message
@@ -61,7 +61,7 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             print("[Warning] \(message)")
             return
         }
-
+        
         let content = UNMutableNotificationContent()
         content.title = "PortKilla Warning"
         content.body = message

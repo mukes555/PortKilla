@@ -4,12 +4,21 @@ import Combine
 // MARK: - PortManager
 class PortManager: ObservableObject {
     @Published var activePorts: [PortInfo] = []
+    @Published var activeTests: [TestProcessInfo] = []
     @Published var isRefreshing = false
     @Published var lastUpdated: Date = Date()
 
     private let scanner = PortScanner()
+    private let processScanner = ProcessScanner()
     private let killer = ProcessKiller()
     private var refreshTimer: Timer?
+
+    // Processes that should NEVER be killed by "Kill All" actions
+    private let safeProcessNames = [
+        "code helper", "cursor", "trae", "xcode", "antigravi", "google chrome", "slack", "electron",
+        "intellij", "idea", "pycharm", "webstorm", "phpstorm", "goland", "rider", "rubymine", "datagrip", "appcode", "clion", "android studio",
+        "sublime text", "atom", "nova", "bbedit", "coteditor", "textmate", "zed", "fleet", "windsurf"
+    ]
 
     var refreshInterval: TimeInterval = 2.0 {
         didSet {
@@ -35,6 +44,12 @@ class PortManager: ObservableObject {
 
     /// Starts automatic port refreshing
     func startAutoRefresh() {
+        // 0 means manual refresh only
+        if refreshInterval <= 0 {
+            stopAutoRefresh()
+            return
+        }
+
         refreshTimer = Timer.scheduledTimer(
             withTimeInterval: refreshInterval,
             repeats: true
@@ -44,6 +59,25 @@ class PortManager: ObservableObject {
         refresh() // Initial refresh
     }
 
+    // MARK: - Computed Properties
+    var totalPortsMemory: String {
+        let kb = activePorts.reduce(0) { $0 + $1.memorySizeKB }
+        return formatMemory(kb)
+    }
+
+    var totalTestsMemory: String {
+        let kb = activeTests.reduce(0) { $0 + $1.memorySizeKB }
+        return formatMemory(kb)
+    }
+
+    private func formatMemory(_ kb: Int) -> String {
+        let mb = Double(kb) / 1024.0
+        if mb < 1 { return "\(kb) KB" }
+        else if mb < 1024 { return String(format: "%.1f MB", mb) }
+        else { return String(format: "%.2f GB", mb / 1024.0) }
+    }
+
+    // MARK: - Actions
     /// Stops automatic refreshing
     func stopAutoRefresh() {
         refreshTimer?.invalidate()
@@ -63,10 +97,12 @@ class PortManager: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             let ports = self.scanner.scanActivePorts()
+            let tests = self.processScanner.scanTestProcesses()
 
             DispatchQueue.main.async {
                 self.checkWatchlist(newPorts: ports)
                 self.activePorts = ports
+                self.activeTests = tests
                 self.lastUpdated = Date()
                 self.isRefreshing = false
             }
@@ -126,9 +162,9 @@ class PortManager: ObservableObject {
                             action: .killed
                         )
 
-                        NotificationManager.shared.showSuccess(
-                            "Killed process on port \(portInfo.port)"
-                        )
+                        // NotificationManager.shared.showSuccess(
+                        //     "Killed process on port \(portInfo.port)"
+                        // )
 
                         // Schedule a real refresh just to be safe/sync with system
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
@@ -140,9 +176,41 @@ class PortManager: ObservableObject {
                 }
             } catch {
                 DispatchQueue.main.async {
-                    NotificationManager.shared.showError(
-                        "Failed to kill port \(portInfo.port): \(error.localizedDescription)"
-                    )
+                    // NotificationManager.shared.showError(
+                    //     "Failed to kill port \(portInfo.port): \(error.localizedDescription)"
+                    // )
+                }
+            }
+        }
+    }
+
+    /// Kills a specific test process
+    func killTestProcess(_ testInfo: TestProcessInfo, force: Bool = false) {
+        // Run on background thread
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            do {
+                try self.killer.killProcess(pid: testInfo.pid, force: force)
+
+                // Verify death
+                var isDead = false
+                for _ in 0..<10 {
+                    if !self.killer.isProcessRunning(testInfo.pid) {
+                        isDead = true
+                        break
+                    }
+                    Thread.sleep(forTimeInterval: 0.1)
+                }
+
+                if isDead {
+                    DispatchQueue.main.async {
+                        self.activeTests.removeAll { $0.id == testInfo.id }
+                        // NotificationManager.shared.showSuccess("Killed test process: \(testInfo.processName)")
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    // NotificationManager.shared.showError("Failed to kill test: \(error.localizedDescription)")
                 }
             }
         }
@@ -153,7 +221,21 @@ class PortManager: ObservableObject {
         // Run on background thread
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            let portsToKill = self.activePorts.filter { $0.type == type }
+
+            // Filter ports to kill, excluding safe processes
+            let portsToKill = self.activePorts.filter { port in
+                // Must match type
+                guard port.type == type else { return false }
+
+                // Check against safe list
+                let processName = port.processName.lowercased()
+                let isSafe = self.safeProcessNames.contains { safeName in
+                    processName.contains(safeName)
+                }
+
+                return !isSafe
+            }
+
             let pids = portsToKill.map { $0.pid }
 
             let _ = self.killer.killProcesses(pids: pids)
@@ -193,11 +275,11 @@ class PortManager: ObservableObject {
                          }
                     }
 
-                    NotificationManager.shared.showSuccess(
-                        "Killed \(successCount) of \(pids.count) processes"
-                    )
+                    // NotificationManager.shared.showSuccess(
+                    //     "Killed \(successCount) of \(pids.count) processes"
+                    // )
                 } else if !pids.isEmpty {
-                    NotificationManager.shared.showError("Failed to kill processes")
+                    // NotificationManager.shared.showError("Failed to kill processes")
                 }
 
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {

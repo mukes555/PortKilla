@@ -23,14 +23,14 @@ jobs:
         run: |
           cd PortKilla
           chmod +x scripts/*.sh
-          ./scripts/create_release.sh
+          ./scripts/build.sh release --package
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            PortKilla/Dist/*.zip
-            PortKilla/Dist/*.dmg
+            PortKilla/Builds/Dist/*.zip
+            PortKilla/Builds/Dist/*.dmg
           draft: false
           prerelease: false
           generate_release_notes: true

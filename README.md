@@ -26,11 +26,12 @@
 PortKilla is written in native Swift for maximum performance and minimal battery impact.
 
 ```bash
-git clone https://github.com/yourusername/portkilla.git
-cd portkilla/PortKilla
-swift build -c release
-open .build/release/PortKilla.app
+git clone https://github.com/mukes555/PortKilla.git
+cd PortKilla
+./PortKilla/scripts/build.sh
 ```
+
+The app will be built and the folder containing `PortKilla.app` will open automatically. Drag it to your Applications folder.
 
 ## 🖥 Usage
 

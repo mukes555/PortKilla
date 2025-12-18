@@ -13,8 +13,7 @@ DerivedData/
 xcuserdata/
 
 # Custom Build Outputs (PortKilla)
-Release/
-Dist/
+PortKilla/scripts/Build/
 
 # Local/Temporary Files
 plan.md

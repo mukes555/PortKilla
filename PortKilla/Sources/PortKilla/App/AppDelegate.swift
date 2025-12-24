@@ -53,9 +53,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         popover.animates = true
         popover.contentSize = NSSize(width: 400, height: 500)
 
-        // Request permissions
-        requestAccessibilityPermissions()
-
         // Hide dock icon (make it a background agent / menu bar app only)
         NSApp.setActivationPolicy(.accessory)
     }
@@ -104,12 +101,5 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         historyWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-    }
-
-    func requestAccessibilityPermissions() {
-        let options: NSDictionary = [
-            kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
-        ]
-        AXIsProcessTrustedWithOptions(options)
     }
 }

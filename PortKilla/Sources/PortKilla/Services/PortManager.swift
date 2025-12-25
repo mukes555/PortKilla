@@ -27,18 +27,19 @@ class PortManager: ObservableObject {
     }
 
     init() {
-        // Load initial preference
-        refreshInterval = UserPreferences.shared.refreshInterval
         startAutoRefresh()
-
-        // Listen for changes
-        NotificationCenter.default.addObserver(self, selector: #selector(preferencesChanged), name: .preferencesChanged, object: nil)
     }
 
-    @objc private func preferencesChanged() {
-        let newInterval = UserPreferences.shared.refreshInterval
-        if abs(refreshInterval - newInterval) > 0.1 {
-            refreshInterval = newInterval
+    func killablePorts(ofType type: PortInfo.PortType) -> [PortInfo] {
+        activePorts.filter { port in
+            guard port.type == type else { return false }
+
+            let processName = port.processName.lowercased()
+            let isSafe = safeProcessNames.contains { safeName in
+                processName.contains(safeName)
+            }
+
+            return !isSafe
         }
     }
 
@@ -100,34 +101,10 @@ class PortManager: ObservableObject {
             let tests = self.processScanner.scanTestProcesses()
 
             DispatchQueue.main.async {
-                self.checkWatchlist(newPorts: ports)
                 self.activePorts = ports
                 self.activeTests = tests
                 self.lastUpdated = Date()
                 self.isRefreshing = false
-            }
-        }
-    }
-
-    /// Checks for watched ports and notifies if they appear
-    private func checkWatchlist(newPorts: [PortInfo]) {
-        let watched = WatchlistManager.shared.watchedPorts
-        guard !watched.isEmpty else { return }
-
-        let previousPorts = Set(activePorts.map { $0.port })
-
-        for portInfo in newPorts {
-            // If port is watched AND it wasn't active before
-            if watched.contains(portInfo.port) && !previousPorts.contains(portInfo.port) {
-                NotificationManager.shared.showSuccess(
-                    "Watched port \(portInfo.port) is now active (\(portInfo.processName))"
-                )
-                // Log detected
-                HistoryManager.shared.addEntry(
-                    port: portInfo.port,
-                    processName: portInfo.processName,
-                    action: .detected
-                )
             }
         }
     }
@@ -162,10 +139,6 @@ class PortManager: ObservableObject {
                             action: .killed
                         )
 
-                        // NotificationManager.shared.showSuccess(
-                        //     "Killed process on port \(portInfo.port)"
-                        // )
-
                         // Schedule a real refresh just to be safe/sync with system
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                             self.refresh()
@@ -176,9 +149,6 @@ class PortManager: ObservableObject {
                 }
             } catch {
                 DispatchQueue.main.async {
-                    // NotificationManager.shared.showError(
-                    //     "Failed to kill port \(portInfo.port): \(error.localizedDescription)"
-                    // )
                 }
             }
         }
@@ -205,12 +175,10 @@ class PortManager: ObservableObject {
                 if isDead {
                     DispatchQueue.main.async {
                         self.activeTests.removeAll { $0.id == testInfo.id }
-                        // NotificationManager.shared.showSuccess("Killed test process: \(testInfo.processName)")
                     }
                 }
             } catch {
                 DispatchQueue.main.async {
-                    // NotificationManager.shared.showError("Failed to kill test: \(error.localizedDescription)")
                 }
             }
         }
@@ -223,18 +191,7 @@ class PortManager: ObservableObject {
             guard let self = self else { return }
 
             // Filter ports to kill, excluding safe processes
-            let portsToKill = self.activePorts.filter { port in
-                // Must match type
-                guard port.type == type else { return false }
-
-                // Check against safe list
-                let processName = port.processName.lowercased()
-                let isSafe = self.safeProcessNames.contains { safeName in
-                    processName.contains(safeName)
-                }
-
-                return !isSafe
-            }
+            let portsToKill = self.killablePorts(ofType: type)
 
             let pids = portsToKill.map { $0.pid }
 
@@ -274,12 +231,7 @@ class PortManager: ObservableObject {
                             )
                          }
                     }
-
-                    // NotificationManager.shared.showSuccess(
-                    //     "Killed \(successCount) of \(pids.count) processes"
-                    // )
                 } else if !pids.isEmpty {
-                    // NotificationManager.shared.showError("Failed to kill processes")
                 }
 
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {

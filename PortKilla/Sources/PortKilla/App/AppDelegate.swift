@@ -12,10 +12,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     let portManager = PortManager()
     var cancellables = Set<AnyCancellable>()
 
-    // Toggle state for menu bar display
-    var showMemoryState = false
-    var displayTimer: Timer?
-
     static func main() {
         let app = NSApplication.shared
         let delegate = AppDelegate()

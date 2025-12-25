@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 struct PortListView: View {
     @ObservedObject var portManager: PortManager
@@ -7,6 +8,11 @@ struct PortListView: View {
     @State private var selectedTab = 0
     @State private var eventMonitor: Any?
     @State private var selectedCategory: PortInfo.PortCategory? = nil
+
+    var appVersionText: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        return "v\(version ?? "dev")"
+    }
 
     // Commands for keyboard shortcuts
     // Note: Global shortcuts are handled by AppDelegate/Menu,
@@ -114,7 +120,7 @@ struct PortListView: View {
 
             Spacer()
 
-            Text("v1.0.0")
+            Text(appVersionText)
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -325,16 +331,7 @@ struct PortListView: View {
     }
 
     func killAllNode() {
-        let nodePorts = portManager.activePorts.filter {
-            // Only select Node.js ports AND filter out safe processes (to keep count accurate with what will actually happen)
-            guard $0.type == .nodejs else { return false }
-
-            // Re-use logic from PortManager or duplicate it here for UI consistency
-            // Ideally PortManager should expose a "killablePorts(ofType:)" method, but we can do a quick check:
-            let safeNames = ["code helper", "cursor", "trae", "xcode", "antigravi", "google chrome", "slack", "electron"]
-            let processName = $0.processName.lowercased()
-            return !safeNames.contains { processName.contains($0) }
-        }
+        let nodePorts = portManager.killablePorts(ofType: .nodejs)
         let count = nodePorts.count
 
         if count == 0 {
@@ -453,7 +450,6 @@ struct PortRowView: View {
     let port: PortInfo
     @ObservedObject var manager: PortManager
     @State private var showConfirmation = false
-    @ObservedObject var watchlistManager = WatchlistManager.shared
 
     var body: some View {
         HStack {
@@ -506,16 +502,6 @@ struct PortRowView: View {
 
             // Action
             HStack(spacing: 4) {
-                // Watch Button
-                Button(action: {
-                    watchlistManager.toggleWatch(port.port)
-                }) {
-                    Image(systemName: watchlistManager.isWatched(port.port) ? "eye.fill" : "eye")
-                        .foregroundColor(watchlistManager.isWatched(port.port) ? .blue : .secondary.opacity(0.5))
-                }
-                .buttonStyle(.plain)
-                .help(watchlistManager.isWatched(port.port) ? "Unwatch port" : "Watch port")
-
                 // Kill Button
                 Button(action: {
                     // Check for Option key (Force Kill)
@@ -540,7 +526,6 @@ struct PortRowView: View {
                         title: Text("Kill Process on :\(port.port)?"),
                         message: Text("Are you sure you want to kill '\(port.processName)' (PID: \(port.pid))?"),
                         primaryButton: .destructive(Text("Kill")) {
-                            print("Attempting to kill port \(port.port)")
                             manager.killPort(port)
                         },
                         secondaryButton: .cancel()

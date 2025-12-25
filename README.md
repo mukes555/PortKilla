@@ -6,18 +6,18 @@
 
 ## 🚀 Key Features
 
-*   **Kill Processes by Port**: Instantly find which PID is using a port (e.g., 3000, 8080) and terminate it with one click.
-*   **Zombie Process Killer**: Identify and force-kill stuck background processes that refuse to quit.
-*   **Test Runner Radar**: Automatically detect and clean up lingering test runners (Jest, Vitest) consuming memory in the background.
-*   **Context-Aware Actions**: Dedicated shortcuts to "Kill All Node" or "Kill All Tests" for rapid development resets.
-*   **Port Monitoring**: Watch specific ports and get notified when they become active.
-*   **Session History**: Log active ports and export activity to CSV for debugging.
+*   **See What’s Listening**: Lists active listening TCP ports with process name, command, and memory.
+*   **Kill by Port**: Kill a single process with confirmation.
+*   **Force Kill**: Hold Option while clicking kill to send SIGKILL.
+*   **Kill All Dev (Node.js)**: One-click bulk kill for Node.js ports (with a safe list to avoid common IDEs/tools).
+*   **Test Radar (Beta)**: Detect common test runners (Jest/Vitest/Mocha/etc) and kill them from a dedicated tab.
+*   **History + CSV Export**: View recent kills and export to CSV.
 
 ## ⚡ Productivity Shortcuts
 
 *   **Global Access**: Lives in your menu bar for instant availability.
 *   **Cmd+R**: Refresh active ports list.
-*   **Cmd+K**: Kill all development processes (Node.js/Python).
+*   **Cmd+K**: Kill all Node.js ports (Ports tab) or all tests (Test Radar tab).
 *   **Option+Click**: Force kill (SIGKILL) stubborn processes.
 
 ## 📦 Installation
@@ -28,17 +28,32 @@ PortKilla is written in native Swift for maximum performance and minimal battery
 ```bash
 git clone https://github.com/mukes555/PortKilla.git
 cd PortKilla
-./PortKilla/scripts/build.sh
+./scripts/build.sh
 ```
 
-The app will be built and the folder containing `PortKilla.app` will open automatically. Drag it to your Applications folder.
+Build output lands in `dist/`:
+
+- `dist/PortKilla.app`
+
+Drag `PortKilla.app` to `/Applications`.
+
+### Build a DMG (optional)
+
+```bash
+./scripts/build.sh --dmg
+```
+
+This produces `dist/PortKilla-1.0.2.dmg`.
+
+To distribute to other Macs without Gatekeeper prompts, you’ll eventually want Developer ID signing + notarization.
 
 ## 🖥 Usage
 
 1.  **Open PortKilla** from your menu bar (Lightning bolt icon).
 2.  **View Active Ports**: See a categorized list of Web, Database, and other processes.
 3.  **Free a Port**: Hover over any row and click **X** to kill the process.
-4.  **Auto-Refresh**: Toggle between Manual, 2s, or 5s refresh intervals via the Eye icon.
+4.  **Auto-Refresh**: Use the Eye menu to choose Manual/2s/5s/10s/30s.
+5.  **History**: Click the Clock icon to view and export history.
 
 ## 🤝 Contributing
 

@@ -22,15 +22,16 @@ jobs:
       - name: Build and Package
         run: |
           cd PortKilla
-          chmod +x scripts/*.sh
-          ./scripts/build.sh release --package
+          chmod +x scripts/build.sh
+          ./scripts/build.sh --dmg
+          ditto -c -k --sequesterRsrc --keepParent dist/PortKilla.app dist/PortKilla.app.zip
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            PortKilla/Builds/Dist/*.zip
-            PortKilla/Builds/Dist/*.dmg
+            PortKilla/dist/*.zip
+            PortKilla/dist/*.dmg
           draft: false
           prerelease: false
           generate_release_notes: true

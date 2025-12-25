@@ -15,21 +15,50 @@ class PortManager: ObservableObject {
     private let killer = ProcessKiller()
     private var refreshTimer: Timer?
     private var toastWorkItem: DispatchWorkItem?
+    private var shouldRestartTimerOnIntervalChange = false
 
-    // Processes that should NEVER be killed by "Kill All" actions
-    private let safeProcessNames = [
+    private enum DefaultsKeys {
+        static let refreshIntervalSeconds = "PortKilla.refreshIntervalSeconds"
+        static let protectedProcessSubstrings = "PortKilla.protectedProcessSubstrings"
+    }
+
+    private static let defaultProtectedProcessSubstrings = [
         "code helper", "cursor", "trae", "xcode", "antigravi", "google chrome", "slack", "electron",
         "intellij", "idea", "pycharm", "webstorm", "phpstorm", "goland", "rider", "rubymine", "datagrip", "appcode", "clion", "android studio",
         "sublime text", "atom", "nova", "bbedit", "coteditor", "textmate", "zed", "fleet", "windsurf"
     ]
 
-    var refreshInterval: TimeInterval = 2.0 {
+    @Published var protectedProcessSubstrings: [String] = [] {
         didSet {
-            restartTimer()
+            let normalized = Self.normalizeProtectedProcessSubstrings(protectedProcessSubstrings)
+            if normalized != protectedProcessSubstrings {
+                protectedProcessSubstrings = normalized
+                return
+            }
+            UserDefaults.standard.set(normalized, forKey: DefaultsKeys.protectedProcessSubstrings)
+        }
+    }
+
+    @Published var refreshInterval: TimeInterval = 2.0 {
+        didSet {
+            UserDefaults.standard.set(refreshInterval, forKey: DefaultsKeys.refreshIntervalSeconds)
+            if shouldRestartTimerOnIntervalChange {
+                restartTimer()
+            }
         }
     }
 
     init() {
+        if let storedProtected = UserDefaults.standard.array(forKey: DefaultsKeys.protectedProcessSubstrings) as? [String] {
+            protectedProcessSubstrings = Self.normalizeProtectedProcessSubstrings(storedProtected)
+        } else {
+            protectedProcessSubstrings = Self.normalizeProtectedProcessSubstrings(Self.defaultProtectedProcessSubstrings)
+        }
+
+        if let stored = UserDefaults.standard.object(forKey: DefaultsKeys.refreshIntervalSeconds) as? Double {
+            refreshInterval = stored
+        }
+        shouldRestartTimerOnIntervalChange = true
         startAutoRefresh()
     }
 
@@ -38,12 +67,32 @@ class PortManager: ObservableObject {
             guard port.type == type else { return false }
 
             let processName = port.processName.lowercased()
-            let isSafe = safeProcessNames.contains { safeName in
-                processName.contains(safeName)
+            let isProtected = protectedProcessSubstrings.contains { substring in
+                processName.contains(substring)
             }
 
-            return !isSafe
+            return !isProtected
         }
+    }
+
+    func isProtectedProcessName(_ processName: String) -> Bool {
+        let lower = processName.lowercased()
+        return protectedProcessSubstrings.contains { lower.contains($0) }
+    }
+
+    func resetProtectedProcessSubstrings() {
+        protectedProcessSubstrings = Self.defaultProtectedProcessSubstrings
+    }
+
+    private static func normalizeProtectedProcessSubstrings(_ values: [String]) -> [String] {
+        var result: [String] = []
+        for value in values {
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if normalized.isEmpty { continue }
+            if result.contains(normalized) { continue }
+            result.append(normalized)
+        }
+        return result
     }
 
     /// Starts automatic port refreshing
@@ -234,22 +283,21 @@ class PortManager: ObservableObject {
         }
     }
 
-    /// Kills all ports of a specific type
-    func killAllPorts(ofType type: PortInfo.PortType) {
-        let portsToKill = killablePorts(ofType: type)
+    func killPorts(_ ports: [PortInfo], force: Bool = false) {
+        if ports.isEmpty {
+            return
+        }
 
-        // Run on background thread
+        let portsToKill = ports
+        let pids = Array(Set(portsToKill.map { $0.pid }))
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            let pids = portsToKill.map { $0.pid }
+            let results = self.killer.killProcesses(pids: pids, force: force)
 
-            let results = self.killer.killProcesses(pids: pids)
-
-            // Verify death for successful kills
             var deadPids: [Int] = []
-
-            for _ in 0..<10 { // Wait up to 1 second
+            for _ in 0..<10 {
                 for pid in pids {
                     if !deadPids.contains(pid) && !self.killer.isProcessRunning(pid) {
                         deadPids.append(pid)
@@ -269,7 +317,6 @@ class PortManager: ObservableObject {
 
             DispatchQueue.main.async {
                 if successCount > 0 {
-                    // Remove verified dead ports instantly
                     self.activePorts.removeAll { port in
                         deadPids.contains(port.pid)
                     }
@@ -280,19 +327,18 @@ class PortManager: ObservableObject {
                         self.showToast("Killed \(successCount) process\(successCount == 1 ? "" : "es")")
                     }
 
-                    // Log bulk kill
                     for port in portsToKill {
-                         if deadPids.contains(port.pid) {
-                             HistoryManager.shared.addEntry(
+                        if deadPids.contains(port.pid) {
+                            HistoryManager.shared.addEntry(
                                 port: port.port,
                                 processName: port.processName,
                                 action: .killed
                             )
-                         }
+                        }
                     }
                 } else if !pids.isEmpty {
-                    self.lastErrorMessage = "Kill all failed"
-                    self.showToast("Kill all failed")
+                    self.lastErrorMessage = "Kill failed"
+                    self.showToast("Kill failed")
                 }
 
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
@@ -300,5 +346,10 @@ class PortManager: ObservableObject {
                 }
             }
         }
+    }
+
+    /// Kills all ports of a specific type
+    func killAllPorts(ofType type: PortInfo.PortType) {
+        killPorts(killablePorts(ofType: type))
     }
 }

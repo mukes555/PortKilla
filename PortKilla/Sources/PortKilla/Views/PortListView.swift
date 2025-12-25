@@ -10,6 +10,8 @@ struct PortListView: View {
     @State private var eventMonitor: Any?
     @State private var selectedCategory: PortInfo.PortCategory? = nil
     @State private var selectedPort: PortInfo?
+    @State private var isShowingProtectedProcesses = false
+    @State private var isShowingBulkKill = false
 
     var appVersionText: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
@@ -119,6 +121,12 @@ struct PortListView: View {
         }
         .sheet(item: $selectedPort) { port in
             PortDetailView(port: port)
+        }
+        .sheet(isPresented: $isShowingProtectedProcesses) {
+            ProtectedProcessListView(portManager: portManager)
+        }
+        .sheet(isPresented: $isShowingBulkKill) {
+            BulkKillView(portManager: portManager)
         }
     }
 
@@ -286,12 +294,24 @@ struct PortListView: View {
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "trash")
-                        Text(selectedTab == 0 ? "Kill All Dev" : "Kill All Tests")
+                        Text(selectedTab == 0 ? "Kill All Dev ⌘K" : "Kill All Tests ⌘K")
                     }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .help(selectedTab == 0 ? "Kill all Node.js processes (Cmd+K)" : "Kill all test processes")
+
+                if selectedTab == 0 {
+                    Button(action: { isShowingBulkKill = true }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "slider.horizontal.3")
+                            Text("Bulk Kill")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("Kill ports matching rules")
+                }
 
                 Spacer()
 
@@ -300,7 +320,7 @@ struct PortListView: View {
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.clockwise")
-                        Text("Refresh")
+                        Text("Refresh ⌘R")
                     }
                 }
                 .buttonStyle(.bordered)
@@ -313,20 +333,40 @@ struct PortListView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    Button("Manual Only") {
-                        portManager.refreshInterval = 0
+                    Button(action: { portManager.refreshInterval = 0 }) {
+                        if portManager.refreshInterval == 0 {
+                            Label("Manual Only", systemImage: "checkmark")
+                        } else {
+                            Text("Manual Only")
+                        }
                     }
-                    Button("Every 2s") {
-                        portManager.refreshInterval = 2
+                    Button(action: { portManager.refreshInterval = 2 }) {
+                        if portManager.refreshInterval == 2 {
+                            Label("Every 2s", systemImage: "checkmark")
+                        } else {
+                            Text("Every 2s")
+                        }
                     }
-                    Button("Every 5s") {
-                        portManager.refreshInterval = 5
+                    Button(action: { portManager.refreshInterval = 5 }) {
+                        if portManager.refreshInterval == 5 {
+                            Label("Every 5s", systemImage: "checkmark")
+                        } else {
+                            Text("Every 5s")
+                        }
                     }
-                    Button("Every 10s") {
-                        portManager.refreshInterval = 10
+                    Button(action: { portManager.refreshInterval = 10 }) {
+                        if portManager.refreshInterval == 10 {
+                            Label("Every 10s", systemImage: "checkmark")
+                        } else {
+                            Text("Every 10s")
+                        }
                     }
-                    Button("Every 30s") {
-                        portManager.refreshInterval = 30
+                    Button(action: { portManager.refreshInterval = 30 }) {
+                        if portManager.refreshInterval == 30 {
+                            Label("Every 30s", systemImage: "checkmark")
+                        } else {
+                            Text("Every 30s")
+                        }
                     }
                 } label: {
                     Image(systemName: "timer")
@@ -334,7 +374,13 @@ struct PortListView: View {
                 }
                 .menuStyle(BorderlessButtonMenuStyle())
                 .frame(width: 20)
-                .help("Monitoring Settings")
+                .help("Refresh Interval")
+
+                Button(action: { isShowingProtectedProcesses = true }) {
+                    Image(systemName: "shield")
+                }
+                .buttonStyle(.borderless)
+                .help("Protected Processes")
 
                 // History Button (Icon only)
                 Button(action: {
@@ -387,19 +433,24 @@ struct PortListView: View {
 
     func killAllTests() {
         let testProcesses = portManager.activeTests
-        let count = testProcesses.count
+        let killableTests = testProcesses.filter { !portManager.isProtectedProcessName($0.processName) }
+        let count = killableTests.count
 
         if count == 0 {
             let alert = NSAlert()
             alert.messageText = "No Test Processes Found"
-            alert.informativeText = "There are no active test processes to kill."
+            if testProcesses.isEmpty {
+                alert.informativeText = "There are no active test processes to kill."
+            } else {
+                alert.informativeText = "All active test processes are protected."
+            }
             alert.alertStyle = .informational
             alert.addButton(withTitle: "OK")
             alert.runModal()
             return
         }
 
-        let processList = testProcesses.map { "• \($0.processName) (PID: \($0.pid))" }.joined(separator: "\n")
+        let processList = killableTests.map { "• \($0.processName) (PID: \($0.pid))" }.joined(separator: "\n")
 
         let alert = NSAlert()
         alert.messageText = "Kill \(count) Test Processes?"
@@ -411,7 +462,7 @@ struct PortListView: View {
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
             // Kill each test process
-            for test in testProcesses {
+            for test in killableTests {
                 portManager.killTestProcess(test)
             }
         }
@@ -749,5 +800,275 @@ struct DetailTitleBar: View {
         }
         .padding(.top, 4)
         .padding(.leading, 2)
+    }
+}
+
+struct ProtectedProcessListView: View {
+    @ObservedObject var portManager: PortManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var newSubstring = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            DetailTitleBar(onClose: { dismiss() })
+
+            Text("Protected Processes")
+                .font(.headline)
+
+            Text("Bulk actions skip any process whose name contains one of these substrings.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            List {
+                ForEach(portManager.protectedProcessSubstrings, id: \.self) { item in
+                    HStack {
+                        Text(item)
+                            .font(.system(.body, design: .monospaced))
+                        Spacer()
+                        Button(action: {
+                            portManager.protectedProcessSubstrings.removeAll { $0 == item }
+                        }) {
+                            Image(systemName: "minus.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .listStyle(.plain)
+
+            HStack(spacing: 8) {
+                TextField("Add substring (e.g. \"xcode\")", text: $newSubstring)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+
+                Button("Add") {
+                    let candidate = newSubstring.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    guard !candidate.isEmpty else { return }
+                    guard !portManager.protectedProcessSubstrings.contains(candidate) else {
+                        newSubstring = ""
+                        return
+                    }
+                    portManager.protectedProcessSubstrings.append(candidate)
+                    newSubstring = ""
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(newSubstring.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            HStack {
+                Button("Reset Defaults") {
+                    portManager.resetProtectedProcessSubstrings()
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Button("Close") {
+                    dismiss()
+                }
+                .buttonStyle(.bordered)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding()
+        .frame(width: 520, height: 420)
+    }
+}
+
+struct BulkKillView: View {
+    @ObservedObject var portManager: PortManager
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var minPortText = ""
+    @State private var maxPortText = ""
+    @State private var projectContains = ""
+    @State private var commandContains = ""
+    @State private var includeProtected = false
+    @State private var forceKill = false
+
+    private var minPort: Int? {
+        let trimmed = minPortText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : Int(trimmed)
+    }
+
+    private var maxPort: Int? {
+        let trimmed = maxPortText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : Int(trimmed)
+    }
+
+    private var isPortRangeValid: Bool {
+        if let minPort, let maxPort {
+            return minPort <= maxPort
+        }
+        return true
+    }
+
+    private var matchingPorts: [PortInfo] {
+        if !isPortRangeValid {
+            return []
+        }
+
+        let projectNeedle = projectContains.trimmingCharacters(in: .whitespacesAndNewlines)
+        let commandNeedle = commandContains.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return portManager.activePorts.filter { port in
+            if !includeProtected && portManager.isProtectedProcessName(port.processName) {
+                return false
+            }
+
+            if let minPort, port.port < minPort {
+                return false
+            }
+            if let maxPort, port.port > maxPort {
+                return false
+            }
+
+            if !projectNeedle.isEmpty {
+                guard let projectName = port.projectName else { return false }
+                if !projectName.localizedCaseInsensitiveContains(projectNeedle) {
+                    return false
+                }
+            }
+
+            if !commandNeedle.isEmpty {
+                if !port.command.localizedCaseInsensitiveContains(commandNeedle) {
+                    return false
+                }
+            }
+
+            return true
+        }
+        .sorted { $0.port < $1.port }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            DetailTitleBar(onClose: { dismiss() })
+
+            Text("Bulk Kill")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Port Range")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        HStack(spacing: 8) {
+                            TextField("Min", text: $minPortText)
+                                .frame(width: 80)
+                            Text("to")
+                                .foregroundColor(.secondary)
+                            TextField("Max", text: $maxPortText)
+                                .frame(width: 80)
+                        }
+                    }
+
+                    Divider()
+                        .frame(height: 36)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Project Name Contains")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("e.g. webapp", text: $projectContains)
+                            .frame(width: 220)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Command Contains")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("e.g. vite", text: $commandContains)
+                            .frame(width: 220)
+                    }
+                }
+
+                if !isPortRangeValid {
+                    Text("Port range is invalid (min must be ≤ max).")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+
+                HStack(spacing: 16) {
+                    Toggle("Include protected processes", isOn: $includeProtected)
+                    Toggle("Force (SIGKILL)", isOn: $forceKill)
+                }
+                .toggleStyle(.checkbox)
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Matches (\(matchingPorts.count))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                if matchingPorts.isEmpty {
+                    Text("No ports match the current rules.")
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 28)
+                } else {
+                    List(matchingPorts) { port in
+                        HStack(spacing: 10) {
+                            Text(":\(port.port)")
+                                .font(.system(.body, design: .monospaced))
+                                .frame(width: 70, alignment: .leading)
+                            Text(port.processName)
+                                .lineLimit(1)
+                            if let project = port.projectName {
+                                Text(project)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            Text("PID \(port.pid)")
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+
+            Spacer()
+
+            HStack {
+                Spacer()
+
+                Button("Close") {
+                    dismiss()
+                }
+                .buttonStyle(.bordered)
+
+                Button("Kill \(matchingPorts.count)") {
+                    let count = matchingPorts.count
+                    if count == 0 {
+                        return
+                    }
+
+                    let listText = matchingPorts.prefix(12).map { "• \($0.processName) (:\($0.port))" }.joined(separator: "\n")
+                    let suffix = count > 12 ? "\n\n…and \(count - 12) more." : ""
+
+                    let alert = NSAlert()
+                    alert.messageText = "Kill \(count) Process\(count == 1 ? "" : "es")?"
+                    alert.informativeText = "This will terminate the following:\n\n\(listText)\(suffix)\n\nAre you sure?"
+                    alert.addButton(withTitle: "Kill")
+                    alert.addButton(withTitle: "Cancel")
+                    alert.alertStyle = .warning
+
+                    if alert.runModal() == .alertFirstButtonReturn {
+                        portManager.killPorts(matchingPorts, force: forceKill)
+                        dismiss()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .disabled(matchingPorts.isEmpty || !isPortRangeValid)
+            }
+        }
+        .padding()
+        .frame(width: 820, height: 520)
     }
 }

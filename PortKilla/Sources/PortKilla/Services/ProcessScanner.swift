@@ -2,6 +2,11 @@ import Foundation
 
 class ProcessScanner {
 
+    enum ScanError: Error {
+        case invalidOutput
+        case commandFailed(Int32)
+    }
+
     // Keywords to identify test processes
     private let testKeywords = [
         "jest",
@@ -38,13 +43,16 @@ class ProcessScanner {
             pipe.fileHandleForReading.closeFile()
             task.waitUntilExit()
 
+            if task.terminationStatus != 0 {
+                return []
+            }
+
             guard let output = String(data: data, encoding: .utf8) else {
                 return []
             }
 
             return parseProcessOutput(output)
         } catch {
-            print("Error scanning processes: \(error)")
             return []
         }
     }

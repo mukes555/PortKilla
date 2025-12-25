@@ -7,11 +7,14 @@ class PortManager: ObservableObject {
     @Published var activeTests: [TestProcessInfo] = []
     @Published var isRefreshing = false
     @Published var lastUpdated: Date = Date()
+    @Published var lastErrorMessage: String?
+    @Published var toastMessage: String?
 
     private let scanner = PortScanner()
     private let processScanner = ProcessScanner()
     private let killer = ProcessKiller()
     private var refreshTimer: Timer?
+    private var toastWorkItem: DispatchWorkItem?
 
     // Processes that should NEVER be killed by "Kill All" actions
     private let safeProcessNames = [
@@ -92,7 +95,7 @@ class PortManager: ObservableObject {
     }
 
     /// Manually refreshes port list
-    func refresh() {
+    func refresh(showToast: Bool = false) {
         if isRefreshing {
             return
         }
@@ -100,16 +103,52 @@ class PortManager: ObservableObject {
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            let ports = self.scanner.scanActivePorts()
             let tests = self.processScanner.scanTestProcesses()
+            let portsResult = Result { try self.scanner.scanActivePorts() }
 
             DispatchQueue.main.async {
-                self.activePorts = ports
                 self.activeTests = tests
-                self.lastUpdated = Date()
                 self.isRefreshing = false
+
+                switch portsResult {
+                case .success(let ports):
+                    self.activePorts = ports
+                    self.lastUpdated = Date()
+                    self.lastErrorMessage = nil
+                    if showToast {
+                        self.showToast("Refreshed")
+                    }
+                case .failure(let error):
+                    self.lastErrorMessage = self.formatError(error, context: "Refresh failed")
+                    if showToast {
+                        self.showToast(self.lastErrorMessage ?? "Refresh failed")
+                    }
+                }
             }
         }
+    }
+
+    private func showToast(_ message: String) {
+        toastWorkItem?.cancel()
+        toastMessage = message
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.toastMessage = nil
+        }
+        toastWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: workItem)
+    }
+
+    private func formatError(_ error: Error, context: String) -> String {
+        if let scanError = error as? PortScanner.ScanError {
+            switch scanError {
+            case .invalidOutput:
+                return "\(context): invalid command output"
+            case .commandFailed(let code):
+                return "\(context): lsof failed (exit \(code))"
+            }
+        }
+        return "\(context): \(error.localizedDescription)"
     }
 
     /// Kills a specific port
@@ -134,6 +173,8 @@ class PortManager: ObservableObject {
                     DispatchQueue.main.async {
                         // Optimistically remove from list for instant feedback
                         self.activePorts.removeAll { $0.id == portInfo.id }
+                        self.lastErrorMessage = nil
+                        self.showToast("Killed :\(portInfo.port)")
 
                         // Log to history
                         HistoryManager.shared.addEntry(
@@ -152,6 +193,8 @@ class PortManager: ObservableObject {
                 }
             } catch {
                 DispatchQueue.main.async {
+                    self.lastErrorMessage = self.formatError(error, context: "Kill failed for :\(portInfo.port)")
+                    self.showToast(self.lastErrorMessage ?? "Kill failed")
                 }
             }
         }
@@ -178,10 +221,14 @@ class PortManager: ObservableObject {
                 if isDead {
                     DispatchQueue.main.async {
                         self.activeTests.removeAll { $0.id == testInfo.id }
+                        self.lastErrorMessage = nil
+                        self.showToast("Killed \(testInfo.processName)")
                     }
                 }
             } catch {
                 DispatchQueue.main.async {
+                    self.lastErrorMessage = self.formatError(error, context: "Kill failed for \(testInfo.processName)")
+                    self.showToast(self.lastErrorMessage ?? "Kill failed")
                 }
             }
         }
@@ -197,7 +244,7 @@ class PortManager: ObservableObject {
 
             let pids = portsToKill.map { $0.pid }
 
-            let _ = self.killer.killProcesses(pids: pids)
+            let results = self.killer.killProcesses(pids: pids)
 
             // Verify death for successful kills
             var deadPids: [Int] = []
@@ -215,12 +262,22 @@ class PortManager: ObservableObject {
             }
 
             let successCount = deadPids.count
+            let failureCount = results.values.filter {
+                if case .failure = $0 { return true }
+                return false
+            }.count
 
             DispatchQueue.main.async {
                 if successCount > 0 {
                     // Remove verified dead ports instantly
                     self.activePorts.removeAll { port in
                         deadPids.contains(port.pid)
+                    }
+                    self.lastErrorMessage = nil
+                    if failureCount > 0 {
+                        self.showToast("Killed \(successCount), \(failureCount) failed")
+                    } else {
+                        self.showToast("Killed \(successCount) process\(successCount == 1 ? "" : "es")")
                     }
 
                     // Log bulk kill
@@ -234,6 +291,8 @@ class PortManager: ObservableObject {
                          }
                     }
                 } else if !pids.isEmpty {
+                    self.lastErrorMessage = "Kill all failed"
+                    self.showToast("Kill all failed")
                 }
 
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {

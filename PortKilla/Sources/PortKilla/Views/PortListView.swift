@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import AppKit
 
 struct PortListView: View {
     @ObservedObject var portManager: PortManager
@@ -8,6 +9,7 @@ struct PortListView: View {
     @State private var selectedTab = 0
     @State private var eventMonitor: Any?
     @State private var selectedCategory: PortInfo.PortCategory? = nil
+    @State private var selectedPort: PortInfo?
 
     var appVersionText: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
@@ -53,31 +55,47 @@ struct PortListView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header Title
-            headerView
+        ZStack(alignment: .top) {
+            VStack(spacing: 0) {
+                if let errorMessage = portManager.lastErrorMessage {
+                    ErrorBannerView(message: errorMessage) {
+                        portManager.lastErrorMessage = nil
+                    }
+                }
 
-            Divider()
+                headerView
 
-            if selectedTab == 0 {
-                portsContentView
-            } else {
-                TestRadarView(portManager: portManager)
+                Divider()
+
+                if selectedTab == 0 {
+                    portsContentView
+                } else {
+                    TestRadarView(portManager: portManager)
+                }
+
+                Divider()
+
+                footerView
             }
+            .frame(width: 400, height: 500)
 
-            Divider()
-
-            // Footer Controls
-            footerView
+            if let toastMessage = portManager.toastMessage {
+                VStack {
+                    Spacer()
+                    ToastView(message: toastMessage)
+                        .padding(.bottom, 12)
+                }
+                .frame(width: 400, height: 500)
+                .allowsHitTesting(false)
+            }
         }
-        .frame(width: 400, height: 500)
         .onAppear {
             // Setup local keyboard shortcuts
             eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 if event.modifierFlags.contains(.command) {
                     switch event.charactersIgnoringModifiers?.lowercased() {
                     case "r":
-                        portManager.refresh()
+                        portManager.refresh(showToast: true)
                         return nil // Consume event
                     case "k":
                         if selectedTab == 0 {
@@ -99,32 +117,44 @@ struct PortListView: View {
                 eventMonitor = nil
             }
         }
+        .sheet(item: $selectedPort) { port in
+            PortDetailView(port: port)
+        }
     }
 
     var headerView: some View {
-        HStack {
-            Image(systemName: "bolt.fill")
-                .foregroundColor(.yellow)
-            Text("PortKilla")
-                .font(.headline)
-                .fontWeight(.bold)
-
-            Spacer()
-
-            Picker("", selection: $selectedTab) {
-                Text("Ports").tag(0)
-                Text("Test Radar (Beta)").tag(1)
+        VStack(spacing: 6) {
+            DetailTitleBar {
+                NSApplication.shared.terminate(nil)
             }
-            .pickerStyle(SegmentedPickerStyle())
-            .frame(width: 200)
+            .padding(.horizontal, 12)
 
-            Spacer()
+            HStack {
+                Image(systemName: "bolt.fill")
+                    .foregroundColor(.yellow)
+                Text("PortKilla")
+                    .font(.headline)
+                    .fontWeight(.bold)
 
-            Text(appVersionText)
-                .font(.caption)
-                .foregroundColor(.secondary)
+                Spacer()
+
+                Picker("", selection: $selectedTab) {
+                    Text("Ports").tag(0)
+                    Text("Test Radar (Beta)").tag(1)
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .frame(width: 200)
+
+                Spacer()
+
+                Text(appVersionText)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 10)
         }
-        .padding(12)
+        .padding(.top, 8)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
@@ -216,7 +246,12 @@ struct PortListView: View {
                 }
                 .frame(maxHeight: .infinity)
             } else {
-                PortListContent(groupedPorts: groupedPorts, portManager: portManager, hoverId: $hoverId)
+                PortListContent(
+                    groupedPorts: groupedPorts,
+                    portManager: portManager,
+                    hoverId: $hoverId,
+                    onSelectPort: { port in selectedPort = port }
+                )
             }
         }
     }
@@ -261,7 +296,7 @@ struct PortListView: View {
                 Spacer()
 
                 Button(action: {
-                    portManager.refresh()
+                    portManager.refresh(showToast: true)
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.clockwise")
@@ -294,7 +329,7 @@ struct PortListView: View {
                         portManager.refreshInterval = 30
                     }
                 } label: {
-                    Image(systemName: "eye")
+                    Image(systemName: "timer")
                         .foregroundColor(portManager.refreshInterval > 0 ? .blue : .secondary)
                 }
                 .menuStyle(BorderlessButtonMenuStyle())
@@ -309,15 +344,6 @@ struct PortListView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("History")
-
-                // Quit Button (Icon only)
-                Button(action: {
-                    NSApplication.shared.terminate(nil)
-                }) {
-                    Image(systemName: "power")
-                }
-                .buttonStyle(.borderless)
-                .help("Quit PortKilla")
             }
             .padding(12)
             .background(Color(nsColor: .windowBackgroundColor))
@@ -402,12 +428,19 @@ struct PortListContent: View {
     let groupedPorts: [(key: PortInfo.PortCategory, value: [PortInfo])]
     @ObservedObject var portManager: PortManager
     @Binding var hoverId: String? // Changed to String to match PortInfo.id
+    let onSelectPort: (PortInfo) -> Void
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                 ForEach(groupedPorts, id: \.key) { category, ports in
-                    PortSectionView(category: category, ports: ports, portManager: portManager, hoverId: $hoverId)
+                    PortSectionView(
+                        category: category,
+                        ports: ports,
+                        portManager: portManager,
+                        hoverId: $hoverId,
+                        onSelectPort: onSelectPort
+                    )
                 }
             }
         }
@@ -419,6 +452,7 @@ struct PortSectionView: View {
     let ports: [PortInfo]
     @ObservedObject var portManager: PortManager
     @Binding var hoverId: String?
+    let onSelectPort: (PortInfo) -> Void
 
     var body: some View {
         Section(header:
@@ -433,7 +467,9 @@ struct PortSectionView: View {
             .background(Color(nsColor: .controlBackgroundColor).opacity(0.9))
         ) {
             ForEach(ports) { port in
-                PortRowView(port: port, manager: portManager)
+                PortRowView(port: port, manager: portManager) {
+                    onSelectPort(port)
+                }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(hoverId == port.id ? Color.primary.opacity(0.05) : Color.clear)
@@ -450,55 +486,61 @@ struct PortRowView: View {
     let port: PortInfo
     @ObservedObject var manager: PortManager
     @State private var showConfirmation = false
+    let onSelect: () -> Void
 
     var body: some View {
         HStack {
-            // Port
-            HStack(spacing: 4) {
-                Image(systemName: port.type.icon)
-                    .foregroundColor(Color(nsColor: port.type.color))
-                Text(":\(String(port.port))")
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.primary)
-            }
-            .frame(width: 80, alignment: .leading)
-
-            // Process
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(port.processName)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.primary)
-
-                    if let project = port.projectName {
-                        Text(project)
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 4)
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(4)
-                    }
-                }
-
-                // Command Line
+            HStack {
+                // Port
                 HStack(spacing: 4) {
-                    Text("└─")
-                        .foregroundColor(.secondary)
-                    Text(port.command)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    Image(systemName: port.type.icon)
+                        .foregroundColor(Color(nsColor: port.type.color))
+                    Text(":\(String(port.port))")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.primary)
                 }
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .help("PID: \(port.pid)\nCommand: \(port.command)")
+                .frame(width: 80, alignment: .leading)
 
-            // Memory
-            Text(port.memoryUsage)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.secondary)
-                .frame(width: 70, alignment: .trailing)
+                // Process
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(port.processName)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.primary)
+
+                        if let project = port.projectName {
+                            Text(project)
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 4)
+                                .background(Color.secondary.opacity(0.1))
+                                .cornerRadius(4)
+                        }
+                    }
+
+                    HStack(spacing: 4) {
+                        Text("└─")
+                            .foregroundColor(.secondary)
+                        Text(port.command)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .help("PID: \(port.pid)\nCommand: \(port.command)")
+
+                // Memory
+                Text(port.memoryUsage)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 70, alignment: .trailing)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onSelect()
+            }
 
             // Action
             HStack(spacing: 4) {
@@ -518,6 +560,21 @@ struct PortRowView: View {
             }
             .frame(width: 60, alignment: .trailing)
         }
+        .contextMenu {
+            Button("Show Details") {
+                onSelect()
+            }
+            Divider()
+            Button("Copy Port") {
+                copyToPasteboard(":\(port.port)")
+            }
+            Button("Copy PID") {
+                copyToPasteboard("\(port.pid)")
+            }
+            Button("Copy Command") {
+                copyToPasteboard(port.command)
+            }
+        }
         // Move alert outside the main hierarchy to prevent hover conflicts
         .background(
             Color.clear
@@ -532,5 +589,165 @@ struct PortRowView: View {
                     )
                 }
         )
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+}
+
+struct ErrorBannerView: View {
+    let message: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.white)
+            Text(message)
+                .font(.system(size: 12))
+                .foregroundColor(.white)
+                .lineLimit(2)
+            Spacer()
+            Button(action: onDismiss) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.white.opacity(0.9))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.red.opacity(0.85))
+    }
+}
+
+struct ToastView: View {
+    let message: String
+
+    var body: some View {
+        Text(message)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.black.opacity(0.85))
+            .cornerRadius(8)
+    }
+}
+
+struct PortDetailView: View {
+    let port: PortInfo
+    @Environment(\.dismiss) private var dismiss
+
+    private var executablePath: String? {
+        let trimmed = port.command.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        return trimmed.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true).first.map(String.init)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            DetailTitleBar(onClose: { dismiss() })
+
+            HStack(alignment: .top) {
+                Image(systemName: port.type.icon)
+                    .font(.title2)
+                    .foregroundColor(Color(nsColor: port.type.color))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(port.processName)
+                        .font(.headline)
+                    Text(":\(port.port) • PID \(port.pid)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Menu {
+                    Button("Copy Port") { copyToPasteboard(":\(port.port)") }
+                    Button("Copy PID") { copyToPasteboard("\(port.pid)") }
+                    Button("Copy Command") { copyToPasteboard(port.command) }
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .menuStyle(BorderlessButtonMenuStyle())
+            }
+
+            Divider()
+
+            Group {
+                DetailRow(label: "User", value: port.user)
+                DetailRow(label: "Memory", value: port.memoryUsage)
+                DetailRow(label: "Type", value: port.type.rawValue)
+                if let project = port.projectName {
+                    DetailRow(label: "Project", value: project)
+                }
+                if let exec = executablePath {
+                    DetailRow(label: "Executable", value: exec)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Command")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(port.command.isEmpty ? "(No command available)" : port.command)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .cornerRadius(8)
+            }
+
+            Spacer()
+        }
+        .padding()
+        .frame(width: 460, height: 420)
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+}
+
+struct DetailTitleBar: View {
+    let onClose: () -> Void
+    @State private var isHoveringClose = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(action: onClose) {
+                ZStack {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 12, height: 12)
+                    if isHoveringClose {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundColor(.black.opacity(0.7))
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .onHover { isHoveringClose = $0 }
+
+            Circle()
+                .fill(Color.yellow)
+                .frame(width: 12, height: 12)
+                .opacity(0.7)
+
+            Circle()
+                .fill(Color.green)
+                .frame(width: 12, height: 12)
+                .opacity(0.7)
+
+            Spacer()
+        }
+        .padding(.top, 4)
+        .padding(.leading, 2)
     }
 }

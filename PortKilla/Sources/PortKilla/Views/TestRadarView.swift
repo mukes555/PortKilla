@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct TestRadarView: View {
     @ObservedObject var portManager: PortManager
@@ -74,7 +75,12 @@ struct TestRadarView: View {
                 }
                 .frame(maxHeight: .infinity)
             } else {
-                TestListContent(filteredTests: filteredTests, portManager: portManager, hoverId: $hoverId, selectedTest: $selectedTest)
+                TestListContent(
+                    filteredTests: filteredTests,
+                    portManager: portManager,
+                    hoverId: $hoverId,
+                    onSelectTest: { test in selectedTest = test }
+                )
             }
         }
         .popover(item: $selectedTest) { test in
@@ -87,21 +93,20 @@ struct TestListContent: View {
     let filteredTests: [TestProcessInfo]
     @ObservedObject var portManager: PortManager
     @Binding var hoverId: String?
-    @Binding var selectedTest: TestProcessInfo?
+    let onSelectTest: (TestProcessInfo) -> Void
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 ForEach(filteredTests) { test in
-                    TestProcessRow(test: test, manager: portManager)
+                    TestProcessRow(test: test, manager: portManager) {
+                        onSelectTest(test)
+                    }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(hoverId == test.id ? Color.primary.opacity(0.05) : Color.clear)
                         .onHover { isHovering in
                             hoverId = isHovering ? test.id : nil
-                        }
-                        .onTapGesture {
-                            selectedTest = test
                         }
                     Divider()
                 }
@@ -112,9 +117,18 @@ struct TestListContent: View {
 
 struct TestDetailView: View {
     let test: TestProcessInfo
+    @Environment(\.dismiss) private var dismiss
+
+    private var executablePath: String? {
+        let trimmed = test.command.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        return trimmed.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true).first.map(String.init)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            DetailTitleBar(onClose: { dismiss() })
+
             HStack {
                 Image(systemName: test.type.icon)
                     .font(.title)
@@ -126,6 +140,16 @@ struct TestDetailView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
+
+                Spacer()
+
+                Menu {
+                    Button("Copy PID") { copyToPasteboard("\(test.pid)") }
+                    Button("Copy Command") { copyToPasteboard(test.command) }
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .menuStyle(BorderlessButtonMenuStyle())
             }
 
             Divider()
@@ -133,6 +157,9 @@ struct TestDetailView: View {
             Group {
                 DetailRow(label: "PID", value: "\(test.pid)")
                 DetailRow(label: "Memory", value: test.memoryUsage)
+                if let exec = executablePath {
+                    DetailRow(label: "Executable", value: exec)
+                }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Command")
@@ -148,7 +175,12 @@ struct TestDetailView: View {
             }
         }
         .padding()
-        .frame(width: 300)
+        .frame(width: 360, height: 360)
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 }
 
@@ -173,43 +205,48 @@ struct TestProcessRow: View {
     let test: TestProcessInfo
     @ObservedObject var manager: PortManager
     @State private var showConfirmation = false
+    let onSelect: () -> Void
 
     var body: some View {
         HStack {
             // Type Icon
-            HStack(spacing: 4) {
-                Image(systemName: test.type.icon)
-                    .foregroundColor(Color(nsColor: test.type.color))
-                Text(test.type.rawValue)
-                    .font(.system(.caption, weight: .medium))
-                    .foregroundColor(.primary)
-            }
-            .frame(width: 80, alignment: .leading)
-
-            // Process & Command
-            VStack(alignment: .leading, spacing: 2) {
-                Text(test.processName)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.primary)
-
+            HStack {
                 HStack(spacing: 4) {
-                    Text("└─")
-                        .foregroundColor(.secondary)
-                    Text(test.command)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    Image(systemName: test.type.icon)
+                        .foregroundColor(Color(nsColor: test.type.color))
+                    Text(test.type.rawValue)
+                        .font(.system(.caption, weight: .medium))
+                        .foregroundColor(.primary)
                 }
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .help("PID: \(test.pid)\nCommand: \(test.command)")
+                .frame(width: 80, alignment: .leading)
 
-            // Memory
-            Text(test.memoryUsage)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.secondary)
-                .frame(width: 70, alignment: .trailing)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(test.processName)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.primary)
+
+                    HStack(spacing: 4) {
+                        Text("└─")
+                            .foregroundColor(.secondary)
+                        Text(test.command)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .help("PID: \(test.pid)\nCommand: \(test.command)")
+
+                Text(test.memoryUsage)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 70, alignment: .trailing)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onSelect()
+            }
 
             // Action
             HStack(spacing: 4) {
@@ -239,5 +276,18 @@ struct TestProcessRow: View {
                 )
             }
         }
+        .contextMenu {
+            Button("Copy PID") {
+                copyToPasteboard("\(test.pid)")
+            }
+            Button("Copy Command") {
+                copyToPasteboard(test.command)
+            }
+        }
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 }

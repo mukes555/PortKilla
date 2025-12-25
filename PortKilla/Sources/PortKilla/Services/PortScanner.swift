@@ -3,8 +3,13 @@ import Foundation
 // MARK: - PortScanner
 class PortScanner {
 
+    enum ScanError: Error {
+        case invalidOutput
+        case commandFailed(Int32)
+    }
+
     /// Scans for all active TCP ports and returns detailed information
-    func scanActivePorts() -> [PortInfo] {
+    func scanActivePorts() throws -> [PortInfo] {
         let task = Process()
         let pipe = Pipe()
 
@@ -17,24 +22,21 @@ class PortScanner {
         task.arguments = ["-iTCP", "-sTCP:LISTEN", "-n", "-P"]
         task.standardOutput = pipe
 
-        do {
-            try task.run()
+        try task.run()
 
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            pipe.fileHandleForReading.closeFile()
-            task.waitUntilExit()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        pipe.fileHandleForReading.closeFile()
+        task.waitUntilExit()
 
-            guard let output = String(data: data, encoding: .utf8) else {
-                return []
-            }
-
-            return parsePortOutput(output)
-        } catch {
-            print("Error scanning ports: \(error)")
-            // Fallback to /usr/bin/lsof if /usr/sbin/lsof fails or vice versa?
-            // Actually lsof is usually in /usr/sbin.
-            return []
+        if task.terminationStatus != 0 {
+            throw ScanError.commandFailed(task.terminationStatus)
         }
+
+        guard let output = String(data: data, encoding: .utf8) else {
+            throw ScanError.invalidOutput
+        }
+
+        return parsePortOutput(output)
     }
 
     /// Parses lsof output into PortInfo objects

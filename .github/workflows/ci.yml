@@ -2,22 +2,24 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
     tags-ignore: ["v*"]
   pull_request:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Swift
-        uses: swift-actions/setup-swift@v1
+      - name: Toolchain versions
+        run: |
+          xcodebuild -version
+          swift --version
 
-      - name: Build app and DMG
+      - name: Build app
         run: |
           cd PortKilla
           chmod +x scripts/build.sh
-          ./scripts/build.sh --dmg
+          ./scripts/build.sh
+          test -d dist/PortKilla.app

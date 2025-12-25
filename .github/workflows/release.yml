@@ -10,14 +10,16 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: macos-latest
+    runs-on: macos-14
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Swift
-        uses: swift-actions/setup-swift@v1
+      - name: Toolchain versions
+        run: |
+          xcodebuild -version
+          swift --version
 
       - name: Build and Package
         run: |
@@ -25,9 +27,10 @@ jobs:
           chmod +x scripts/build.sh
           ./scripts/build.sh --dmg
           ditto -c -k --sequesterRsrc --keepParent dist/PortKilla.app dist/PortKilla.app.zip
+          ls -la dist
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             PortKilla/dist/*.zip

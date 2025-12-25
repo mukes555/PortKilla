@@ -31,3 +31,8 @@ jobs:
           chmod +x scripts/build.sh
           ./scripts/build.sh
           test -d dist/PortKilla.app
+
+      - name: Run tests
+        run: |
+          cd PortKilla
+          swift test

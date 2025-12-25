@@ -21,6 +21,7 @@ class PortScanner {
             try task.run()
 
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            pipe.fileHandleForReading.closeFile()
             task.waitUntilExit()
 
             guard let output = String(data: data, encoding: .utf8) else {
@@ -37,7 +38,7 @@ class PortScanner {
     }
 
     /// Parses lsof output into PortInfo objects
-    private func parsePortOutput(_ output: String) -> [PortInfo] {
+    func parsePortOutput(_ output: String) -> [PortInfo] {
         let lines = output.components(separatedBy: "\n")
         var ports: [PortInfo] = []
 
@@ -50,18 +51,14 @@ class PortScanner {
             guard components.count >= 9 else { continue }
 
             let processName = String(components[0])
-            let pid = Int(components[1]) ?? 0
+            guard let pid = Int(components[1]) else { continue }
             let user = String(components[2])
 
-            // Extract port from "localhost:3000" or "*:3000"
-            // The address is usually the 9th component (index 8)
-            let addressComponents = components[8].split(separator: ":")
-            guard let portString = addressComponents.last,
-                  let port = Int(portString) else { continue }
+            guard let port = extractPort(from: components) else { continue }
 
             // Filter out duplicate ports if multiple processes share it (rare but possible)
             // or if the same process listens on IPv4 and IPv6
-            if ports.contains(where: { $0.port == port }) {
+            if ports.contains(where: { $0.port == port && $0.pid == pid }) {
                 continue
             }
 
@@ -87,6 +84,19 @@ class PortScanner {
         }
 
         return ports.sorted { $0.port < $1.port }
+    }
+
+    private func extractPort(from lsofLineComponents: [Substring]) -> Int? {
+        for token in lsofLineComponents.reversed() {
+            guard token.contains(":") else { continue }
+            let addressComponents = token.split(separator: ":")
+            guard let last = addressComponents.last else { continue }
+            let digits = last.trimmingCharacters(in: CharacterSet.decimalDigits.inverted)
+            if let port = Int(digits) {
+                return port
+            }
+        }
+        return nil
     }
 
     /// Determines port type based on process information
@@ -183,7 +193,7 @@ class PortScanner {
     }
 
     /// Gets full command for a process
-    private func getProcessCommand(pid: Int) -> String {
+    func getProcessCommand(pid: Int) -> String {
         let task = Process()
         let pipe = Pipe()
 
@@ -193,9 +203,9 @@ class PortScanner {
 
         do {
             try task.run()
-            task.waitUntilExit()
-
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            pipe.fileHandleForReading.closeFile()
+            task.waitUntilExit()
             return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         } catch {
             return ""
@@ -203,7 +213,7 @@ class PortScanner {
     }
 
     /// Gets memory usage for a process
-    private func getProcessMemory(pid: Int) -> (String, Int) {
+    func getProcessMemory(pid: Int) -> (String, Int) {
         let task = Process()
         let pipe = Pipe()
 
@@ -213,9 +223,9 @@ class PortScanner {
 
         do {
             try task.run()
-            task.waitUntilExit()
-
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            pipe.fileHandleForReading.closeFile()
+            task.waitUntilExit()
             if let output = String(data: data, encoding: .utf8),
                let kb = Int(output.trimmingCharacters(in: .whitespacesAndNewlines)) {
                 return (formatMemory(kilobytes: kb), kb)

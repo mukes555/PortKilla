@@ -18,7 +18,7 @@ class ProcessKiller {
         if kill(pid_t(pid), signal) == 0 {
             return
         }
-        
+
         let errorCode = errno
 
         // If process not found (ESRCH), it's effectively dead
@@ -27,7 +27,7 @@ class ProcessKiller {
         }
 
         // If SIGTERM failed and we haven't forced yet, try forcing
-        if !force { 
+        if !force {
             if kill(pid_t(pid), SIGKILL) == 0 {
                 return
             }
@@ -57,8 +57,18 @@ class ProcessKiller {
 
     /// Checks if a process is currently running
     func isProcessRunning(_ pid: Int) -> Bool {
-        // kill(pid, 0) checks existence without sending a signal
-        return kill(pid_t(pid), 0) == 0
+        if kill(pid_t(pid), 0) == 0 {
+            return true
+        }
+
+        switch errno {
+        case EPERM:
+            return true
+        case ESRCH:
+            return false
+        default:
+            return false
+        }
     }
 
     /// Kills multiple processes

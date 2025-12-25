@@ -93,6 +93,9 @@ class PortManager: ObservableObject {
 
     /// Manually refreshes port list
     func refresh() {
+        if isRefreshing {
+            return
+        }
         isRefreshing = true
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -186,12 +189,11 @@ class PortManager: ObservableObject {
 
     /// Kills all ports of a specific type
     func killAllPorts(ofType type: PortInfo.PortType) {
+        let portsToKill = killablePorts(ofType: type)
+
         // Run on background thread
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-
-            // Filter ports to kill, excluding safe processes
-            let portsToKill = self.killablePorts(ofType: type)
 
             let pids = portsToKill.map { $0.pid }
 

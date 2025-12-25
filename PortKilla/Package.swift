@@ -16,5 +16,9 @@ let package = Package(
             name: "PortKilla",
             path: "Sources/PortKilla"
         ),
+        .testTarget(
+            name: "PortKillaTests",
+            dependencies: ["PortKilla"]
+        ),
     ]
 )

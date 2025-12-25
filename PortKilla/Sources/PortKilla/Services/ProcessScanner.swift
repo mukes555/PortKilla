@@ -35,6 +35,7 @@ class ProcessScanner {
             try task.run()
 
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            pipe.fileHandleForReading.closeFile()
             task.waitUntilExit()
 
             guard let output = String(data: data, encoding: .utf8) else {
@@ -48,7 +49,7 @@ class ProcessScanner {
         }
     }
 
-    private func parseProcessOutput(_ output: String) -> [TestProcessInfo] {
+    func parseProcessOutput(_ output: String) -> [TestProcessInfo] {
         let lines = output.components(separatedBy: "\n")
         var processes: [TestProcessInfo] = []
 

@@ -3,15 +3,24 @@ import Foundation
 import AppKit
 
 struct PortListView: View {
+    private enum ActiveSheet: Identifiable {
+        case portDetail(PortInfo)
+
+        var id: String {
+            switch self {
+            case .portDetail(let port):
+                return "portDetail-\(port.id)"
+            }
+        }
+    }
+
     @ObservedObject var portManager: PortManager
     @State private var hoverId: String?
     @State private var searchText = ""
     @State private var selectedTab = 0
     @State private var eventMonitor: Any?
     @State private var selectedCategory: PortInfo.PortCategory? = nil
-    @State private var selectedPort: PortInfo?
-    @State private var isShowingProtectedProcesses = false
-    @State private var isShowingBulkKill = false
+    @State private var activeSheet: ActiveSheet?
 
     var appVersionText: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
@@ -69,17 +78,22 @@ struct PortListView: View {
 
                 Divider()
 
-                if selectedTab == 0 {
+                switch selectedTab {
+                case 0:
                     portsContentView
-                } else {
+                case 1:
                     TestRadarView(portManager: portManager)
+                case 2:
+                    AdvancedView(portManager: portManager)
+                default:
+                    portsContentView
                 }
 
                 Divider()
 
                 footerView
             }
-            .frame(width: 400, height: 500)
+            .frame(width: 500, height: 600)
 
             if let toastMessage = portManager.toastMessage {
                 VStack {
@@ -87,11 +101,14 @@ struct PortListView: View {
                     ToastView(message: toastMessage)
                         .padding(.bottom, 12)
                 }
-                .frame(width: 400, height: 500)
+                .frame(width: 500, height: 600)
                 .allowsHitTesting(false)
             }
         }
         .onAppear {
+            if selectedTab > 2 {
+                selectedTab = 0
+            }
             // Setup local keyboard shortcuts
             eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 if event.modifierFlags.contains(.command) {
@@ -102,8 +119,10 @@ struct PortListView: View {
                     case "k":
                         if selectedTab == 0 {
                             killAllNode()
-                        } else {
+                        } else if selectedTab == 1 {
                             killAllTests()
+                        } else {
+                            return event
                         }
                         return nil // Consume event
                     default:
@@ -119,14 +138,11 @@ struct PortListView: View {
                 eventMonitor = nil
             }
         }
-        .sheet(item: $selectedPort) { port in
-            PortDetailView(port: port)
-        }
-        .sheet(isPresented: $isShowingProtectedProcesses) {
-            ProtectedProcessListView(portManager: portManager)
-        }
-        .sheet(isPresented: $isShowingBulkKill) {
-            BulkKillView(portManager: portManager)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .portDetail(let port):
+                PortDetailView(port: port)
+            }
         }
     }
 
@@ -143,21 +159,28 @@ struct PortListView: View {
                 Text("PortKilla")
                     .font(.headline)
                     .fontWeight(.bold)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
 
                 Spacer()
 
                 Picker("", selection: $selectedTab) {
                     Text("Ports").tag(0)
-                    Text("Test Radar (Beta)").tag(1)
+                    Text("Test Radar").tag(1)
+                    Text("Advanced").tag(2)
                 }
                 .pickerStyle(SegmentedPickerStyle())
-                .frame(width: 200)
+                .frame(width: 260)
 
                 Spacer()
 
-                Text(appVersionText)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 8) {
+                    Text(appVersionText)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.9)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 10)
@@ -258,11 +281,12 @@ struct PortListView: View {
                     groupedPorts: groupedPorts,
                     portManager: portManager,
                     hoverId: $hoverId,
-                    onSelectPort: { port in selectedPort = port }
+                    onSelectPort: { port in activeSheet = .portDetail(port) }
                 )
             }
         }
     }
+
 
     var footerView: some View {
         VStack(spacing: 0) {
@@ -270,8 +294,10 @@ struct PortListView: View {
             HStack {
                 if selectedTab == 0 {
                     Text("📊 \(portManager.activePorts.count) ports active • \(portManager.totalPortsMemory)")
-                } else {
+                } else if selectedTab == 1 {
                     Text("🕵️‍♂️ \(portManager.activeTests.count) tests running • \(portManager.totalTestsMemory)")
+                } else {
+                    Text("📊 \(portManager.activePorts.count) ports active • \(portManager.totalPortsMemory)")
                 }
                 Spacer()
                 Text("Last updated: \(timeAgo(from: portManager.lastUpdated))")
@@ -301,18 +327,6 @@ struct PortListView: View {
                 .controlSize(.small)
                 .help(selectedTab == 0 ? "Kill all Node.js processes (Cmd+K)" : "Kill all test processes")
 
-                if selectedTab == 0 {
-                    Button(action: { isShowingBulkKill = true }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "slider.horizontal.3")
-                            Text("Bulk Kill")
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .help("Kill ports matching rules")
-                }
-
                 Spacer()
 
                 Button(action: {
@@ -326,61 +340,6 @@ struct PortListView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .help("Refresh (Cmd+R)")
-
-                // Refresh Interval Menu (Replaces Prefs)
-                Menu {
-                    Text("Refresh Interval")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Button(action: { portManager.refreshInterval = 0 }) {
-                        if portManager.refreshInterval == 0 {
-                            Label("Manual Only", systemImage: "checkmark")
-                        } else {
-                            Text("Manual Only")
-                        }
-                    }
-                    Button(action: { portManager.refreshInterval = 2 }) {
-                        if portManager.refreshInterval == 2 {
-                            Label("Every 2s", systemImage: "checkmark")
-                        } else {
-                            Text("Every 2s")
-                        }
-                    }
-                    Button(action: { portManager.refreshInterval = 5 }) {
-                        if portManager.refreshInterval == 5 {
-                            Label("Every 5s", systemImage: "checkmark")
-                        } else {
-                            Text("Every 5s")
-                        }
-                    }
-                    Button(action: { portManager.refreshInterval = 10 }) {
-                        if portManager.refreshInterval == 10 {
-                            Label("Every 10s", systemImage: "checkmark")
-                        } else {
-                            Text("Every 10s")
-                        }
-                    }
-                    Button(action: { portManager.refreshInterval = 30 }) {
-                        if portManager.refreshInterval == 30 {
-                            Label("Every 30s", systemImage: "checkmark")
-                        } else {
-                            Text("Every 30s")
-                        }
-                    }
-                } label: {
-                    Image(systemName: "timer")
-                        .foregroundColor(portManager.refreshInterval > 0 ? .blue : .secondary)
-                }
-                .menuStyle(BorderlessButtonMenuStyle())
-                .frame(width: 20)
-                .help("Refresh Interval")
-
-                Button(action: { isShowingProtectedProcesses = true }) {
-                    Image(systemName: "shield")
-                }
-                .buttonStyle(.borderless)
-                .help("Protected Processes")
 
                 // History Button (Icon only)
                 Button(action: {
@@ -472,6 +431,171 @@ struct PortListView: View {
 
     func openHistory() {
         appDelegate.showHistory()
+    }
+}
+
+struct AdvancedView: View {
+    private enum NestedSheet: Identifiable {
+        case protectedProcesses
+        case bulkKill
+
+        var id: String {
+            switch self {
+            case .protectedProcesses:
+                return "protectedProcesses"
+            case .bulkKill:
+                return "bulkKill"
+            }
+        }
+    }
+
+    @ObservedObject var portManager: PortManager
+    @State private var nestedSheet: NestedSheet?
+
+    private var refreshIntervalOptions: [(value: TimeInterval, title: String)] {
+        [
+            (0, "Manual only"),
+            (2, "Every 2 seconds"),
+            (5, "Every 5 seconds"),
+            (10, "Every 10 seconds"),
+            (30, "Every 30 seconds")
+        ]
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                // Refresh Settings Card
+                AdvancedCard(title: "Refresh Settings", icon: "arrow.clockwise") {
+                    VStack(spacing: 12) {
+                        HStack {
+                            Text("Auto Refresh")
+                            Spacer()
+                            Picker("", selection: $portManager.refreshInterval) {
+                                ForEach(refreshIntervalOptions, id: \.value) { option in
+                                    Text(option.title).tag(option.value)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 160)
+                        }
+
+                        Divider()
+
+                        Button(action: {
+                            portManager.refresh(showToast: true)
+                        }) {
+                            ShortcutRow(title: "Manual Refresh", shortcut: "⌘R")
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                // Tools Card
+                AdvancedCard(title: "Tools", icon: "hammer.fill") {
+                    VStack(spacing: 16) {
+                        HStack(alignment: .center) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Bulk Kill")
+                                    .fontWeight(.medium)
+                                Text("Kill by port range, project, or command.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Button("Open…") { nestedSheet = .bulkKill }
+                                .buttonStyle(.borderedProminent)
+                        }
+
+                        Divider()
+
+                        HStack(alignment: .center) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Protected Processes")
+                                    .fontWeight(.medium)
+                                Text("\(portManager.protectedProcessSubstrings.count) rules active.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Button("Manage…") { nestedSheet = .protectedProcesses }
+                                .buttonStyle(.bordered)
+                        }
+                    }
+                }
+
+                // Shortcuts Card
+                AdvancedCard(title: "Keyboard Shortcuts", icon: "keyboard") {
+                    VStack(spacing: 12) {
+                        ShortcutRow(title: "Kill All (current tab)", shortcut: "⌘K")
+                    }
+                }
+            }
+            .padding(20)
+        }
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        .sheet(item: $nestedSheet) { sheet in
+            switch sheet {
+            case .bulkKill:
+                BulkKillView(portManager: portManager)
+            case .protectedProcesses:
+                ProtectedProcessListView(portManager: portManager)
+            }
+        }
+    }
+}
+
+struct AdvancedCard<Content: View>: View {
+    let title: String
+    let icon: String
+    let content: Content
+
+    init(title: String, icon: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.icon = icon
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .foregroundColor(.blue)
+                Text(title)
+                    .font(.headline)
+            }
+            .padding(.bottom, 4)
+
+            content
+        }
+        .padding(16)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .cornerRadius(10)
+        .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+        )
+    }
+}
+
+struct ShortcutRow: View {
+    let title: String
+    let shortcut: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(shortcut)
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(4)
+        }
     }
 }
 

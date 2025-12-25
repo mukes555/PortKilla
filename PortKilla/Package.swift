@@ -14,10 +14,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "PortKilla",
-            path: "Sources/PortKilla",
-            resources: [
-                .process("Resources")
-            ]
+            path: "Sources/PortKilla"
         ),
     ]
 )

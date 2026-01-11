@@ -7,8 +7,12 @@
 ## 🚀 Key Features
 
 *   **See What’s Listening**: Lists active listening TCP ports with process name, command, and memory.
-*   **Kill by Port**: Kill a single process with confirmation.
-*   **Force Kill**: Hold Option while clicking kill to send SIGKILL.
+*   **Process Tree View**: Expand any process to see its child processes (e.g., Python spawning worker threads).
+*   **Smart Kill**:
+    *   **Kill Port**: Terminates the main process.
+    *   **Kill Tree**: Automatically terminates child processes (like `sleep` or worker threads) when killing the parent.
+    *   **Force Kill**: Hold Option while clicking kill to send SIGKILL.
+*   **Docker Integration**: Automatically detects and displays Docker container names next to mapped ports.
 *   **Kill All Dev (Node.js)**: One-click bulk kill for Node.js ports (with a safe list to avoid common IDEs/tools).
 *   **Test Radar (Beta)**: Detect common test runners (Jest/Vitest/Mocha/etc) and kill them from a dedicated tab.
 *   **History + CSV Export**: View recent kills and export to CSV.
@@ -18,6 +22,7 @@
 *   **Global Access**: Lives in your menu bar for instant availability.
 *   **Cmd+R**: Refresh active ports list.
 *   **Cmd+K**: Kill all Node.js ports (Ports tab) or all tests (Test Radar tab).
+*   **Click Row**: Expand/collapse process tree.
 *   **Option+Click**: Force kill (SIGKILL) stubborn processes.
 
 ## 📦 Installation
@@ -43,7 +48,7 @@ Drag `PortKilla.app` to `/Applications`.
 ./scripts/build.sh --dmg
 ```
 
-This produces `dist/PortKilla-1.0.5.dmg`.
+This produces `dist/PortKilla-1.1.0.dmg`.
 
 To distribute to other Macs without Gatekeeper prompts, you’ll eventually want Developer ID signing + notarization.
 
@@ -51,9 +56,13 @@ To distribute to other Macs without Gatekeeper prompts, you’ll eventually want
 
 1.  **Open PortKilla** from your menu bar (Lightning bolt icon).
 2.  **View Active Ports**: See a categorized list of Web, Database, and other processes.
-3.  **Free a Port**: Hover over any row and click **X** to kill the process.
-4.  **Auto-Refresh**: Use the Eye menu to choose Manual/2s/5s/10s/30s.
-5.  **History**: Click the Clock icon to view and export history.
+3.  **Process Tree**: Click on any row to expand and view child processes.
+4.  **Free a Port**:
+    *   Click **X** to kill.
+    *   **Shift+Click X** to kill the entire process tree.
+    *   **Option+Click X** to force kill.
+5.  **Auto-Refresh**: Use the Eye menu to choose Manual/2s/5s/10s/30s.
+6.  **History**: Click the Clock icon to view and export history.
 
 ## 🤝 Contributing
 

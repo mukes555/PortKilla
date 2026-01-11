@@ -15,8 +15,10 @@ struct PortInfo: Identifiable, Codable {
     let memorySizeKB: Int
     let type: PortType
     let projectName: String?
+    let containerName: String?
+    let children: [ProcessInfo]?
 
-    init(port: Int, pid: Int, processName: String, command: String, user: String, memoryUsage: String, memorySizeKB: Int, type: PortType, projectName: String? = nil) {
+    init(port: Int, pid: Int, processName: String, command: String, user: String, memoryUsage: String, memorySizeKB: Int, type: PortType, projectName: String? = nil, containerName: String? = nil, children: [ProcessInfo]? = nil) {
         self.port = port
         self.pid = pid
         self.processName = processName
@@ -26,6 +28,15 @@ struct PortInfo: Identifiable, Codable {
         self.memorySizeKB = memorySizeKB
         self.type = type
         self.projectName = projectName
+        self.containerName = containerName
+        self.children = children
+    }
+
+    struct ProcessInfo: Identifiable, Codable {
+        var id: Int { pid }
+        let pid: Int
+        let name: String
+        let command: String
     }
 
     enum PortCategory: String, Codable, CaseIterable {

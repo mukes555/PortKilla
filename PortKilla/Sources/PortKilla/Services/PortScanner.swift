@@ -69,6 +69,8 @@ class PortScanner {
             let (memory, memoryKb) = getProcessMemory(pid: pid)
             let type = determinePortType(processName: processName, command: command)
             let projectName = extractProjectName(command: command)
+            let containerName = DockerService.shared.getContainerName(forPort: port)
+            let children = getChildProcesses(pid: pid)
 
             let portInfo = PortInfo(
                 port: port,
@@ -79,7 +81,9 @@ class PortScanner {
                 memoryUsage: memory,
                 memorySizeKB: memoryKb,
                 type: type,
-                projectName: projectName
+                projectName: projectName,
+                containerName: containerName,
+                children: children
             )
 
             ports.append(portInfo)
@@ -192,6 +196,48 @@ class PortScanner {
         }
 
         return .other
+    }
+
+    /// Gets child processes for a PID
+    func getChildProcesses(pid: Int) -> [PortInfo.ProcessInfo] {
+        let task = Process()
+        let pipe = Pipe()
+
+        // Use pgrep as ps might be restricted in sandbox/some environments
+        task.launchPath = "/usr/bin/pgrep"
+        // -P: parent pid
+        // -l: list process name
+        task.arguments = ["-P", "\(pid)", "-l"]
+        task.standardOutput = pipe
+
+        do {
+            try task.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            task.waitUntilExit()
+
+            guard let output = String(data: data, encoding: .utf8) else { return [] }
+
+            var children: [PortInfo.ProcessInfo] = []
+            let lines = output.components(separatedBy: "\n")
+
+            for line in lines {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if trimmed.isEmpty { continue }
+
+                // Format: PID Name (e.g., "12345 sleep")
+                let parts = trimmed.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+                
+                guard parts.count >= 1, let pid = Int(parts[0]) else { continue }
+                
+                let name = parts.count > 1 ? String(parts[1]) : "Unknown"
+                
+                // pgrep -l doesn't give full command args on macOS usually, so we use name as command too
+                children.append(PortInfo.ProcessInfo(pid: pid, name: name, command: name))
+            }
+            return children
+        } catch {
+            return []
+        }
     }
 
     /// Gets full command for a process

@@ -201,12 +201,12 @@ class PortManager: ObservableObject {
     }
 
     /// Kills a specific port
-    func killPort(_ portInfo: PortInfo, force: Bool = false) {
+    func killPort(_ portInfo: PortInfo, force: Bool = false, killTree: Bool = false) {
         // Run on background thread to prevent UI freeze
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             do {
-                try self.killer.killProcess(pid: portInfo.pid, force: force)
+                try self.killer.killProcess(pid: portInfo.pid, force: force, killTree: killTree)
 
                 // Verify death
                 var isDead = false
@@ -223,7 +223,8 @@ class PortManager: ObservableObject {
                         // Optimistically remove from list for instant feedback
                         self.activePorts.removeAll { $0.id == portInfo.id }
                         self.lastErrorMessage = nil
-                        self.showToast("Killed :\(portInfo.port)")
+                        let action = killTree ? "Killed Tree" : "Killed"
+                        self.showToast("\(action) :\(portInfo.port)")
 
                         // Log to history
                         HistoryManager.shared.addEntry(
@@ -244,6 +245,31 @@ class PortManager: ObservableObject {
                 DispatchQueue.main.async {
                     self.lastErrorMessage = self.formatError(error, context: "Kill failed for :\(portInfo.port)")
                     self.showToast(self.lastErrorMessage ?? "Kill failed")
+                }
+            }
+        }
+    }
+
+    /// Stops a Docker container by name
+    func stopDockerContainer(_ name: String) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            do {
+                try DockerService.shared.stopContainer(name: name)
+                
+                DispatchQueue.main.async {
+                    self.showToast("Stopped container \(name)")
+                    self.lastErrorMessage = nil
+                    
+                    // Schedule a refresh
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        self.refresh()
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.lastErrorMessage = self.formatError(error, context: "Failed to stop container")
+                    self.showToast("Stop failed")
                 }
             }
         }

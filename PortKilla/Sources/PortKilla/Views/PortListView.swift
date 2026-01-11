@@ -253,7 +253,7 @@ struct PortListView: View {
                 Text("Memory")
                     .frame(width: 70, alignment: .trailing)
                 Text("Action")
-                    .frame(width: 60, alignment: .trailing)
+                    .frame(width: 80, alignment: .trailing)
             }
             .font(.system(size: 10, weight: .medium))
             .foregroundColor(.secondary)
@@ -661,109 +661,195 @@ struct PortRowView: View {
     let port: PortInfo
     @ObservedObject var manager: PortManager
     @State private var showConfirmation = false
+    @State private var isExpanded = false
     let onSelect: () -> Void
 
     var body: some View {
-        HStack {
+        VStack(spacing: 0) {
             HStack {
-                // Port
-                HStack(spacing: 4) {
-                    Image(systemName: port.type.icon)
-                        .foregroundColor(Color(nsColor: port.type.color))
-                    Text(":\(String(port.port))")
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundColor(.primary)
-                }
-                .frame(width: 80, alignment: .leading)
-
-                // Process
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack {
-                        Text(port.processName)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.primary)
-
-                        if let project = port.projectName {
-                            Text(project)
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 4)
-                                .background(Color.secondary.opacity(0.1))
-                                .cornerRadius(4)
-                        }
-                    }
-
-                    HStack(spacing: 4) {
-                        Text("└─")
+                // Expand/Collapse Button (Process Tree)
+                if let children = port.children, !children.isEmpty {
+                    Button(action: { isExpanded.toggle() }) {
+                        Image(systemName: "chevron.right")
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
                             .foregroundColor(.secondary)
-                        Text(port.command)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                            .font(.system(size: 10, weight: .bold))
                     }
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .buttonStyle(.plain)
+                    .frame(width: 16)
+                } else {
+                    Spacer().frame(width: 16)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .help("PID: \(port.pid)\nCommand: \(port.command)")
 
-                // Memory
-                Text(port.memoryUsage)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .frame(width: 70, alignment: .trailing)
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                onSelect()
-            }
-
-            // Action
-            HStack(spacing: 4) {
-                // Kill Button
-                Button(action: {
-                    // Check for Option key (Force Kill)
-                    if NSEvent.modifierFlags.contains(.option) {
-                        manager.killPort(port, force: true)
-                    } else {
-                        showConfirmation = true
+                HStack {
+                    // Port
+                    HStack(spacing: 4) {
+                        Image(systemName: port.type.icon)
+                            .foregroundColor(Color(nsColor: port.type.color))
+                        Text(":\(String(port.port))")
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.primary)
                     }
-                }) {
-                    Image(systemName: "xmark.circle.fill")
+                    .frame(width: 80, alignment: .leading)
+
+                    // Process
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text(port.processName)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.primary)
+
+                            if let project = port.projectName {
+                                Text(project)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 4)
+                                    .background(Color.secondary.opacity(0.1))
+                                    .cornerRadius(4)
+                            }
+
+                            if let container = port.containerName {
+                                HStack(spacing: 2) {
+                                    Image(systemName: "shippingbox")
+                                        .font(.system(size: 8))
+                                    Text(container)
+                                        .font(.system(size: 11))
+                                }
+                                .foregroundColor(.blue)
+                                .padding(.horizontal, 4)
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(4)
+                            }
+                        }
+
+                        HStack(spacing: 4) {
+                            Text("└─")
+                                .foregroundColor(.secondary)
+                            Text(port.command)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                        .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .help("PID: \(port.pid)\nCommand: \(port.command)")
+
+                    // Memory
+                    Text(port.memoryUsage)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .frame(width: 70, alignment: .trailing)
                 }
-                .buttonStyle(.plain)
-            }
-            .frame(width: 60, alignment: .trailing)
-        }
-        .contextMenu {
-            Button("Show Details") {
-                onSelect()
-            }
-            Divider()
-            Button("Copy Port") {
-                copyToPasteboard(":\(port.port)")
-            }
-            Button("Copy PID") {
-                copyToPasteboard("\(port.pid)")
-            }
-            Button("Copy Command") {
-                copyToPasteboard(port.command)
-            }
-        }
-        // Move alert outside the main hierarchy to prevent hover conflicts
-        .background(
-            Color.clear
-                .alert(isPresented: $showConfirmation) {
-                    Alert(
-                        title: Text("Kill Process on :\(port.port)?"),
-                        message: Text("Are you sure you want to kill '\(port.processName)' (PID: \(port.pid))?"),
-                        primaryButton: .destructive(Text("Kill")) {
-                            manager.killPort(port)
-                        },
-                        secondaryButton: .cancel()
-                    )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    // Better UX: Click anywhere on the row to toggle expansion if children exist
+                    if let children = port.children, !children.isEmpty {
+                        isExpanded.toggle()
+                    } else {
+                        onSelect()
+                    }
                 }
-        )
+
+                // Action
+                HStack(spacing: 6) {
+                    // Details Button
+                    Button(action: onSelect) {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Show Details")
+
+                    // Kill Button
+                    Button(action: {
+                        // Check for Option key (Force Kill)
+                        // Check for Shift key (Kill Tree)
+                        let force = NSEvent.modifierFlags.contains(.option)
+                        let killTree = NSEvent.modifierFlags.contains(.shift)
+
+                        if force || killTree {
+                            manager.killPort(port, force: force, killTree: killTree)
+                        } else {
+                            showConfirmation = true
+                        }
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Click to kill. Option+Click to force kill. Shift+Click to kill process tree.")
+                }
+                .frame(width: 80, alignment: .trailing)
+            }
+            .contextMenu {
+                Button("Show Details") {
+                    onSelect()
+                }
+                Divider()
+                Button("Kill Process Tree") {
+                    manager.killPort(port, killTree: true)
+                }
+                Button("Force Kill (SIGKILL)") {
+                    manager.killPort(port, force: true)
+                }
+                Divider()
+                if let container = port.containerName {
+                    Button("Stop Docker Container") {
+                        manager.stopDockerContainer(container)
+                    }
+                    Divider()
+                }
+                Button("Copy Port") {
+                    copyToPasteboard(":\(port.port)")
+                }
+                Button("Copy PID") {
+                    copyToPasteboard("\(port.pid)")
+                }
+                Button("Copy Command") {
+                    copyToPasteboard(port.command)
+                }
+            }
+            // Move alert outside the main hierarchy to prevent hover conflicts
+            .background(
+                Color.clear
+                    .alert(isPresented: $showConfirmation) {
+                        Alert(
+                            title: Text("Kill Process on :\(port.port)?"),
+                            message: Text("Are you sure you want to kill '\(port.processName)' (PID: \(port.pid))?"),
+                            primaryButton: .destructive(Text("Kill")) {
+                                manager.killPort(port)
+                            },
+                            secondaryButton: .cancel()
+                        )
+                    }
+            )
+
+            // Expanded Children View
+            if isExpanded, let children = port.children, !children.isEmpty {
+                ForEach(children) { child in
+                    HStack {
+                        Spacer().frame(width: 36) // Indent
+
+                        Image(systemName: "arrow.turn.down.right")
+                            .foregroundColor(.secondary.opacity(0.5))
+                            .font(.system(size: 10))
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(child.name)
+                                .font(.system(size: 12))
+                            Text("PID: \(child.pid)")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                    .background(Color.secondary.opacity(0.05))
+                }
+            }
+        }
     }
 
     private func copyToPasteboard(_ text: String) {
@@ -861,6 +947,9 @@ struct PortDetailView: View {
                 }
                 if let exec = executablePath {
                     DetailRow(label: "Executable", value: exec)
+                }
+                if let container = port.containerName {
+                    DetailRow(label: "Container", value: container)
                 }
             }
 

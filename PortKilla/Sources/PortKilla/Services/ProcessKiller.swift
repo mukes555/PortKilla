@@ -9,8 +9,20 @@ class ProcessKiller {
         case unknownError(String)
     }
 
-    /// Kills a process by PID
-    func killProcess(pid: Int, force: Bool = false) throws {
+    /// Kills a process by PID, optionally killing its children as well (process tree)
+    func killProcess(pid: Int, force: Bool = false, killTree: Bool = false) throws {
+        if killTree {
+            // Find children first
+            let children = getChildPids(for: pid)
+            for childPid in children {
+                // Recursively kill child's children too?
+                // For simplicity, let's just kill direct children or recurse one level if needed.
+                // But generally, killing the tree means killing everything rooted at PID.
+                // Let's do a simple recursive call for safety.
+                try? killProcess(pid: childPid, force: force, killTree: true)
+            }
+        }
+    
         // Try the C-level kill function first, as it's more direct and reliable than spawning a Process
         let signal = force ? SIGKILL : SIGTERM
 
@@ -52,6 +64,29 @@ class ProcessKiller {
             }
         } catch {
             throw KillError.unknownError(error.localizedDescription)
+        }
+    }
+    
+    private func getChildPids(for pid: Int) -> [Int] {
+        let task = Process()
+        task.launchPath = "/usr/bin/pgrep"
+        task.arguments = ["-P", "\(pid)"]
+        
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        
+        do {
+            try task.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            task.waitUntilExit()
+            
+            guard let output = String(data: data, encoding: .utf8) else { return [] }
+            
+            let pids = output.components(separatedBy: .newlines)
+                .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+            return pids
+        } catch {
+            return []
         }
     }
 

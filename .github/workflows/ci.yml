@@ -35,4 +35,4 @@ jobs:
       - name: Run tests
         run: |
           cd PortKilla
-          swift test
+          swift test --disable-sandbox

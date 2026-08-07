@@ -10,9 +10,9 @@ class PortManager: ObservableObject {
     @Published var lastErrorMessage: String?
     @Published var toastMessage: String?
 
-    private let scanner = PortScanner()
+    let scanner = PortScanner()
     private let processScanner = ProcessScanner()
-    private let killer = ProcessKiller()
+    let killer = ProcessKiller()
     private var refreshTimer: Timer?
     private var toastWorkItem: DispatchWorkItem?
     private var shouldRestartTimerOnIntervalChange = false
@@ -83,7 +83,7 @@ class PortManager: ObservableObject {
 
     /// One-shot "tell me when this frees up" armed when a kill didn't finish
     /// in time (slow shutdown, trapped SIGTERM).
-    private var pendingFreeNotifications: Set<Int> = []
+    var pendingFreeNotifications: Set<Int> = []
 
     /// Set when GitHub has a newer release; drives the "Download vX.Y.Z" menu item.
     @Published var updateAvailableVersion: String?
@@ -392,7 +392,7 @@ class PortManager: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: workItem)
     }
 
-    private func formatError(_ error: Error, context: String) -> String {
+    func formatError(_ error: Error, context: String) -> String {
         if let scanError = error as? PortScanner.ScanError {
             switch scanError {
             case .invalidOutput:
@@ -404,125 +404,13 @@ class PortManager: ObservableObject {
         return "\(context): \(error.localizedDescription)"
     }
 
-    /// Polls until the given PIDs exit or the timeout passes; returns the dead ones.
-    private func waitForExit(pids: [Int], timeout: TimeInterval = 1.0) -> Set<Int> {
-        var dead = Set<Int>()
-        let deadline = Date().addingTimeInterval(timeout)
-
-        while true {
-            for pid in pids where !dead.contains(pid) {
-                if !killer.isProcessRunning(pid) {
-                    dead.insert(pid)
-                }
-            }
-            if dead.count == pids.count || Date() >= deadline {
-                return dead
-            }
-            Thread.sleep(forTimeInterval: 0.1)
-        }
-    }
-
-    private func scheduleRefresh(after delay: TimeInterval = 2.0) {
+    func scheduleRefresh(after delay: TimeInterval = 2.0) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             self?.refresh()
         }
     }
 
     // MARK: - Kill actions
-
-    /// Kills a specific port
-    func killPort(_ portInfo: PortInfo, force: Bool = false, killTree: Bool = false) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            do {
-                try self.killer.killProcess(
-                    pid: portInfo.pid,
-                    force: force,
-                    killTree: killTree,
-                    expectedName: portInfo.processName
-                )
-
-                let died = self.waitForExit(pids: [portInfo.pid]).contains(portInfo.pid)
-
-                DispatchQueue.main.async {
-                    if died {
-                        // Optimistically remove from list for instant feedback
-                        self.activePorts.removeAll { $0.id == portInfo.id }
-                        self.lastErrorMessage = nil
-                        let action = killTree ? "Killed Tree" : "Killed"
-                        self.showToast("\(action) :\(portInfo.port)")
-
-                        HistoryManager.shared.addEntry(
-                            port: portInfo.port,
-                            processName: portInfo.processName,
-                            action: .killed
-                        )
-
-                        // Sync with the system shortly after
-                        self.scheduleRefresh()
-                    } else {
-                        let hint = force ? "" : " Option+click the kill button to force kill (SIGKILL)."
-                        self.lastErrorMessage = ":\(portInfo.port) did not terminate.\(hint)"
-                        self.showToast("Kill failed for :\(portInfo.port)")
-                        // Slow shutdowns are common — tell the user when it's done
-                        self.pendingFreeNotifications.insert(portInfo.port)
-                    }
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.lastErrorMessage = self.formatError(error, context: "Kill failed for :\(portInfo.port)")
-                    self.showToast(self.lastErrorMessage ?? "Kill failed")
-                }
-            }
-        }
-    }
-
-    /// Kills whatever listens on a port number (used by the URL scheme).
-    /// Scans fresh so it works even when the cached list is stale.
-    func killPortNumber(_ portNumber: Int, force: Bool = false) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            let table = ProcessTable.capture()
-            let ports = (try? self.scanner.scanActivePorts(processes: table)) ?? []
-
-            guard let target = ports.first(where: { $0.port == portNumber }) else {
-                DispatchQueue.main.async {
-                    self.showToast(":\(portNumber) is not in use")
-                }
-                return
-            }
-            self.killPort(target, force: force)
-        }
-    }
-
-    /// Kills an arbitrary process (used for children in the process tree).
-    func killProcess(pid: Int, name: String, force: Bool = false) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            do {
-                try self.killer.killProcess(pid: pid, force: force, expectedName: name)
-                let died = self.waitForExit(pids: [pid]).contains(pid)
-
-                DispatchQueue.main.async {
-                    if died {
-                        self.lastErrorMessage = nil
-                        self.showToast("Killed \(name)")
-                        self.scheduleRefresh(after: 0.5)
-                    } else {
-                        let hint = force ? "" : " Option+click to force kill (SIGKILL)."
-                        self.lastErrorMessage = "\(name) did not terminate.\(hint)"
-                        self.showToast("Kill failed")
-                    }
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.lastErrorMessage = self.formatError(error, context: "Kill failed for \(name)")
-                    self.showToast(self.lastErrorMessage ?? "Kill failed")
-                }
-            }
-        }
-    }
 
     /// Stops a Docker container by name
     func stopDockerContainer(_ name: String) {
@@ -545,125 +433,4 @@ class PortManager: ObservableObject {
         }
     }
 
-    /// Kills a specific test process
-    func killTestProcess(_ testInfo: TestProcessInfo, force: Bool = false) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            do {
-                try self.killer.killProcess(
-                    pid: testInfo.pid,
-                    force: force,
-                    expectedName: testInfo.processName
-                )
-
-                let died = self.waitForExit(pids: [testInfo.pid]).contains(testInfo.pid)
-
-                DispatchQueue.main.async {
-                    if died {
-                        self.activeTests.removeAll { $0.id == testInfo.id }
-                        self.lastErrorMessage = nil
-                        self.showToast("Killed \(testInfo.processName)")
-                    } else {
-                        let hint = force ? "" : " Option+click to force kill (SIGKILL)."
-                        self.lastErrorMessage = "\(testInfo.processName) did not terminate.\(hint)"
-                        self.showToast("Kill failed")
-                    }
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.lastErrorMessage = self.formatError(error, context: "Kill failed for \(testInfo.processName)")
-                    self.showToast(self.lastErrorMessage ?? "Kill failed")
-                }
-            }
-        }
-    }
-
-    /// Kills several test processes in one pass (one background block, one
-    /// verification wait — killing N tests no longer parks N sleeping threads).
-    func killTestProcesses(_ tests: [TestProcessInfo], force: Bool = false) {
-        if tests.isEmpty {
-            return
-        }
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            for test in tests {
-                try? self.killer.killProcess(pid: test.pid, force: force, expectedName: test.processName)
-            }
-
-            let dead = self.waitForExit(pids: tests.map { $0.pid })
-
-            DispatchQueue.main.async {
-                self.activeTests.removeAll { dead.contains($0.pid) }
-                let failed = tests.count - dead.count
-                if failed > 0 {
-                    self.showToast("Killed \(dead.count), \(failed) failed")
-                } else {
-                    self.showToast("Killed \(dead.count) test process\(dead.count == 1 ? "" : "es")")
-                }
-            }
-        }
-    }
-
-    func killPorts(_ ports: [PortInfo], force: Bool = false) {
-        if ports.isEmpty {
-            return
-        }
-
-        // Several ports can share one PID; kill each process once.
-        var portsByPid: [Int: PortInfo] = [:]
-        for port in ports where portsByPid[port.pid] == nil {
-            portsByPid[port.pid] = port
-        }
-        let targets = Array(portsByPid.values)
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            var killErrors = 0
-            for target in targets {
-                do {
-                    try self.killer.killProcess(pid: target.pid, force: force, expectedName: target.processName)
-                } catch {
-                    killErrors += 1
-                }
-            }
-
-            let deadPids = self.waitForExit(pids: targets.map { $0.pid })
-            let successCount = deadPids.count
-
-            DispatchQueue.main.async {
-                if successCount > 0 {
-                    self.activePorts.removeAll { deadPids.contains($0.pid) }
-                    self.lastErrorMessage = nil
-
-                    let failureCount = targets.count - successCount
-                    if failureCount > 0 {
-                        self.showToast("Killed \(successCount), \(failureCount) failed")
-                    } else {
-                        self.showToast("Killed \(successCount) process\(successCount == 1 ? "" : "es")")
-                    }
-
-                    for port in ports where deadPids.contains(port.pid) {
-                        HistoryManager.shared.addEntry(
-                            port: port.port,
-                            processName: port.processName,
-                            action: .killed
-                        )
-                    }
-                } else {
-                    self.lastErrorMessage = "Kill failed"
-                    self.showToast("Kill failed")
-                }
-
-                self.scheduleRefresh()
-            }
-        }
-    }
-
-    /// Kills all ports of a specific type
-    func killAllPorts(ofType type: PortInfo.PortType) {
-        killPorts(killablePorts(ofType: type))
-    }
 }

@@ -13,7 +13,7 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Swift
         uses: swift-actions/setup-swift@v2
@@ -36,3 +36,17 @@ jobs:
         run: |
           cd PortKilla
           swift test --disable-sandbox
+
+      - name: UI render smoke test
+        run: |
+          cd PortKilla
+          swift build
+          PORTKILLA_SNAPSHOT=/tmp/ui-smoke.png .build/debug/PortKilla
+          test -s /tmp/ui-smoke.png
+
+      - name: Upload UI snapshot
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-smoke
+          path: /tmp/ui-smoke.png
+

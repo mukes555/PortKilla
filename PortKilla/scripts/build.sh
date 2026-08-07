@@ -3,7 +3,7 @@
 set -euo pipefail
 
 APP_NAME="PortKilla"
-VERSION="1.1.0"
+VERSION="1.4.0"
 BUNDLE_ID="${BUNDLE_ID:-com.mukes555.$APP_NAME}"
 MAKE_DMG=0
 
@@ -60,6 +60,11 @@ echo "📂 Copying executable..."
 BINARY_SOURCE="$PROJECT_ROOT/.build/release/$APP_NAME"
 cp "$BINARY_SOURCE" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
+# 3b. App icon (regenerate with scripts/make_icon.swift)
+if [ -f "$PROJECT_ROOT/assets/AppIcon.icns" ]; then
+    cp "$PROJECT_ROOT/assets/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+fi
+
 # 4. Generate Info.plist
 echo "📝 Generating Info.plist..."
 cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
@@ -79,6 +84,19 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
     <string>$VERSION</string>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>$BUNDLE_ID.url</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>portkilla</string>
+            </array>
+        </dict>
+    </array>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>LSUIElement</key>
@@ -91,10 +109,12 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 </plist>
 EOF
 
+# Single-binary bundle: sign the bundle itself (--deep is deprecated and
+# unnecessary here since there is no nested code).
 echo "🔏 Signing App (ad-hoc)..."
-codesign --force --deep --sign - "$APP_BUNDLE"
+codesign --force --sign - "$APP_BUNDLE"
 
-codesign --verify --deep --strict "$APP_BUNDLE"
+codesign --verify --strict "$APP_BUNDLE"
 
 if [ "$MAKE_DMG" -eq 1 ]; then
     echo "📦 Creating DMG..."

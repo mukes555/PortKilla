@@ -1,7 +1,7 @@
 import Foundation
 import AppKit
 
-struct TestProcessInfo: Identifiable, Codable {
+struct TestProcessInfo: Identifiable, Codable, Equatable {
     var id: String {
         return "\(pid)-\(processName)"
     }
@@ -10,14 +10,16 @@ struct TestProcessInfo: Identifiable, Codable {
     let command: String
     let memoryUsage: String
     let memorySizeKB: Int
+    let cpuPercent: Double
     let type: TestType
 
-    init(pid: Int, processName: String, command: String, memoryUsage: String, memorySizeKB: Int, type: TestType) {
+    init(pid: Int, processName: String, command: String, memoryUsage: String, memorySizeKB: Int, cpuPercent: Double = 0, type: TestType) {
         self.pid = pid
         self.processName = processName
         self.command = command
         self.memoryUsage = memoryUsage
         self.memorySizeKB = memorySizeKB
+        self.cpuPercent = cpuPercent
         self.type = type
     }
 

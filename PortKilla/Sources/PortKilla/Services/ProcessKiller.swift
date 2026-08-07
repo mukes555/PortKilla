@@ -3,123 +3,102 @@ import Foundation
 // MARK: - ProcessKiller
 class ProcessKiller {
 
-    enum KillError: Error {
-        case permissionDenied
-        case processNotFound
+    enum KillError: Error, LocalizedError {
+        case invalidPid(Int)
+        case permissionDenied(Int)
+        case identityMismatch(pid: Int, expected: String, actual: String)
         case unknownError(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidPid(let pid):
+                return "Invalid PID \(pid)"
+            case .permissionDenied(let pid):
+                return "No permission to kill PID \(pid)"
+            case .identityMismatch(let pid, _, let actual):
+                return "PID \(pid) now belongs to '\(actual)' — refresh and retry"
+            case .unknownError(let message):
+                return message
+            }
+        }
     }
 
-    /// Kills a process by PID, optionally killing its children as well (process tree)
-    func killProcess(pid: Int, force: Bool = false, killTree: Bool = false) throws {
+    /// Kills a process by PID, optionally killing its children as well.
+    ///
+    /// Pass `expectedName` (the process name captured at scan time) whenever
+    /// possible: PIDs get recycled, and the check refuses to signal a PID that
+    /// now belongs to a different program.
+    func killProcess(pid: Int, force: Bool = false, killTree: Bool = false, expectedName: String? = nil) throws {
+        // kill(0)/kill(-1) signal entire process groups — never allow them.
+        guard pid > 0 else { throw KillError.invalidPid(pid) }
+
+        if let expectedName {
+            guard let actualName = currentProcessName(pid: pid) else {
+                return // Already gone — nothing to do.
+            }
+            // Prefix match in both directions because lsof truncates long names.
+            let expected = expectedName.lowercased()
+            let actual = actualName.lowercased()
+            let sameProcess = actual.hasPrefix(expected) || expected.hasPrefix(actual)
+            if !sameProcess {
+                throw KillError.identityMismatch(pid: pid, expected: expectedName, actual: actualName)
+            }
+        }
+
         if killTree {
-            // Find children first
-            let children = getChildPids(for: pid)
-            for childPid in children {
-                // Recursively kill child's children too?
-                // For simplicity, let's just kill direct children or recurse one level if needed.
-                // But generally, killing the tree means killing everything rooted at PID.
-                // Let's do a simple recursive call for safety.
+            for childPid in getChildPids(for: pid) {
                 try? killProcess(pid: childPid, force: force, killTree: true)
             }
         }
-    
-        // Try the C-level kill function first, as it's more direct and reliable than spawning a Process
-        let signal = force ? SIGKILL : SIGTERM
 
-        // kill(pid, signal) returns 0 on success, -1 on error
+        // The user explicitly chooses SIGKILL (force); a graceful kill must
+        // never silently escalate, so a failed SIGTERM is reported, not forced.
+        let signal = force ? SIGKILL : SIGTERM
         if kill(pid_t(pid), signal) == 0 {
             return
         }
 
-        let errorCode = errno
-
-        // If process not found (ESRCH), it's effectively dead
-        if errorCode == ESRCH {
-            return
-        }
-
-        // If SIGTERM failed and we haven't forced yet, try forcing
-        if !force {
-            if kill(pid_t(pid), SIGKILL) == 0 {
-                return
-            }
-        }
-
-        // If C-level kill failed, let's try the shell command as a fallback
-        // This is useful if there are weird environment/path issues
-        let task = Process()
-        task.launchPath = "/bin/kill"
-        task.arguments = ["-9", "\(pid)"] // Force kill
-
-        do {
-            // Pipe output to avoid cluttering logs
-            task.standardOutput = Pipe()
-            task.standardError = Pipe()
-
-            try task.run()
-            task.waitUntilExit()
-
-            if task.terminationStatus != 0 {
-                throw KillError.unknownError("Failed to kill process \(pid).")
-            }
-        } catch {
-            throw KillError.unknownError(error.localizedDescription)
+        switch errno {
+        case ESRCH:
+            return // Process died in the meantime — mission accomplished.
+        case EPERM:
+            throw KillError.permissionDenied(pid)
+        default:
+            throw KillError.unknownError("kill(\(pid)) failed (errno \(errno))")
         }
     }
-    
+
     private func getChildPids(for pid: Int) -> [Int] {
-        let task = Process()
-        task.launchPath = "/usr/bin/pgrep"
-        task.arguments = ["-P", "\(pid)"]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        
-        do {
-            try task.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            task.waitUntilExit()
-            
-            guard let output = String(data: data, encoding: .utf8) else { return [] }
-            
-            let pids = output.components(separatedBy: .newlines)
-                .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
-            return pids
-        } catch {
-            return []
-        }
+        // pgrep exits 1 when there are no children.
+        let output = (try? CommandRunner.run(
+            "/usr/bin/pgrep", ["-P", "\(pid)"], timeout: 2.0, allowedExitCodes: [0, 1]
+        )) ?? ""
+
+        return output.components(separatedBy: .newlines)
+            .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+    }
+
+    /// Returns the executable base name currently running under `pid`,
+    /// or nil if the PID is not alive.
+    private func currentProcessName(pid: Int) -> String? {
+        // ps exits 1 when the PID doesn't exist.
+        let output = (try? CommandRunner.run(
+            "/bin/ps", ["-p", "\(pid)", "-o", "comm="], timeout: 2.0, allowedExitCodes: [0, 1]
+        )) ?? ""
+
+        let path = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        if path.isEmpty { return nil }
+        return path.split(separator: "/").last.map(String.init) ?? path
     }
 
     /// Checks if a process is currently running
     func isProcessRunning(_ pid: Int) -> Bool {
+        guard pid > 0 else { return false }
+
         if kill(pid_t(pid), 0) == 0 {
             return true
         }
-
-        switch errno {
-        case EPERM:
-            return true
-        case ESRCH:
-            return false
-        default:
-            return false
-        }
+        // EPERM means it exists but belongs to someone else.
+        return errno == EPERM
     }
-
-    /// Kills multiple processes
-    func killProcesses(pids: [Int], force: Bool = false) -> [Int: Result<Void, Error>] {
-        var results: [Int: Result<Void, Error>] = [:]
-
-        for pid in pids {
-            do {
-                try killProcess(pid: pid, force: force)
-                results[pid] = .success(())
-            } catch {
-                results[pid] = .failure(error)
-            }
-        }
-
-        return results
-    }
-
 }

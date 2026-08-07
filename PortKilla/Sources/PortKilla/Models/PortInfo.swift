@@ -2,9 +2,9 @@ import Foundation
 import AppKit
 
 // MARK: - PortInfo Model
-struct PortInfo: Identifiable, Codable {
+struct PortInfo: Identifiable, Codable, Equatable {
     var id: String {
-        return "\(port)-\(pid)"
+        return "\(port)-\(pid)-\(proto)"
     }
     let port: Int
     let pid: Int
@@ -15,10 +15,26 @@ struct PortInfo: Identifiable, Codable {
     let memorySizeKB: Int
     let type: PortType
     let projectName: String?
+    /// Working directory of the process (used for "open in Finder/Terminal")
+    let projectPath: String?
     let containerName: String?
     let children: [ProcessInfo]?
+    /// Host the socket is bound to ("127.0.0.1", "*", "::1", …)
+    let bindAddress: String?
+    /// "tcp" or "udp"
+    let proto: String
+    let cpuPercent: Double
+    /// Human-readable process age, e.g. "3h 12m"
+    let age: String?
 
-    init(port: Int, pid: Int, processName: String, command: String, user: String, memoryUsage: String, memorySizeKB: Int, type: PortType, projectName: String? = nil, containerName: String? = nil, children: [ProcessInfo]? = nil) {
+    /// True when the socket listens on all interfaces, i.e. is reachable
+    /// from the local network, not just this machine.
+    var isExposed: Bool {
+        guard let bindAddress else { return false }
+        return bindAddress == "*" || bindAddress == "0.0.0.0" || bindAddress == "::"
+    }
+
+    init(port: Int, pid: Int, processName: String, command: String, user: String, memoryUsage: String, memorySizeKB: Int, type: PortType, projectName: String? = nil, projectPath: String? = nil, containerName: String? = nil, children: [ProcessInfo]? = nil, bindAddress: String? = nil, proto: String = "tcp", cpuPercent: Double = 0, age: String? = nil) {
         self.port = port
         self.pid = pid
         self.processName = processName
@@ -28,11 +44,16 @@ struct PortInfo: Identifiable, Codable {
         self.memorySizeKB = memorySizeKB
         self.type = type
         self.projectName = projectName
+        self.projectPath = projectPath
         self.containerName = containerName
         self.children = children
+        self.bindAddress = bindAddress
+        self.proto = proto
+        self.cpuPercent = cpuPercent
+        self.age = age
     }
 
-    struct ProcessInfo: Identifiable, Codable {
+    struct ProcessInfo: Identifiable, Codable, Equatable {
         var id: Int { pid }
         let pid: Int
         let name: String

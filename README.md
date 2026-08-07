@@ -1,6 +1,6 @@
-# PortKilla - macOS Port Manager
+<p align="center"><img src="assets/logo.png" width="680" alt="PortKilla — the macOS menu bar port manager"></p>
 
-![PortKilla - macOS Port Manager](assets/portkilla_banner.png)
+# PortKilla - macOS Port Manager
 
 <p align="center"><img src="assets/screenshot.png" width="500" alt="PortKilla main window: watched ports, dev servers with project chips, exposed badges"></p>
 

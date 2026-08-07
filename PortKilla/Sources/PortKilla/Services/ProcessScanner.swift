@@ -2,11 +2,6 @@ import Foundation
 
 class ProcessScanner {
 
-    enum ScanError: Error {
-        case invalidOutput
-        case commandFailed(Int32)
-    }
-
     // Keywords to identify test processes
     private let testKeywords = [
         "jest",
@@ -27,73 +22,47 @@ class ProcessScanner {
         "testcafe"
     ]
 
-    func scanTestProcesses() -> [TestProcessInfo] {
-        let task = Process()
-        let pipe = Pipe()
-
-        // Use ps to list all processes with PID, RSS (memory), and Command
-        task.launchPath = "/bin/ps"
-        task.arguments = ["-A", "-o", "pid=,rss=,command="]
-        task.standardOutput = pipe
-
-        do {
-            try task.run()
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            pipe.fileHandleForReading.closeFile()
-            task.waitUntilExit()
-
-            if task.terminationStatus != 0 {
-                return []
-            }
-
-            guard let output = String(data: data, encoding: .utf8) else {
-                return []
-            }
-
-            return parseProcessOutput(output)
-        } catch {
-            return []
-        }
+    /// Filters test processes out of a shared process snapshot
+    /// (no subprocess spawned here).
+    func scanTestProcesses(processes: ProcessTable) -> [TestProcessInfo] {
+        processes.allEntries
+            .compactMap { makeTestInfo(pid: $0.pid, memoryKb: $0.rssKB, command: $0.command, cpuPercent: $0.cpuPercent) }
+            .sorted { $0.pid < $1.pid }
     }
 
+    /// Parses raw "PID RSS COMMAND" lines (kept as the testable entry point).
     func parseProcessOutput(_ output: String) -> [TestProcessInfo] {
-        let lines = output.components(separatedBy: "\n")
         var processes: [TestProcessInfo] = []
 
-        for line in lines {
+        for line in output.components(separatedBy: "\n") {
             let trimmedLine = line.trimmingCharacters(in: .whitespaces)
             guard !trimmedLine.isEmpty else { continue }
 
-            // ps output format: PID RSS COMMAND (args...)
-            // 12345 1024 /usr/local/bin/node ...
-
             let parts = trimmedLine.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
-            guard parts.count >= 3 else { continue }
-
-            guard let pid = Int(parts[0]),
+            guard parts.count >= 3,
+                  let pid = Int(parts[0]),
                   let memoryKb = Int(parts[1]) else { continue }
 
-            let command = String(parts[2])
-
-            // Check if it's a test process
-            if let type = determineTestType(command: command) {
-                let processName = extractProcessName(from: command)
-                let memory = formatMemory(kilobytes: memoryKb)
-
-                let info = TestProcessInfo(
-                    pid: pid,
-                    processName: processName,
-                    command: command,
-                    memoryUsage: memory,
-                    memorySizeKB: memoryKb,
-                    type: type
-                )
+            if let info = makeTestInfo(pid: pid, memoryKb: memoryKb, command: String(parts[2])) {
                 processes.append(info)
             }
         }
 
         return processes
+    }
+
+    private func makeTestInfo(pid: Int, memoryKb: Int, command: String, cpuPercent: Double = 0) -> TestProcessInfo? {
+        guard let type = determineTestType(command: command) else { return nil }
+
+        return TestProcessInfo(
+            pid: pid,
+            processName: extractProcessName(from: command),
+            command: command,
+            memoryUsage: MemoryFormat.string(kilobytes: memoryKb),
+            memorySizeKB: memoryKb,
+            cpuPercent: cpuPercent,
+            type: type
+        )
     }
 
     private func determineTestType(command: String) -> TestProcessInfo.TestType? {
@@ -129,9 +98,7 @@ class ProcessScanner {
     }
 
     private func extractProcessName(from command: String) -> String {
-        // Simple extraction: get the last component of the executable path
-        // e.g., "/usr/local/bin/node /path/to/jest.js" -> "node" (or "jest" if we are smart)
-
+        // Last path component of the executable, e.g. "/usr/local/bin/node ..." -> "node"
         let components = command.components(separatedBy: " ")
         if let first = components.first {
             let pathComponents = first.components(separatedBy: "/")
@@ -140,16 +107,5 @@ class ProcessScanner {
             }
         }
         return "Unknown"
-    }
-
-    private func formatMemory(kilobytes: Int) -> String {
-        let mb = Double(kilobytes) / 1024.0
-        if mb < 1 {
-            return "\(kilobytes)KB"
-        } else if mb < 1024 {
-            return String(format: "%.1fMB", mb)
-        } else {
-            return String(format: "%.2fGB", mb / 1024.0)
-        }
     }
 }

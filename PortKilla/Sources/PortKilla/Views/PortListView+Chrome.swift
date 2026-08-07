@@ -63,6 +63,12 @@ extension PortListView {
 
             Divider()
 
+            Button(appDelegate.isPinned ? "Unpin Floating Window" : "Pin as Floating Window") {
+                appDelegate.togglePinnedWindow()
+            }
+
+            Divider()
+
             Button("Bulk Kill…") { activeSheet = .bulkKill }
             Button("Protected Processes…") { activeSheet = .protectedProcesses }
             Button("Change Hotkey… (\(appDelegate.hotkeyDisplay))") { activeSheet = .hotkeyRecorder }

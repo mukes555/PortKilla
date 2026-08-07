@@ -12,8 +12,7 @@ struct ProcessTable {
         let ppid: Int
         let rssKB: Int
         let cpuPercent: Double
-        /// Raw ps etime, e.g. "05:12" or "2-03:44:01"
-        let elapsed: String
+        let ageSeconds: Int?
         let command: String
 
         /// Executable base name, e.g. "/usr/local/bin/node server.js" -> "node"
@@ -29,10 +28,32 @@ struct ProcessTable {
     private let childrenByPpid: [Int: [Entry]]
 
     static func capture() -> ProcessTable {
+        // Raw-syscall snapshot; ps subprocess only as a fallback
+        if let samples = NativeScanner.captureSamples() {
+            return ProcessTable(entries: samples.map { sample in
+                Entry(
+                    pid: sample.pid, ppid: sample.ppid, rssKB: sample.rssKB,
+                    cpuPercent: sample.cpuPercent, ageSeconds: sample.ageSeconds,
+                    command: sample.command
+                )
+            })
+        }
+
         let output = (try? CommandRunner.run(
             "/bin/ps", ["-axo", "pid=,ppid=,rss=,%cpu=,etime=,command="], timeout: 5.0
         )) ?? ""
         return ProcessTable(psOutput: output)
+    }
+
+    init(entries: [Entry]) {
+        var byPid: [Int: Entry] = [:]
+        var byPpid: [Int: [Entry]] = [:]
+        for entry in entries {
+            byPid[entry.pid] = entry
+            byPpid[entry.ppid, default: []].append(entry)
+        }
+        entriesByPid = byPid
+        childrenByPpid = byPpid
     }
 
     init(psOutput: String) {
@@ -55,7 +76,7 @@ struct ProcessTable {
                 ppid: ppid,
                 rssKB: rss,
                 cpuPercent: Double(parts[3]) ?? 0,
-                elapsed: String(parts[4]),
+                ageSeconds: ElapsedFormat.seconds(fromEtime: String(parts[4])),
                 command: String(parts[5])
             )
             byPid[pid] = entry
@@ -72,6 +93,6 @@ struct ProcessTable {
     func name(for pid: Int) -> String? { entriesByPid[pid]?.name }
     func rssKB(for pid: Int) -> Int? { entriesByPid[pid]?.rssKB }
     func cpuPercent(for pid: Int) -> Double? { entriesByPid[pid]?.cpuPercent }
-    func elapsed(for pid: Int) -> String? { entriesByPid[pid]?.elapsed }
+    func ageSeconds(for pid: Int) -> Int? { entriesByPid[pid]?.ageSeconds }
     func children(of pid: Int) -> [Entry] { childrenByPpid[pid] ?? [] }
 }

@@ -21,6 +21,24 @@ struct PortHistoryItem: Identifiable, Codable {
     }
 }
 
+enum CSV {
+    /// Escapes a value for a CSV cell, defusing spreadsheet formula injection
+    /// (process names are attacker-influenced: a name like "=cmd|..." would
+    /// otherwise execute when the export is opened in Excel).
+    static func field(_ raw: String) -> String {
+        var value = raw
+        if let first = value.first, "=+-@".contains(first) {
+            value = "'" + value
+        }
+
+        let needsQuoting = value.contains(",") || value.contains("\"") || value.contains("\n")
+        if needsQuoting {
+            value = "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        }
+        return value
+    }
+}
+
 class HistoryManager {
     static let shared = HistoryManager()
     

@@ -1,0 +1,85 @@
+import SwiftUI
+
+/// Pinned section at the top of the port list showing every watched port and
+/// its live status — including "free", which is the answer users usually
+/// opened the app to get.
+struct WatchedSectionView: View {
+    @ObservedObject var portManager: PortManager
+    let onKillRequest: (PortInfo) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("WATCHED")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .background(Color(nsColor: .controlBackgroundColor).opacity(0.9))
+
+            ForEach(portManager.watchedPorts.sorted(), id: \.self) { port in
+                watchedRow(port: port)
+                Divider()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func watchedRow(port: Int) -> some View {
+        let active = portManager.activePorts.first { $0.port == port }
+
+        HStack(spacing: 8) {
+            Image(systemName: "star.fill")
+                .font(.system(size: 10))
+                .foregroundColor(.yellow)
+
+            Text(":\(String(port))")
+                .font(.system(.body, design: .monospaced))
+                .frame(width: 64, alignment: .leading)
+
+            if let active {
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 6, height: 6)
+                Text(active.processName)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                Text(active.memoryUsage)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+            } else {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 6, height: 6)
+                Text("free")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.green)
+            }
+
+            Spacer()
+
+            if let active {
+                Button(action: { onKillRequest(active) }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Kill process on port \(port)")
+                .help("Kill \(active.processName)")
+            }
+
+            Button(action: { portManager.toggleWatch(port) }) {
+                Image(systemName: "star.slash")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Stop watching port \(port)")
+            .help("Stop watching :\(port)")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+    }
+}

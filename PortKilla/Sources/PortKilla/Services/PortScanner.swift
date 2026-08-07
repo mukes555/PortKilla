@@ -14,6 +14,28 @@ class PortScanner {
     /// Scans listening TCP ports and bound UDP sockets. `processes` supplies
     /// per-PID command, memory, and children so we don't shell out per port.
     func scanActivePorts(processes: ProcessTable) throws -> [PortInfo] {
+        // Fast path: raw libproc syscalls, no subprocesses at all
+        if let native = NativeScanner.allListeners(), !native.isEmpty {
+            var raws: [RawListener] = []
+            for listener in native {
+                let raw = RawListener(
+                    processName: processes.name(for: listener.pid) ?? "unknown",
+                    pid: listener.pid,
+                    user: NativeScanner.bsdInfo(Int32(listener.pid)).map { NativeScanner.username($0.pbi_uid) } ?? "?",
+                    host: listener.host,
+                    port: listener.port,
+                    proto: listener.proto
+                )
+                mergeListener(raw, into: &raws)
+            }
+            return buildPortInfos(raws, processes: processes)
+        }
+
+        // Fallback: the lsof pipeline
+        return try scanWithLsof(processes: processes)
+    }
+
+    private func scanWithLsof(processes: ProcessTable) throws -> [PortInfo] {
         // -iTCP -sTCP:LISTEN: listening TCP sockets only; -n/-P: skip name lookups.
         // lsof exits 1 when nothing matches, so that's an empty list, not an error.
         let tcpOutput: String
@@ -45,10 +67,26 @@ class PortScanner {
         let user: String
         var host: String
         let port: Int
+        var proto: String = "tcp"
 
         var isExposedHost: Bool {
             host == "*" || host == "0.0.0.0" || host == "::"
         }
+    }
+
+    /// IPv4/IPv6 duplicates of the same (pid, port, proto) merge into one row;
+    /// when one of them binds all interfaces, the merged row keeps that host
+    /// so the "exposed" badge can't be masked.
+    private func mergeListener(_ raw: RawListener, into listeners: inout [RawListener]) {
+        if let existing = listeners.firstIndex(where: {
+            $0.port == raw.port && $0.pid == raw.pid && $0.proto == raw.proto
+        }) {
+            if raw.isExposedHost && !listeners[existing].isExposedHost {
+                listeners[existing].host = raw.host
+            }
+            return
+        }
+        listeners.append(raw)
     }
 
     /// Parses lsof output into PortInfo objects
@@ -80,20 +118,20 @@ class PortScanner {
                 continue
             }
 
-            let raw = RawListener(processName: processName, pid: pid, user: user, host: endpoint.host, port: endpoint.port)
-
-            if let existing = listeners.firstIndex(where: { $0.port == raw.port && $0.pid == raw.pid }) {
-                if raw.isExposedHost && !listeners[existing].isExposedHost {
-                    listeners[existing].host = raw.host
-                }
-                continue
-            }
-            listeners.append(raw)
+            let raw = RawListener(
+                processName: processName, pid: pid, user: user,
+                host: endpoint.host, port: endpoint.port, proto: proto
+            )
+            mergeListener(raw, into: &listeners)
         }
 
+        return buildPortInfos(listeners, processes: processes)
+    }
+
+    /// Enriches raw listeners with process details from the shared snapshot.
+    private func buildPortInfos(_ listeners: [RawListener], processes: ProcessTable) -> [PortInfo] {
         refreshWorkingDirectories(for: listeners.map { $0.pid })
 
-        // Pass 2: enrich with process details from the shared snapshot.
         let ports = listeners.map { raw -> PortInfo in
             let command = processes.command(for: raw.pid) ?? ""
             let processName = Self.bestProcessName(lsofName: raw.processName, entryName: processes.name(for: raw.pid))
@@ -118,9 +156,9 @@ class PortScanner {
                 containerName: DockerService.shared.getContainerName(forPort: raw.port),
                 children: children.isEmpty ? nil : children,
                 bindAddress: raw.host,
-                proto: proto,
+                proto: raw.proto,
                 cpuPercent: processes.cpuPercent(for: raw.pid) ?? 0,
-                age: processes.elapsed(for: raw.pid).flatMap(ElapsedFormat.humanize)
+                age: processes.ageSeconds(for: raw.pid).flatMap { ElapsedFormat.humanize(seconds: $0) }
             )
         }
 
@@ -129,26 +167,36 @@ class PortScanner {
 
     // MARK: - Working directories
 
-    /// Queries lsof once for the working directories of PIDs not yet cached,
-    /// and drops cache entries for PIDs that disappeared.
+    /// Resolves working directories for PIDs not yet cached — native syscall
+    /// first, one lsof batch as fallback — and drops entries for dead PIDs.
     private func refreshWorkingDirectories(for pids: [Int]) {
         cwdCache = cwdCache.filter { pids.contains($0.key) }
 
-        let missing = pids.filter { cwdCache[$0] == nil }
+        var missing = pids.filter { cwdCache[$0] == nil }
         guard !missing.isEmpty else { return }
 
-        let pidList = missing.map(String.init).joined(separator: ",")
-        // -Fn machine format: "p<pid>" line, then "n<path>" line per file
-        let output = (try? CommandRunner.run(
-            "/usr/sbin/lsof", ["-a", "-p", pidList, "-d", "cwd", "-Fn"],
-            timeout: 3.0, allowedExitCodes: [0, 1]
-        )) ?? ""
-
-        for (pid, path) in Self.parseCwdOutput(output) {
-            cwdCache[pid] = path
+        for pid in missing {
+            if let path = NativeScanner.workingDirectory(Int32(pid)) {
+                cwdCache[pid] = path
+            }
         }
+        missing = missing.filter { cwdCache[$0] == nil }
+
+        if !missing.isEmpty {
+            let pidList = missing.map(String.init).joined(separator: ",")
+            // -Fn machine format: "p<pid>" line, then "n<path>" line per file
+            let output = (try? CommandRunner.run(
+                "/usr/sbin/lsof", ["-a", "-p", pidList, "-d", "cwd", "-Fn"],
+                timeout: 3.0, allowedExitCodes: [0, 1]
+            )) ?? ""
+
+            for (pid, path) in Self.parseCwdOutput(output) {
+                cwdCache[pid] = path
+            }
+        }
+
         // Negative-cache misses so we don't re-query them every refresh
-        for pid in missing where cwdCache[pid] == nil {
+        for pid in pids where cwdCache[pid] == nil {
             cwdCache[pid] = ""
         }
     }

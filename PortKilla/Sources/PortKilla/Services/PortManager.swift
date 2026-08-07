@@ -28,6 +28,7 @@ class PortManager: ObservableObject {
         static let hideSystemProcesses = "PortKilla.hideSystemProcesses"
         static let confirmBeforeKill = "PortKilla.confirmBeforeKill"
         static let watchedPorts = "PortKilla.watchedPorts"
+        static let guardedPorts = "PortKilla.guardedPorts"
     }
 
     private static let defaultProtectedProcessSubstrings = [
@@ -77,6 +78,14 @@ class PortManager: ObservableObject {
             UserDefaults.standard.set(Array(watchedPorts).sorted(), forKey: DefaultsKeys.watchedPorts)
         }
     }
+    /// Guarded ports auto-kill any new (unprotected, user-owned) occupant.
+    /// Strictly opt-in per port; a guarded port is always also watched.
+    @Published var guardedPorts: Set<Int> = [] {
+        didSet {
+            UserDefaults.standard.set(Array(guardedPorts).sorted(), forKey: DefaultsKeys.guardedPorts)
+        }
+    }
+
     /// Occupancy of watched ports at the previous scan (port -> process name).
     private var watchedOccupancy: [Int: String] = [:]
     private var hasCompletedFirstScan = false
@@ -106,6 +115,9 @@ class PortManager: ObservableObject {
         }
         if let stored = UserDefaults.standard.array(forKey: DefaultsKeys.watchedPorts) as? [Int] {
             watchedPorts = Set(stored)
+        }
+        if let stored = UserDefaults.standard.array(forKey: DefaultsKeys.guardedPorts) as? [Int] {
+            guardedPorts = Set(stored)
         }
         shouldRestartTimerOnIntervalChange = true
 
@@ -140,9 +152,27 @@ class PortManager: ObservableObject {
         watchedPorts.contains(port)
     }
 
+    func isGuarded(_ port: Int) -> Bool {
+        guardedPorts.contains(port)
+    }
+
+    /// Confirmation happens in the UI — this just flips the state.
+    func toggleGuard(_ port: Int) {
+        if guardedPorts.contains(port) {
+            guardedPorts.remove(port)
+            showToast("Guard removed from :\(port)")
+        } else {
+            guardedPorts.insert(port)
+            watchedPorts.insert(port) // guarding implies watching
+            Notifier.requestPermission()
+            showToast("Guarding :\(port)")
+        }
+    }
+
     func toggleWatch(_ port: Int) {
         if watchedPorts.contains(port) {
             watchedPorts.remove(port)
+            guardedPorts.remove(port)
             watchedOccupancy.removeValue(forKey: port)
             showToast("Stopped watching :\(port)")
         } else {
@@ -190,6 +220,15 @@ class PortManager: ObservableObject {
         pendingFreeNotifications.subtract(freed)
     }
 
+    /// A guard only ever fires against unprotected processes the user owns.
+    private func guardKillTarget(for port: Int, in ports: [PortInfo]) -> PortInfo? {
+        guard guardedPorts.contains(port),
+              let occupant = ports.first(where: { $0.port == port }),
+              !isProtectedProcessName(occupant.processName),
+              !isSystemPort(occupant) else { return nil }
+        return occupant
+    }
+
     private func processWatchedPorts(with ports: [PortInfo]) {
         guard !watchedPorts.isEmpty else {
             watchedOccupancy = [:]
@@ -208,7 +247,15 @@ class PortManager: ObservableObject {
                 case .freed:
                     Notifier.send(title: "Port \(event.port) is free", body: "Nothing is listening on :\(event.port) anymore.")
                 case .occupied(let name):
-                    Notifier.send(title: "Port \(event.port) in use", body: "'\(name)' started listening on :\(event.port).")
+                    if let intruder = guardKillTarget(for: event.port, in: ports) {
+                        Notifier.send(
+                            title: "Guard on :\(event.port)",
+                            body: "Auto-killing '\(intruder.processName)' — it grabbed a guarded port."
+                        )
+                        killPort(intruder)
+                    } else {
+                        Notifier.send(title: "Port \(event.port) in use", body: "'\(name)' started listening on :\(event.port).")
+                    }
                 }
             }
         }

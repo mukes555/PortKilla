@@ -13,7 +13,7 @@ final class ProcessTableTests: XCTestCase {
         XCTAssertEqual(table.rssKB(for: 100), 2048)
         XCTAssertEqual(table.rssKB(for: 200), 1024)
         XCTAssertEqual(table.cpuPercent(for: 100), 12.5)
-        XCTAssertEqual(table.elapsed(for: 100), "1-02:30:00")
+        XCTAssertEqual(table.ageSeconds(for: 100), 95_400) // 1-02:30:00
     }
 
     func testChildLookup() {

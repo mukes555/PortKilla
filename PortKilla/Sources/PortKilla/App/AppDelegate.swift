@@ -5,11 +5,13 @@ import ImageIO
 import UniformTypeIdentifiers
 
 @main
-class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, ObservableObject {
+class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowDelegate, ObservableObject {
 
     var statusItem: NSStatusItem!
     var popover: NSPopover!
     var historyWindow: NSWindow?
+    private var pinnedPanel: NSPanel?
+    @Published var isPinned = false
     private var hotKey: GlobalHotKey?
 
     private enum HotKeyDefaults {
@@ -181,7 +183,51 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, Observabl
     }
 
     func popoverDidClose(_ notification: Notification) {
-        portManager.setPopoverVisible(false)
+        // A pinned window keeps the fast refresh cadence alive
+        portManager.setPopoverVisible(isPinned)
+    }
+
+    // MARK: - Pinned floating window
+
+    /// A floating panel with the same content, for keeping an eye on ports
+    /// while working ("is my build's port free yet?").
+    func togglePinnedWindow() {
+        if let panel = pinnedPanel {
+            panel.close()
+            return
+        }
+
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 600),
+            styleMask: [.titled, .closable, .utilityWindow],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = "PortKilla"
+        panel.level = .floating
+        panel.isReleasedWhenClosed = false
+        panel.hidesOnDeactivate = false
+        // The panel is mouse-driven; a second key monitor would double-handle
+        // shortcuts alongside the popover's.
+        panel.contentViewController = NSHostingController(
+            rootView: PortListView(portManager: portManager, installsKeyMonitor: false)
+                .environmentObject(self)
+        )
+        panel.delegate = self
+        panel.center()
+        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        pinnedPanel = panel
+        isPinned = true
+        portManager.setPopoverVisible(true)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard (notification.object as? NSWindow) === pinnedPanel else { return }
+        pinnedPanel = nil
+        isPinned = false
+        portManager.setPopoverVisible(popover.isShown)
     }
 
     @objc func togglePopover() {

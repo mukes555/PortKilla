@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.5.0 — 2026-08-07
+
+### The native scanner release
+
+- **Raw-syscall scanning (libproc)**: process + socket enumeration now uses
+  kernel interfaces directly — a full scan (≈480 processes, ≈60 listeners) takes
+  ~19ms with **zero subprocesses** (previously two lsof runs + ps per refresh).
+  lsof/ps remain only as an automatic fallback. CPU% is now a true
+  between-scans delta, and process names are no longer truncated at 9 chars.
+- **Pin as Floating Window** (gear menu): keep the port list on top while you
+  work; refresh stays at full cadence while pinned.
+- **Port guards** (bolt-shield in the Watched section): opt-in per port —
+  anything unprotected of yours that grabs a guarded port is auto-killed, with
+  a notification. Explicit confirmation required to enable.
+- **Raycast extension scaffold** under `extensions/raycast/` (experimental),
+  built on the CLI's `list --json` / `kill`.
+- CLI `list` now shows a PROTO column.
+- Internals: kill verification is event-driven (DispatchSourceProcess), the
+  two largest files were split per-responsibility, CI actions bumped and a UI
+  render smoke test added to every CI run.
+
 ## 1.4.0 — 2026-08-07
 
 The "big batch" release.

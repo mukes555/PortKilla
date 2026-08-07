@@ -48,6 +48,9 @@ Right-click any port → **Watch**. Watched ports are **pinned to the top of the
 
 ## 📡 More Signal
 
+*   **Native scanner**: ports and processes are enumerated with raw kernel syscalls (libproc) — a full scan takes ~20ms with zero subprocesses.
+*   **Pin as Floating Window**: keep the list on top while you work (gear menu).
+*   **Port guards** 🛡⚡: opt-in per watched port — anything of yours that grabs a guarded port gets auto-killed, with a notification.
 *   **UDP ports** are listed too (tagged `UDP`; ephemeral outgoing sockets filtered out).
 *   **Age & CPU** per process in tooltips and details — Test Radar shows live CPU to expose runaway watchers.
 *   **Open Project in your editor**: VS Code, Cursor, Zed, Sublime Text, and Trae are auto-detected.
@@ -100,7 +103,7 @@ Drag `PortKilla.app` to `/Applications`.
 ./scripts/build.sh --dmg
 ```
 
-This produces `dist/PortKilla-1.4.0.dmg`.
+This produces `dist/PortKilla-1.5.0.dmg`.
 
 To distribute to other Macs without Gatekeeper prompts, you’ll eventually want Developer ID signing + notarization.
 

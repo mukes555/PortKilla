@@ -46,10 +46,13 @@ struct PortListView: View {
     @AppStorage("PortKilla.didDismissHotkeyTip") var didDismissHotkeyTip = false
     @FocusState var isSearchFocused: Bool
 
-    init(portManager: PortManager, initialSearchText: String = "", initialSelectedId: String? = nil) {
+    let installsKeyMonitor: Bool
+
+    init(portManager: PortManager, initialSearchText: String = "", initialSelectedId: String? = nil, installsKeyMonitor: Bool = true) {
         _portManager = ObservedObject(wrappedValue: portManager)
         _searchText = State(initialValue: initialSearchText)
         _selectedId = State(initialValue: initialSelectedId)
+        self.installsKeyMonitor = installsKeyMonitor
     }
 
     var filteredPorts: [PortInfo] {

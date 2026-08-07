@@ -70,6 +70,17 @@ struct WatchedSectionView: View {
                 .help("Kill \(active.processName)")
             }
 
+            Button(action: { toggleGuard(port) }) {
+                Image(systemName: portManager.isGuarded(port) ? "bolt.shield.fill" : "bolt.shield")
+                    .font(.system(size: 11))
+                    .foregroundColor(portManager.isGuarded(port) ? .orange : .secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(portManager.isGuarded(port) ? "Disable guard on port \(port)" : "Guard port \(port)")
+            .help(portManager.isGuarded(port)
+                  ? "Guard active: anything that takes :\(port) gets auto-killed"
+                  : "Guard :\(port) — auto-kill anything that takes it")
+
             Button(action: { portManager.toggleWatch(port) }) {
                 Image(systemName: "star.slash")
                     .font(.system(size: 11))
@@ -81,5 +92,25 @@ struct WatchedSectionView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 5)
+    }
+
+    /// Enabling a guard is the one automation that kills without asking —
+    /// it always gets an explicit confirmation.
+    private func toggleGuard(_ port: Int) {
+        if portManager.isGuarded(port) {
+            portManager.toggleGuard(port)
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Guard port :\(port)?"
+        alert.informativeText = "PortKilla will automatically kill any unprotected process of yours that starts listening on :\(port), and notify you when it does."
+        alert.addButton(withTitle: "Guard")
+        alert.addButton(withTitle: "Cancel")
+        alert.alertStyle = .warning
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            portManager.toggleGuard(port)
+        }
     }
 }

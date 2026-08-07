@@ -6,6 +6,9 @@ import AppKit
 extension PortListView {
 
     func installKeyMonitorIfNeeded() {
+        // Pinned-window copies skip the monitor — two instances would
+        // double-handle every shortcut.
+        guard installsKeyMonitor else { return }
         // The popover can re-show without a matching onDisappear;
         // guard so shortcuts never stack duplicate monitors.
         guard eventMonitor == nil else { return }

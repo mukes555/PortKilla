@@ -54,10 +54,11 @@ enum PortKillaCLI {
             return 0
         }
 
-        print("PORT   PID     PROCESS               MEMORY    BIND")
+        print("PORT   PROTO  PID     PROCESS               MEMORY    BIND")
         for port in ports {
             let line = [
                 ":\(port.port)".padding(toLength: 7, withPad: " ", startingAt: 0),
+                port.proto.padding(toLength: 7, withPad: " ", startingAt: 0),
                 "\(port.pid)".padding(toLength: 8, withPad: " ", startingAt: 0),
                 port.processName.padding(toLength: 22, withPad: " ", startingAt: 0),
                 port.memoryUsage.padding(toLength: 10, withPad: " ", startingAt: 0),

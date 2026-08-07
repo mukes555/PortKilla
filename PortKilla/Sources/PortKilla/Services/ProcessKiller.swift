@@ -69,7 +69,12 @@ class ProcessKiller {
     }
 
     private func getChildPids(for pid: Int) -> [Int] {
-        // pgrep exits 1 when there are no children.
+        // Native snapshot first; pgrep as fallback (exits 1 with no children)
+        let native = NativeScanner.childPids(of: Int32(pid))
+        if !native.isEmpty {
+            return native.map(Int.init)
+        }
+
         let output = (try? CommandRunner.run(
             "/usr/bin/pgrep", ["-P", "\(pid)"], timeout: 2.0, allowedExitCodes: [0, 1]
         )) ?? ""
@@ -81,7 +86,13 @@ class ProcessKiller {
     /// Returns the executable base name currently running under `pid`,
     /// or nil if the PID is not alive.
     private func currentProcessName(pid: Int) -> String? {
-        // ps exits 1 when the PID doesn't exist.
+        guard isProcessRunning(pid) else { return nil }
+
+        if let name = NativeScanner.processName(Int32(pid)) {
+            return name
+        }
+
+        // Fallback: ps exits 1 when the PID doesn't exist
         let output = (try? CommandRunner.run(
             "/bin/ps", ["-p", "\(pid)", "-o", "comm="], timeout: 2.0, allowedExitCodes: [0, 1]
         )) ?? ""

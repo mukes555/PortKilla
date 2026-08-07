@@ -46,6 +46,12 @@ struct PortListView: View {
     @AppStorage("PortKilla.didDismissHotkeyTip") private var didDismissHotkeyTip = false
     @FocusState private var isSearchFocused: Bool
 
+    init(portManager: PortManager, initialSearchText: String = "", initialSelectedId: String? = nil) {
+        _portManager = ObservedObject(wrappedValue: portManager)
+        _searchText = State(initialValue: initialSearchText)
+        _selectedId = State(initialValue: initialSelectedId)
+    }
+
     var appVersionText: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
         return "v\(version ?? "dev")"

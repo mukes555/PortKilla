@@ -12,8 +12,13 @@ let package = Package(
         .executable(name: "PortKilla", targets: ["PortKilla"])
     ],
     targets: [
+        .target(
+            name: "CLibProc",
+            path: "Sources/CLibProc"
+        ),
         .executableTarget(
             name: "PortKilla",
+            dependencies: ["CLibProc"],
             path: "Sources/PortKilla"
         ),
         .testTarget(

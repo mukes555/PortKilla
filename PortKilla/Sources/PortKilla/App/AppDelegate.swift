@@ -1,6 +1,8 @@
 import Cocoa
 import SwiftUI
 import Combine
+import ImageIO
+import UniformTypeIdentifiers
 
 @main
 class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, ObservableObject {
@@ -97,6 +99,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, Observabl
             let viewName = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_VIEW"] ?? "main"
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
                 self?.writeSnapshot(of: viewName, to: snapshotPath)
+                NSApp.terminate(nil)
+            }
+        }
+
+        // Demo-reel hook: renders a scripted search→kill→free sequence with
+        // fabricated data into an animated GIF (for the README), then quits.
+        //   PORTKILLA_DEMO_GIF=/tmp/demo.gif
+        if let gifPath = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_DEMO_GIF"] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.renderDemoReel(to: gifPath)
                 NSApp.terminate(nil)
             }
         }

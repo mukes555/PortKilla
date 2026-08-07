@@ -2,7 +2,7 @@
 
 # PortKilla - macOS Port Manager
 
-<p align="center"><img src="assets/screenshot.png" width="500" alt="PortKilla main window: watched ports, dev servers with project chips, exposed badges"></p>
+<p align="center"><img src="assets/demo.gif" width="500" alt="PortKilla demo: search port 3000, kill it, watch it come back free"></p>
 
 **PortKilla** is a lightweight, native macOS menu bar app that helps developers identify and kill processes occupying ports. Instantly fix `EADDRINUSE` errors, terminate stuck Node.js servers, and free up localhost ports without touching the terminal.
 

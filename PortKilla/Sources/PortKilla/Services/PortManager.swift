@@ -108,11 +108,16 @@ class PortManager: ObservableObject {
             watchedPorts = Set(stored)
         }
         shouldRestartTimerOnIntervalChange = true
-        startAutoRefresh()
 
-        // Once a day, quietly see if a newer release exists
-        if UpdateChecker.shouldAutoCheck() {
-            checkForUpdates(manual: false)
+        // Demo-reel rendering drives state manually — no live scanning
+        let isDemoMode = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_DEMO_GIF"] != nil
+        if !isDemoMode {
+            startAutoRefresh()
+
+            // Once a day, quietly see if a newer release exists
+            if UpdateChecker.shouldAutoCheck() {
+                checkForUpdates(manual: false)
+            }
         }
     }
 

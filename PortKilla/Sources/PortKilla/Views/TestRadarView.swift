@@ -3,41 +3,14 @@ import AppKit
 
 struct TestRadarView: View {
     @ObservedObject var portManager: PortManager
+    // Filtered by the main search field in PortListView
+    let tests: [TestProcessInfo]
+    @Binding var selectedId: String?
     @State private var hoverId: String?
-    @State private var searchText = ""
     @State private var selectedTest: TestProcessInfo?
-
-    var filteredTests: [TestProcessInfo] {
-        if searchText.isEmpty {
-            return portManager.activeTests
-        } else {
-            return portManager.activeTests.filter { test in
-                test.processName.localizedCaseInsensitiveContains(searchText) ||
-                test.command.localizedCaseInsensitiveContains(searchText)
-            }
-        }
-    }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Search Bar
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                TextField("Search test processes...", text: $searchText)
-                    .textFieldStyle(PlainTextFieldStyle())
-                if !searchText.isEmpty {
-                    Button(action: { searchText = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(8)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .overlay(Rectangle().frame(height: 1).foregroundColor(Color(nsColor: .separatorColor)), alignment: .bottom)
-
             // Column Headers
             HStack {
                 Text("Type")
@@ -58,14 +31,14 @@ struct TestRadarView: View {
             Divider()
 
             // List
-            if filteredTests.isEmpty {
+            if tests.isEmpty {
                 VStack {
                     Spacer()
                     Image(systemName: "checkmark.shield")
                         .font(.system(size: 32))
                         .foregroundColor(.secondary)
                         .padding(.bottom, 8)
-                    Text(searchText.isEmpty ? "No active test processes" : "No results found")
+                    Text("No active test processes")
                     .foregroundColor(.secondary)
                 Text("Background tests will appear here (Beta)")
                     .font(.caption)
@@ -76,9 +49,10 @@ struct TestRadarView: View {
                 .frame(maxHeight: .infinity)
             } else {
                 TestListContent(
-                    filteredTests: filteredTests,
+                    filteredTests: tests,
                     portManager: portManager,
                     hoverId: $hoverId,
+                    selectedId: $selectedId,
                     onSelectTest: { test in selectedTest = test }
                 )
             }
@@ -93,25 +67,44 @@ struct TestListContent: View {
     let filteredTests: [TestProcessInfo]
     @ObservedObject var portManager: PortManager
     @Binding var hoverId: String?
+    @Binding var selectedId: String?
     let onSelectTest: (TestProcessInfo) -> Void
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(filteredTests) { test in
-                    TestProcessRow(test: test, manager: portManager) {
-                        onSelectTest(test)
-                    }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(hoverId == test.id ? Color.primary.opacity(0.05) : Color.clear)
-                        .onHover { isHovering in
-                            hoverId = isHovering ? test.id : nil
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(filteredTests) { test in
+                        TestProcessRow(test: test, manager: portManager) {
+                            onSelectTest(test)
                         }
-                    Divider()
+                            .id(test.id)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(rowBackground(for: test.id))
+                            .onHover { isHovering in
+                                hoverId = isHovering ? test.id : nil
+                            }
+                        Divider()
+                    }
+                }
+            }
+            .onChange(of: selectedId) { newValue in
+                if let newValue {
+                    proxy.scrollTo(newValue)
                 }
             }
         }
+    }
+
+    private func rowBackground(for id: String) -> Color {
+        if selectedId == id {
+            return Color.accentColor.opacity(0.15)
+        }
+        if hoverId == id {
+            return Color.primary.opacity(0.05)
+        }
+        return Color.clear
     }
 }
 
@@ -144,8 +137,8 @@ struct TestDetailView: View {
                 Spacer()
 
                 Menu {
-                    Button("Copy PID") { copyToPasteboard("\(test.pid)") }
-                    Button("Copy Command") { copyToPasteboard(test.command) }
+                    Button("Copy PID") { Pasteboard.copy("\(test.pid)") }
+                    Button("Copy Command") { Pasteboard.copy(test.command) }
                 } label: {
                     Image(systemName: "doc.on.doc")
                 }
@@ -176,28 +169,6 @@ struct TestDetailView: View {
         }
         .padding()
         .frame(width: 360, height: 360)
-    }
-
-    private func copyToPasteboard(_ text: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-    }
-}
-
-struct DetailRow: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        HStack {
-            Text(label)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .frame(width: 60, alignment: .leading)
-            Text(value)
-                .font(.system(.body, design: .monospaced))
-            Spacer()
-        }
     }
 }
 
@@ -238,10 +209,16 @@ struct TestProcessRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .help("PID: \(test.pid)\nCommand: \(test.command)")
 
-                Text(test.memoryUsage)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .frame(width: 70, alignment: .trailing)
+                // Tests are exactly where CPU% matters (runaway watchers)
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(test.memoryUsage)
+                        .font(.system(size: 11, design: .monospaced))
+                    Text(String(format: "%.0f%% cpu", test.cpuPercent))
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(test.cpuPercent > 80 ? .orange : .secondary)
+                }
+                .foregroundColor(.secondary)
+                .frame(width: 70, alignment: .trailing)
             }
             .contentShape(Rectangle())
             .onTapGesture {
@@ -255,8 +232,10 @@ struct TestProcessRow: View {
                 Button(action: {
                     if NSEvent.modifierFlags.contains(.option) {
                         manager.killTestProcess(test, force: true)
-                    } else {
+                    } else if manager.confirmBeforeKill {
                         showConfirmation = true
+                    } else {
+                        manager.killTestProcess(test)
                     }
                 }) {
                     Image(systemName: "xmark.circle.fill")
@@ -268,7 +247,7 @@ struct TestProcessRow: View {
             .alert(isPresented: $showConfirmation) {
                 Alert(
                     title: Text("Kill Test Process?"),
-                    message: Text("Are you sure you want to kill '\(test.processName)' (PID: \(test.pid))?"),
+                    message: Text("Are you sure you want to kill '\(test.processName)' (PID: \(String(test.pid)))?"),
                     primaryButton: .destructive(Text("Kill")) {
                         manager.killTestProcess(test)
                     },
@@ -278,16 +257,11 @@ struct TestProcessRow: View {
         }
         .contextMenu {
             Button("Copy PID") {
-                copyToPasteboard("\(test.pid)")
+                Pasteboard.copy("\(test.pid)")
             }
             Button("Copy Command") {
-                copyToPasteboard(test.command)
+                Pasteboard.copy(test.command)
             }
         }
-    }
-
-    private func copyToPasteboard(_ text: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
     }
 }

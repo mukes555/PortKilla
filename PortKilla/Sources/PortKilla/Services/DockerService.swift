@@ -1,133 +1,110 @@
 import Foundation
 
-class DockerService {
+/// Maps published container ports to container names and can stop containers.
+///
+/// All state is lock-guarded: lookups run on the refresh queue while
+/// `stopContainer` runs on ad-hoc kill queues.
+final class DockerService {
     static let shared = DockerService()
-    
-    // Maps a public port to a container name
-    // Key: Public Port (Int), Value: Container Name (String)
+
+    private let lock = NSLock()
     private var portContainerMap: [Int: String] = [:]
-    
-    // Cache control
-    private var lastUpdate: Date = Date.distantPast
-    private let cacheValidity: TimeInterval = 2.0 // Refresh Docker info every 2 seconds max
-    
-    // Only attempt to run docker if we think it's installed
-    private var isDockerInstalled: Bool = true
-    
+    private var lastUpdate: Date = .distantPast
+    private var cachedDockerPath: String?
+    private var lastPathProbe: Date = .distantPast
+
+    /// Container port mappings change rarely; don't shell out more often than this.
+    private let cacheValidity: TimeInterval = 5.0
+    /// When docker isn't found, re-probe occasionally — it may get installed
+    /// or started later (the old code latched "not installed" forever).
+    private let pathProbeInterval: TimeInterval = 60.0
+
+    private static let candidatePaths = [
+        "/usr/local/bin/docker",
+        "/opt/homebrew/bin/docker", // Homebrew on Apple Silicon
+        "/usr/bin/docker",
+        "/Applications/Docker.app/Contents/Resources/bin/docker"
+    ]
+
     func getContainerName(forPort port: Int) -> String? {
-        refreshDockerInfoIfNeeded()
+        refreshIfNeeded()
+        lock.lock(); defer { lock.unlock() }
         return portContainerMap[port]
     }
-    
-    private func refreshDockerInfoIfNeeded() {
-        if Date().timeIntervalSince(lastUpdate) < cacheValidity {
+
+    private func refreshIfNeeded() {
+        lock.lock()
+        let isFresh = Date().timeIntervalSince(lastUpdate) < cacheValidity
+        if isFresh {
+            lock.unlock()
             return
         }
-        
-        if !isDockerInstalled {
-            return
-        }
-        
         lastUpdate = Date()
-        
-        let task = Process()
-        task.launchPath = "/usr/local/bin/docker" // Standard path, might need adjustment or searching
-        
-        // Fallback to /usr/bin/docker or use `which docker` if needed, 
-        // but hardcoding common paths is faster for now.
-        if !FileManager.default.fileExists(atPath: task.launchPath!) {
-            // Try alternative path
-            task.launchPath = "/usr/bin/docker"
-            if !FileManager.default.fileExists(atPath: task.launchPath!) {
-                // Try one more common location for Docker Desktop on Mac
-                task.launchPath = "/Applications/Docker.app/Contents/Resources/bin/docker"
-                if !FileManager.default.fileExists(atPath: task.launchPath!) {
-                     isDockerInstalled = false
-                     return
-                }
-            }
+        lock.unlock()
+
+        guard let docker = dockerPath() else { return }
+
+        // Output per container: "0.0.0.0:5432->5432/tcp::my-postgres"
+        guard let output = try? CommandRunner.run(
+            docker, ["ps", "--format", "{{.Ports}}::{{.Names}}"], timeout: 3.0
+        ) else {
+            // Daemon down or hung — clear stale names so the UI doesn't lie.
+            lock.lock(); portContainerMap = [:]; lock.unlock()
+            return
         }
-        
-        // Command: docker ps --format "{{.Ports}}::{{.Names}}"
-        // Output looks like: 0.0.0.0:5432->5432/tcp::my-postgres-db
-        task.arguments = ["ps", "--format", "{{.Ports}}::{{.Names}}"]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        
-        do {
-            try task.run()
-            
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8) {
-                parseDockerOutput(output)
-            }
-        } catch {
-            print("Failed to run docker command: \(error)")
-        }
+
+        let map = Self.parsePortMap(output)
+        lock.lock(); portContainerMap = map; lock.unlock()
     }
-    
-    private func parseDockerOutput(_ output: String) {
-        // Clear old map
-        var newMap: [Int: String] = [:]
-        
-        let lines = output.components(separatedBy: "\n")
-        for line in lines {
+
+    private func dockerPath() -> String? {
+        lock.lock(); defer { lock.unlock() }
+        if let cached = cachedDockerPath { return cached }
+        if Date().timeIntervalSince(lastPathProbe) < pathProbeInterval { return nil }
+
+        lastPathProbe = Date()
+        cachedDockerPath = Self.candidatePaths.first { FileManager.default.fileExists(atPath: $0) }
+        return cachedDockerPath
+    }
+
+    static func parsePortMap(_ output: String) -> [Int: String] {
+        var map: [Int: String] = [:]
+
+        for line in output.components(separatedBy: "\n") {
+            // IPv6 bindings contain "::" themselves (":::8080->8080/tcp::api"),
+            // so the container name is the LAST component, ports are the rest.
             let parts = line.components(separatedBy: "::")
-            guard parts.count >= 2 else { continue }
-            
-            let portsStr = parts[0]
-            let containerName = parts[1]
-            
-            // Ports string examples:
-            // "0.0.0.0:5432->5432/tcp"
-            // "0.0.0.0:80->80/tcp, 0.0.0.0:443->443/tcp"
-            
-            // Split by comma for multiple ports
-            let portMappings = portsStr.components(separatedBy: ",")
-            
-            for mapping in portMappings {
-                // Look for pattern "0.0.0.0:PORT->" or ":::PORT->"
-                if let rangeArrow = mapping.range(of: "->") {
-                    let publicPart = mapping[..<rangeArrow.lowerBound]
-                    // publicPart is like "0.0.0.0:5432" or ":::5432"
-                    
-                    if let lastColon = publicPart.lastIndex(of: ":") {
-                        let portStr = publicPart[publicPart.index(after: lastColon)...]
-                        if let port = Int(portStr) {
-                            newMap[port] = containerName
-                        }
-                    }
+            guard parts.count >= 2, let containerName = parts.last, !containerName.isEmpty else { continue }
+
+            let portsStr = parts.dropLast().joined(separator: "::")
+
+            // Ports string: "0.0.0.0:5432->5432/tcp" or several comma-separated mappings
+            for mapping in portsStr.components(separatedBy: ",") {
+                guard let rangeArrow = mapping.range(of: "->") else { continue }
+                let publicPart = mapping[..<rangeArrow.lowerBound] // "0.0.0.0:5432" or ":::5432"
+
+                guard let lastColon = publicPart.lastIndex(of: ":") else { continue }
+                let portStr = publicPart[publicPart.index(after: lastColon)...]
+                if let port = Int(portStr) {
+                    map[port] = containerName
                 }
             }
         }
-        
-        self.portContainerMap = newMap
+
+        return map
     }
-    
+
     func stopContainer(name: String) throws {
-        let task = Process()
-        
-        // Reuse path logic (simplified here for brevity, usually should store the valid path)
-        var dockerPath = "/usr/local/bin/docker"
-        if !FileManager.default.fileExists(atPath: dockerPath) {
-             dockerPath = "/usr/bin/docker"
-             if !FileManager.default.fileExists(atPath: dockerPath) {
-                 dockerPath = "/Applications/Docker.app/Contents/Resources/bin/docker"
-             }
+        guard let docker = dockerPath() else {
+            throw NSError(domain: "DockerService", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "Docker CLI not found"
+            ])
         }
-        
-        task.launchPath = dockerPath
-        task.arguments = ["stop", name]
-        
-        try task.run()
-        task.waitUntilExit()
-        
-        if task.terminationStatus != 0 {
-            throw NSError(domain: "DockerService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to stop container \(name)"])
-        }
-        
-        // Invalidate cache so UI updates quickly
-        lastUpdate = Date.distantPast
+
+        // `docker stop` waits up to 10s for a graceful shutdown; allow that plus slack.
+        _ = try CommandRunner.run(docker, ["stop", name], timeout: 15.0)
+
+        // Invalidate cache so the UI updates quickly
+        lock.lock(); lastUpdate = .distantPast; lock.unlock()
     }
 }

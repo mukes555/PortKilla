@@ -3,16 +3,31 @@ import SwiftUI
 import Combine
 
 @main
-class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
+class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, ObservableObject {
 
     var statusItem: NSStatusItem!
     var popover: NSPopover!
     var historyWindow: NSWindow?
+    private var hotKey: GlobalHotKey?
+
+    private enum HotKeyDefaults {
+        static let keyCode = "PortKilla.hotkeyKeyCode"
+        static let modifiers = "PortKilla.hotkeyModifiers"
+        static let display = "PortKilla.hotkeyDisplay"
+    }
+
+    @Published var hotkeyDisplay: String = GlobalHotKey.defaultDisplay
 
     let portManager = PortManager()
     var cancellables = Set<AnyCancellable>()
 
     static func main() {
+        // CLI mode: `PortKilla list`, `PortKilla kill 3000`, …
+        let arguments = Array(Foundation.ProcessInfo.processInfo.arguments.dropFirst())
+        if let exitCode = PortKillaCLI.run(arguments) {
+            exit(exitCode)
+        }
+
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate
@@ -47,15 +62,96 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         popover.contentViewController = NSHostingController(rootView: contentView)
         popover.behavior = .transient
         popover.animates = true
-        popover.contentSize = NSSize(width: 400, height: 500)
+        popover.contentSize = NSSize(width: 500, height: 600)
+        // Track visibility so PortManager can slow the scan down while hidden.
+        popover.delegate = self
 
         // Hide dock icon (make it a background agent / menu bar app only)
         NSApp.setActivationPolicy(.accessory)
+
+        // Global hotkey from anywhere toggles the popover (permission-free
+        // Carbon API); the shortcut is user-configurable via the gear menu.
+        registerStoredHotKey()
+
+        // First launch: open the popover once so the user finds the app,
+        // instead of it silently vanishing into the menu bar.
+        let hasLaunchedKey = "PortKilla.hasLaunchedBefore"
+        if !UserDefaults.standard.bool(forKey: hasLaunchedKey) {
+            UserDefaults.standard.set(true, forKey: hasLaunchedKey)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.togglePopover()
+            }
+        }
+
+        // Debug/testing hook: auto-open the popover so the UI can be screenshotted
+        if Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SHOW_ON_LAUNCH"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                self?.togglePopover()
+            }
+        }
+
+        // Debug/testing hook: render a view to PNG offscreen (no screen-recording
+        // permission needed), then quit. Waits for the first scan to fill the list.
+        //   PORTKILLA_SNAPSHOT=/tmp/ui.png [PORTKILLA_SNAPSHOT_VIEW=main|bulkkill|protected|detail]
+        if let snapshotPath = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT"] {
+            let viewName = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_VIEW"] ?? "main"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+                self?.writeSnapshot(of: viewName, to: snapshotPath)
+                NSApp.terminate(nil)
+            }
+        }
+    }
+
+    private func writeSnapshot(of viewName: String, to path: String) {
+        // Seed watched ports so the watched section can be rendered in snapshots
+        if let watchList = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_WATCH"] {
+            portManager.watchedPorts = Set(watchList.split(separator: ",").compactMap { Int($0) })
+        }
+
+        let view: NSView
+        switch viewName {
+        case "bulkkill":
+            view = NSHostingView(rootView: BulkKillView(portManager: portManager))
+        case "protected":
+            view = NSHostingView(rootView: ProtectedProcessListView(portManager: portManager))
+        case "detail":
+            let port = portManager.activePorts.first ?? PortInfo(
+                port: 3000, pid: 1234, processName: "node",
+                command: "/usr/local/bin/node server.js", user: NSUserName(),
+                memoryUsage: "45MB", memorySizeKB: 46080, type: .nodejs,
+                projectName: "my-app", bindAddress: "*"
+            )
+            view = NSHostingView(rootView: PortDetailView(port: port))
+        default:
+            view = NSHostingView(rootView: PortListView(portManager: portManager).environmentObject(self))
+        }
+
+        let size = view.fittingSize == .zero ? NSSize(width: 500, height: 600) : view.fittingSize
+
+        // Host in an offscreen window so the view gets a real appearance chain
+        // (otherwise dark-mode colors resolve against a transparent void).
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless], backing: .buffered, defer: false
+        )
+        switch Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_APPEARANCE"] {
+        case "light": window.appearance = NSAppearance(named: .aqua)
+        case "dark": window.appearance = NSAppearance(named: .darkAqua)
+        default: window.appearance = NSApp.effectiveAppearance
+        }
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+
+        guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        if let data = rep.representation(using: .png, properties: [:]) {
+            try? data.write(to: URL(fileURLWithPath: path))
+        }
     }
 
     func updateMenuBar() {
         guard let button = statusItem.button else { return }
-        let count = portManager.activePorts.count
+        let count = portManager.menuBarBadgeCount
 
         if count > 0 {
             // Active state
@@ -66,6 +162,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             button.image = NSImage(systemSymbolName: "bolt", accessibilityDescription: "No Active Ports")
             button.title = ""
         }
+    }
+
+    func popoverWillShow(_ notification: Notification) {
+        portManager.setPopoverVisible(true)
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        portManager.setPopoverVisible(false)
     }
 
     @objc func togglePopover() {
@@ -80,9 +184,80 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
     }
 
+    func closePopover() {
+        popover.performClose(nil)
+    }
+
+    // MARK: - Global hotkey
+
+    private func registerStoredHotKey() {
+        let defaults = UserDefaults.standard
+        let keyCode = defaults.object(forKey: HotKeyDefaults.keyCode) as? Int
+        let modifiers = defaults.object(forKey: HotKeyDefaults.modifiers) as? Int
+
+        hotkeyDisplay = defaults.string(forKey: HotKeyDefaults.display) ?? GlobalHotKey.defaultDisplay
+        hotKey = GlobalHotKey(
+            keyCode: keyCode.map(UInt32.init) ?? GlobalHotKey.defaultKeyCode,
+            modifiers: modifiers.map(UInt32.init) ?? GlobalHotKey.defaultModifiers
+        ) { [weak self] in
+            self?.togglePopover()
+        }
+    }
+
+    /// Replaces the global hotkey; returns false if registration failed
+    /// (e.g. the combination is taken by the system).
+    @discardableResult
+    func setHotKey(keyCode: UInt32, carbonModifiers: UInt32, display: String) -> Bool {
+        hotKey = nil // Unregister the old one first (deinit)
+
+        guard let newHotKey = GlobalHotKey(keyCode: keyCode, modifiers: carbonModifiers, onPress: { [weak self] in
+            self?.togglePopover()
+        }) else {
+            registerStoredHotKey() // Fall back to the previous shortcut
+            return false
+        }
+
+        hotKey = newHotKey
+        hotkeyDisplay = display
+        let defaults = UserDefaults.standard
+        defaults.set(Int(keyCode), forKey: HotKeyDefaults.keyCode)
+        defaults.set(Int(carbonModifiers), forKey: HotKeyDefaults.modifiers)
+        defaults.set(display, forKey: HotKeyDefaults.display)
+        return true
+    }
+
+    func resetHotKey() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: HotKeyDefaults.keyCode)
+        defaults.removeObject(forKey: HotKeyDefaults.modifiers)
+        defaults.removeObject(forKey: HotKeyDefaults.display)
+        hotKey = nil
+        registerStoredHotKey()
+    }
+
+    /// URL scheme: portkilla://kill/3000[?force=1], portkilla://show
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            switch url.host {
+            case "kill":
+                let portNumber = Int(url.lastPathComponent)
+                let force = url.query?.contains("force=1") ?? false
+                if let portNumber {
+                    portManager.killPortNumber(portNumber, force: force)
+                }
+            case "show":
+                if !popover.isShown {
+                    togglePopover()
+                }
+            default:
+                break
+            }
+        }
+    }
+
     func showHistory() {
         if historyWindow == nil {
-            let historyView = HistoryView()
+            let historyView = HistoryView(portManager: portManager)
             historyWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
                 styleMask: [.titled, .closable, .resizable],

@@ -1,7 +1,20 @@
 import SwiftUI
 
 struct HistoryView: View {
+    @ObservedObject var portManager: PortManager
     @State private var historyItems: [PortHistoryItem] = []
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
+
+    private static let exportFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter
+    }()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,7 +27,7 @@ struct HistoryView: View {
                 Text("Process")
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text("Action")
-                    .frame(width: 60, alignment: .trailing)
+                    .frame(width: 100, alignment: .trailing)
             }
             .font(.system(size: 12, weight: .medium))
             .foregroundColor(.secondary)
@@ -48,10 +61,23 @@ struct HistoryView: View {
                                 .font(.system(size: 12))
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                            Text(item.action.rawValue)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(item.action == .killed ? .red : .green)
-                                .frame(width: 60, alignment: .trailing)
+                            HStack(spacing: 6) {
+                                Spacer()
+                                Text(item.action.rawValue)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(item.action == .killed ? .red : .green)
+
+                                // The same server tends to come back — offer a re-kill
+                                if isPortActiveAgain(item.port) {
+                                    Button("Kill again") {
+                                        killAgain(item)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.mini)
+                                    .help("Port :\(String(item.port)) is occupied again")
+                                }
+                            }
+                            .frame(width: 100, alignment: .trailing)
                         }
                         .padding(.vertical, 2)
                     }
@@ -80,7 +106,7 @@ struct HistoryView: View {
             .padding(12)
             .background(Color(nsColor: .windowBackgroundColor))
         }
-        .frame(width: 350, height: 400)
+        .frame(width: 430, height: 400)
         .onAppear {
             loadHistory()
         }
@@ -90,10 +116,27 @@ struct HistoryView: View {
         historyItems = HistoryManager.shared.history
     }
 
+    private func isPortActiveAgain(_ port: Int) -> Bool {
+        portManager.activePorts.contains { $0.port == port }
+    }
+
+    private func killAgain(_ item: PortHistoryItem) {
+        guard let target = portManager.activePorts.first(where: { $0.port == item.port }) else { return }
+
+        let alert = NSAlert()
+        alert.messageText = "Kill Process on :\(target.port)?"
+        alert.informativeText = "This will terminate '\(target.processName)' (PID \(target.pid))."
+        alert.addButton(withTitle: "Kill")
+        alert.addButton(withTitle: "Cancel")
+        alert.alertStyle = .warning
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            portManager.killPort(target)
+        }
+    }
+
     private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
-        return formatter.string(from: date)
+        Self.timeFormatter.string(from: date)
     }
     
     private func exportHistory() {
@@ -117,12 +160,15 @@ struct HistoryView: View {
     
     private func generateCSV() -> String {
         var csv = "Timestamp,Port,Process,Action\n"
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        
+
         for item in historyItems {
-            let line = "\(formatter.string(from: item.timestamp)),\(item.port),\(item.processName),\(item.action.rawValue)\n"
-            csv.append(line)
+            let fields = [
+                Self.exportFormatter.string(from: item.timestamp),
+                "\(item.port)",
+                CSV.field(item.processName),
+                item.action.rawValue
+            ]
+            csv.append(fields.joined(separator: ",") + "\n")
         }
         return csv
     }

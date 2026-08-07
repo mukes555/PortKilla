@@ -2,6 +2,8 @@
 
 ![PortKilla - macOS Port Manager](assets/portkilla_banner.png)
 
+<p align="center"><img src="assets/screenshot.png" width="500" alt="PortKilla main window: watched ports, dev servers with project chips, exposed badges"></p>
+
 **PortKilla** is a lightweight, native macOS menu bar app that helps developers identify and kill processes occupying ports. Instantly fix `EADDRINUSE` errors, terminate stuck Node.js servers, and free up localhost ports without touching the terminal.
 
 ## 🚀 Key Features
@@ -14,16 +16,66 @@
     *   **Force Kill**: Hold Option while clicking kill to send SIGKILL.
 *   **Docker Integration**: Automatically detects and displays Docker container names next to mapped ports.
 *   **Kill All Dev (Node.js)**: One-click bulk kill for Node.js ports (with a safe list to avoid common IDEs/tools).
-*   **Test Radar (Beta)**: Detect common test runners (Jest/Vitest/Mocha/etc) and kill them from a dedicated tab.
+*   **Test Radar (Beta)**: Detect common test runners (Jest/Vitest/Mocha/etc) and kill them from the Tests filter.
 *   **History + CSV Export**: View recent kills and export to CSV.
 
-## ⚡ Productivity Shortcuts
+## ⚡ Keyboard-First Workflow
 
-*   **Global Access**: Lives in your menu bar for instant availability.
-*   **Cmd+R**: Refresh active ports list.
-*   **Cmd+K**: Kill all Node.js ports (Ports tab) or all tests (Test Radar tab).
-*   **Click Row**: Expand/collapse process tree.
-*   **Option+Click**: Force kill (SIGKILL) stubborn processes.
+The whole flow works without touching the mouse: **⌥⌘P → type "3000" or "vite" → ⏎ → dead**.
+
+*   **⌥⌘P**: Open PortKilla from anywhere (global hotkey, no permissions needed).
+*   **Type to search**: The search field is focused the moment the popover opens.
+*   **↑ / ↓**: Move the selection. **→ / ←**: Expand/collapse the process tree.
+*   **⏎**: Kill the selected process (**⌘⏎** force kills with SIGKILL).
+*   **⌘O**: Open `http://localhost:<port>` for the selected row in your browser.
+*   **⌘C**: Copy the selected port number.
+*   **⌘R**: Refresh. **⌘K**: Kill all dev servers (or all tests on the Tests filter).
+*   **Esc**: Clear search, then close.
+*   **Option+Click ✕**: Force kill. **Shift+Click ✕**: Kill the whole process tree.
+
+## 🛡 Signal over Noise
+
+*   **Hide System Processes** (default on): system daemons stay out of your way — a footer hint shows how many are hidden.
+*   **Exposed badge**: ports bound to `0.0.0.0`/`*` are flagged — they're reachable from your local network, not just localhost.
+*   **Project detection**: each dev server shows its actual project folder (from the process working directory) — right-click to reveal it in Finder or open it in Terminal.
+*   **Smart menu-bar count**: the badge counts your dev ports, not every macOS daemon.
+*   **Protected processes** (shield icon): IDEs and tools are skipped by bulk kills.
+*   **Launch at Login**: toggle it in the gear menu.
+
+## 🔔 Port Watchlist
+
+Right-click any port → **Watch**. Watched ports are **pinned to the top of the list with live status** — including "free ✓" — and PortKilla notifies you the moment a watched port **frees up** (no more `EADDRINUSE` retry-loops) or when **something new grabs it**. Searching a free port number offers to watch it in one click, and a kill that's slow to finish notifies you when the port is finally available.
+
+## 📡 More Signal
+
+*   **UDP ports** are listed too (tagged `UDP`; ephemeral outgoing sockets filtered out).
+*   **Age & CPU** per process in tooltips and details — Test Radar shows live CPU to expose runaway watchers.
+*   **Open Project in your editor**: VS Code, Cursor, Zed, Sublime Text, and Trae are auto-detected.
+*   **Configurable hotkey**: gear menu → Change Hotkey (default ⌥⌘P).
+
+## ⌨️ CLI Companion
+
+The same binary doubles as a CLI:
+
+```bash
+# optional: put it on your PATH
+ln -s /Applications/PortKilla.app/Contents/MacOS/PortKilla /usr/local/bin/portkilla
+```
+
+```bash
+portkilla list            # table of listening ports
+portkilla list --json     # JSON output for scripts
+portkilla kill 3000       # graceful kill (SIGTERM)
+portkilla kill 3000 --force
+```
+
+There's also a URL scheme: `open "portkilla://kill/3000"` or `portkilla://show`.
+
+## 🔄 Updates
+
+PortKilla checks GitHub Releases once a day (gear menu → **Check for Updates…**) and shows a **Download vX.Y.Z** item when a newer version exists. No auto-installer — the app is unsigned (no Apple Developer program), so updates stay a deliberate download.
+
+> **First launch note:** since the app is not notarized, macOS may warn on first open. Right-click `PortKilla.app` → **Open** → **Open** (needed once), or `xattr -dr com.apple.quarantine /Applications/PortKilla.app`.
 
 ## 📦 Installation
 
@@ -48,7 +100,7 @@ Drag `PortKilla.app` to `/Applications`.
 ./scripts/build.sh --dmg
 ```
 
-This produces `dist/PortKilla-1.1.0.dmg`.
+This produces `dist/PortKilla-1.4.0.dmg`.
 
 To distribute to other Macs without Gatekeeper prompts, you’ll eventually want Developer ID signing + notarization.
 
@@ -57,7 +109,7 @@ To distribute to other Macs without Gatekeeper prompts, you’ll eventually want
 1.  **Open PortKilla** from your menu bar (Lightning bolt icon).
 2.  **View Active Ports**: See a categorized list of Web, Database, and other processes.
 3.  **Process Tree**: Click on any row to expand and view child processes.
-4.  **Free a Port**:
+4.  **Free a Port**: 
     *   Click **X** to kill.
     *   **Shift+Click X** to kill the entire process tree.
     *   **Option+Click X** to force kill.

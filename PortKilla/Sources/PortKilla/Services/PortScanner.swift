@@ -70,7 +70,7 @@ class PortScanner {
         var proto: String = "tcp"
 
         var isExposedHost: Bool {
-            host == "*" || host == "0.0.0.0" || host == "::"
+            PortInfo.isWildcardHost(host)
         }
     }
 
@@ -295,7 +295,9 @@ class PortScanner {
             return .nodejs
         }
 
-        let databases = ["postgres", "mysqld", "mysql", "mongod", "redis-server", "mariadbd", "mariadb", "docker-proxy"]
+        // docker-proxy intentionally excluded: it fronts Docker-published ports
+        // and is classified below as .docker (with the container name attached).
+        let databases = ["postgres", "mysqld", "mysql", "mongod", "redis-server", "mariadbd", "mariadb"]
         if databases.contains(where: { executable == $0 || lowerProcess.contains($0) }) {
             return .database
         }

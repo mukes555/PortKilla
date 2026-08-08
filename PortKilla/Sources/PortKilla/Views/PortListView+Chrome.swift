@@ -12,7 +12,7 @@ extension PortListView {
 
     var headerView: some View {
         VStack(spacing: 8) {
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "bolt.fill")
                     .foregroundColor(.yellow)
                 Text("PortKilla")
@@ -21,7 +21,9 @@ extension PortListView {
 
                 Spacer()
 
-                settingsMenu
+                densityToggle
+                overflowMenu
+                settingsButton
             }
 
             searchField
@@ -38,68 +40,55 @@ extension PortListView {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
-    var settingsMenu: some View {
+    /// Modern segmented capsule to switch row density.
+    var densityToggle: some View {
+        DensityToggle(density: $portManager.viewDensity)
+    }
+
+    /// Overflow menu: actions only (never settings — those live in ⚙︎).
+    var overflowMenu: some View {
         Menu {
-            Button("Refresh Now") { portManager.refresh(showToast: true) }
+            Button("Refresh") { portManager.refresh(showToast: true) }
                 .keyboardShortcut("r")
-
-            Menu("Auto Refresh") {
-                Picker("", selection: $portManager.refreshInterval) {
-                    Text("Manual only").tag(TimeInterval(0))
-                    Text("Every 2 seconds").tag(TimeInterval(2))
-                    Text("Every 5 seconds").tag(TimeInterval(5))
-                    Text("Every 10 seconds").tag(TimeInterval(10))
-                    Text("Every 30 seconds").tag(TimeInterval(30))
-                }
-                .pickerStyle(.inline)
-                .labelsHidden()
-            }
-
-            Divider()
-
-            Toggle("Hide System Processes", isOn: $portManager.hideSystemProcesses)
-            Toggle("Confirm Before Kill", isOn: $portManager.confirmBeforeKill)
-            Toggle("Launch at Login", isOn: launchAtLoginBinding)
-
-            Divider()
-
+            Button("Bulk Kill…") { activeSheet = .bulkKill }
             Button(appDelegate.isPinned ? "Unpin Floating Window" : "Pin as Floating Window") {
                 appDelegate.togglePinnedWindow()
             }
-
-            Divider()
-
-            Button("Bulk Kill…") { activeSheet = .bulkKill }
-            Button("Protected Processes…") { activeSheet = .protectedProcesses }
-            Button("Change Hotkey… (\(appDelegate.hotkeyDisplay))") { activeSheet = .hotkeyRecorder }
             Button("History…") { appDelegate.showHistory() }
 
             Divider()
 
             if let newer = portManager.updateAvailableVersion {
-                Button("Download v\(newer)…") {
-                    NSWorkspace.shared.open(UpdateChecker.releasesPageURL)
-                }
-            } else {
-                Button("Check for Updates…") {
-                    portManager.checkForUpdates(manual: true)
-                }
+                Button("Download v\(newer)…") { NSWorkspace.shared.open(UpdateChecker.releasesPageURL) }
             }
-
-            Text("\(appVersionText) · global hotkey \(appDelegate.hotkeyDisplay)")
-
             Button("Quit PortKilla") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q")
         } label: {
-            Image(systemName: "gearshape")
+            Image(systemName: "ellipsis.circle")
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
-                .frame(width: 28, height: 22)
+                .frame(width: 26, height: 22)
                 .contentShape(Rectangle())
         }
         .menuStyle(BorderlessButtonMenuStyle())
         .menuIndicator(.hidden)
         .fixedSize()
+        .help("Actions")
+    }
+
+    /// Gear opens the dedicated Settings window — settings only, no actions.
+    var settingsButton: some View {
+        Button {
+            appDelegate.openSettings()
+        } label: {
+            Image(systemName: "gearshape")
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+                .frame(width: 26, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut(",", modifiers: .command)
         .help("Settings")
     }
 

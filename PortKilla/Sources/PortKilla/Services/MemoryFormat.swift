@@ -47,7 +47,4 @@ enum ElapsedFormat {
         }
     }
 
-    static func humanize(_ etime: String) -> String? {
-        seconds(fromEtime: etime).flatMap { humanize(seconds: $0) }
-    }
 }

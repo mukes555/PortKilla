@@ -31,7 +31,8 @@ enum CSV {
             value = "'" + value
         }
 
-        let needsQuoting = value.contains(",") || value.contains("\"") || value.contains("\n")
+        let needsQuoting = value.contains(",") || value.contains("\"")
+            || value.contains("\n") || value.contains("\r")
         if needsQuoting {
             value = "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
         }

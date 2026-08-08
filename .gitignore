@@ -19,3 +19,7 @@ PortKilla/Builds/
 # Local/Temporary Files
 plan.md
 *.log
+
+# Sanitizer / alternate build dirs
+.build-*/
+**/.build-*/

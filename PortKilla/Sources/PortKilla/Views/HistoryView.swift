@@ -123,14 +123,11 @@ struct HistoryView: View {
     private func killAgain(_ item: PortHistoryItem) {
         guard let target = portManager.activePorts.first(where: { $0.port == item.port }) else { return }
 
-        let alert = NSAlert()
-        alert.messageText = "Kill Process on :\(target.port)?"
-        alert.informativeText = "This will terminate '\(target.processName)' (PID \(target.pid))."
-        alert.addButton(withTitle: "Kill")
-        alert.addButton(withTitle: "Cancel")
-        alert.alertStyle = .warning
-
-        if alert.runModal() == .alertFirstButtonReturn {
+        let confirmed = KillConfirm.run(
+            title: "Kill Process on :\(target.port)?",
+            message: "This will terminate '\(target.processName)' (PID \(target.pid))."
+        )
+        if confirmed {
             portManager.killPort(target)
         }
     }
@@ -152,7 +149,7 @@ struct HistoryView: View {
                 do {
                     try csvContent.write(to: url, atomically: true, encoding: .utf8)
                 } catch {
-                    print("Failed to save history: \(error)")
+                    NSAlert(error: error).runModal()
                 }
             }
         }

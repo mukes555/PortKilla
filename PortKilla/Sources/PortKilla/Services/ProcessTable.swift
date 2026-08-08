@@ -14,9 +14,14 @@ struct ProcessTable {
         let cpuPercent: Double
         let ageSeconds: Int?
         let command: String
+        /// Authoritative name from the kernel (native scans). The computed
+        /// fallback mis-splits paths with spaces ("Google Chrome Helper" -> "Google").
+        var processName: String?
 
-        /// Executable base name, e.g. "/usr/local/bin/node server.js" -> "node"
         var name: String {
+            if let processName, !processName.isEmpty {
+                return processName
+            }
             let executable = command.split(separator: " ").first.map(String.init) ?? command
             return executable.split(separator: "/").last.map(String.init) ?? executable
         }
@@ -34,7 +39,7 @@ struct ProcessTable {
                 Entry(
                     pid: sample.pid, ppid: sample.ppid, rssKB: sample.rssKB,
                     cpuPercent: sample.cpuPercent, ageSeconds: sample.ageSeconds,
-                    command: sample.command
+                    command: sample.command, processName: sample.name
                 )
             })
         }

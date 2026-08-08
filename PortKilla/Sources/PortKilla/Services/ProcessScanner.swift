@@ -68,8 +68,9 @@ class ProcessScanner {
     private func determineTestType(command: String) -> TestProcessInfo.TestType? {
         let lowerCommand = command.lowercased()
 
-        // Filter out PortKilla itself and common system tools to avoid false positives
-        if lowerCommand.contains("portkilaa") || lowerCommand.contains("grep") {
+        // Filter out PortKilla itself and common system tools to avoid false
+        // positives. Match both the product name and the (double-a) dev folder.
+        if lowerCommand.contains("portkilla") || lowerCommand.contains("portkilaa") || lowerCommand.contains("grep") {
             return nil
         }
 

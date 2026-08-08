@@ -181,15 +181,12 @@ extension PortListView {
         }
 
         let processList = devPorts.map { "• \($0.processName) (:\($0.port))" }.joined(separator: "\n")
-
-        let alert = NSAlert()
-        alert.messageText = "Kill \(devPorts.count) Dev Server\(devPorts.count == 1 ? "" : "s")?"
-        alert.informativeText = "This will terminate the following processes:\n\n\(processList)\n\nAre you sure?"
-        alert.addButton(withTitle: "Kill All")
-        alert.addButton(withTitle: "Cancel")
-        alert.alertStyle = .warning
-
-        if alert.runModal() == .alertFirstButtonReturn {
+        let confirmed = KillConfirm.run(
+            title: "Kill \(devPorts.count) Dev Server\(devPorts.count == 1 ? "" : "s")?",
+            message: "This will terminate the following processes:\n\n\(processList)\n\nAre you sure?",
+            confirmTitle: "Kill All"
+        )
+        if confirmed {
             portManager.killPorts(devPorts)
         }
     }
@@ -211,15 +208,12 @@ extension PortListView {
         }
 
         let processList = killableTests.map { "• \($0.processName) (PID: \($0.pid))" }.joined(separator: "\n")
-
-        let alert = NSAlert()
-        alert.messageText = "Kill \(killableTests.count) Test Processes?"
-        alert.informativeText = "This will terminate the following processes:\n\n\(processList)\n\nAre you sure?"
-        alert.addButton(withTitle: "Kill All")
-        alert.addButton(withTitle: "Cancel")
-        alert.alertStyle = .warning
-
-        if alert.runModal() == .alertFirstButtonReturn {
+        let confirmed = KillConfirm.run(
+            title: "Kill \(killableTests.count) Test Processes?",
+            message: "This will terminate the following processes:\n\n\(processList)\n\nAre you sure?",
+            confirmTitle: "Kill All"
+        )
+        if confirmed {
             portManager.killTestProcesses(killableTests)
         }
     }

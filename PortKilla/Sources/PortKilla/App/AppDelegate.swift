@@ -10,6 +10,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     var statusItem: NSStatusItem!
     var popover: NSPopover!
     var historyWindow: NSWindow?
+    private var settingsWindow: NSWindow?
     private var pinnedPanel: NSPanel?
     @Published var isPinned = false
     private var hotKey: GlobalHotKey?
@@ -70,6 +71,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         // Track visibility so PortManager can slow the scan down while hidden.
         popover.delegate = self
 
+        // Redraw the menu bar when its display preference changes
+        portManager.onMenuBarPreferenceChanged = { [weak self] in self?.updateMenuBar() }
+
         // Hide dock icon (make it a background agent / menu bar app only)
         NSApp.setActivationPolicy(.accessory)
 
@@ -87,28 +91,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
             }
         }
 
-        // Debug/testing hook: auto-open the popover so the UI can be screenshotted
-        if Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SHOW_ON_LAUNCH"] == "1" {
+        // Developer-only rendering hooks (screenshots, README GIF, CI smoke
+        // test). Compiled only in debug builds — never in the shipped app.
+        #if DEBUG
+        installDevHooks()
+        #endif
+    }
+
+    #if DEBUG
+    /// Offscreen render hooks, driven by PORTKILLA_* env vars. See CONTRIBUTING.md.
+    private func installDevHooks() {
+        let env = Foundation.ProcessInfo.processInfo.environment
+
+        if env["PORTKILLA_SHOW_ON_LAUNCH"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 self?.togglePopover()
             }
         }
 
-        // Debug/testing hook: render a view to PNG offscreen (no screen-recording
-        // permission needed), then quit. Waits for the first scan to fill the list.
-        //   PORTKILLA_SNAPSHOT=/tmp/ui.png [PORTKILLA_SNAPSHOT_VIEW=main|bulkkill|protected|detail]
-        if let snapshotPath = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT"] {
-            let viewName = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_VIEW"] ?? "main"
+        if let snapshotPath = env["PORTKILLA_SNAPSHOT"] {
+            let viewName = env["PORTKILLA_SNAPSHOT_VIEW"] ?? "main"
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
                 self?.writeSnapshot(of: viewName, to: snapshotPath)
                 NSApp.terminate(nil)
             }
         }
 
-        // Demo-reel hook: renders a scripted search→kill→free sequence with
-        // fabricated data into an animated GIF (for the README), then quits.
-        //   PORTKILLA_DEMO_GIF=/tmp/demo.gif
-        if let gifPath = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_DEMO_GIF"] {
+        if let gifPath = env["PORTKILLA_DEMO_GIF"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 self?.renderDemoReel(to: gifPath)
                 NSApp.terminate(nil)
@@ -121,6 +130,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         if let watchList = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_WATCH"] {
             portManager.watchedPorts = Set(watchList.split(separator: ",").compactMap { Int($0) })
         }
+        if let density = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_DENSITY"],
+           let value = PortManager.ViewDensity(rawValue: density) {
+            portManager.viewDensity = value
+        }
 
         let view: NSView
         switch viewName {
@@ -128,6 +141,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
             view = NSHostingView(rootView: BulkKillView(portManager: portManager))
         case "protected":
             view = NSHostingView(rootView: ProtectedProcessListView(portManager: portManager))
+        case "settings":
+            view = NSHostingView(rootView: SettingsView(portManager: portManager).environmentObject(self))
         case "detail":
             let port = portManager.activePorts.first ?? PortInfo(
                 port: 3000, pid: 1234, processName: "node",
@@ -162,20 +177,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
             try? data.write(to: URL(fileURLWithPath: path))
         }
     }
+    #endif
 
     func updateMenuBar() {
         guard let button = statusItem.button else { return }
         let count = portManager.menuBarBadgeCount
+        let active = count > 0
 
-        if count > 0 {
-            // Active state
-            button.image = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Active Ports")
-            button.title = "\(count)"
-        } else {
-            // Idle state
-            button.image = NSImage(systemSymbolName: "bolt", accessibilityDescription: "No Active Ports")
-            button.title = ""
-        }
+        button.image = NSImage(
+            systemSymbolName: active ? "bolt.fill" : "bolt",
+            accessibilityDescription: active ? "Active Ports" : "No Active Ports"
+        )
+        button.title = (active && portManager.showMenuBarCount) ? "\(count)" : ""
     }
 
     func popoverWillShow(_ notification: Notification) {
@@ -220,6 +233,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
 
         pinnedPanel = panel
         isPinned = true
+        // The pinned window replaces the popover — close it so there aren't
+        // two identical copies on screen.
+        popover.performClose(nil)
         portManager.setPopoverVisible(true)
     }
 
@@ -231,6 +247,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     }
 
     @objc func togglePopover() {
+        // While pinned, there's a floating window already — don't open a second
+        // identical popover; just bring the pinned window forward.
+        if let panel = pinnedPanel {
+            panel.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
         if let button = statusItem.button {
             if popover.isShown {
                 popover.performClose(nil)
@@ -244,6 +268,30 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
 
     func closePopover() {
         popover.performClose(nil)
+    }
+
+    /// Opens the dedicated Settings window (gear icon / ⌘,).
+    func openSettings() {
+        // The transient popover floats at a high window level and would sit on
+        // top of a normal window — close it so Settings is actually visible.
+        popover.performClose(nil)
+
+        if settingsWindow == nil {
+            let view = SettingsView(portManager: portManager).environmentObject(self)
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 480, height: 420),
+                styleMask: [.titled, .closable],
+                backing: .buffered, defer: false
+            )
+            window.title = "PortKilla Settings"
+            window.isReleasedWhenClosed = false
+            window.contentViewController = NSHostingController(rootView: view)
+            window.center()
+            settingsWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        settingsWindow?.orderFrontRegardless()
     }
 
     // MARK: - Global hotkey
@@ -318,15 +366,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
 
     private func confirmAndKillFromURL(port: Int, force: Bool) {
         NSApp.activate(ignoringOtherApps: true)
-
-        let alert = NSAlert()
-        alert.messageText = "Kill process on :\(port)?"
-        alert.informativeText = "A link asked PortKilla to \(force ? "force-" : "")kill whatever is listening on :\(port). Only continue if you initiated this."
-        alert.addButton(withTitle: "Kill")
-        alert.addButton(withTitle: "Cancel")
-        alert.alertStyle = .warning
-
-        if alert.runModal() == .alertFirstButtonReturn {
+        let confirmed = KillConfirm.run(
+            title: "Kill process on :\(port)?",
+            message: "A link asked PortKilla to \(force ? "force-" : "")kill whatever is listening on :\(port). Only continue if you initiated this."
+        )
+        if confirmed {
             // respectProtected: a link must not be able to kill a protected process
             portManager.killPortNumber(port, force: force, respectProtected: true)
         }

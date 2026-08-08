@@ -70,7 +70,7 @@ class PortScanner {
         var proto: String = "tcp"
 
         var isExposedHost: Bool {
-            host == "*" || host == "0.0.0.0" || host == "::"
+            PortInfo.isWildcardHost(host)
         }
     }
 

@@ -27,11 +27,17 @@ struct PortInfo: Identifiable, Codable, Equatable {
     /// Human-readable process age, e.g. "3h 12m"
     let age: String?
 
-    /// True when the socket listens on all interfaces, i.e. is reachable
-    /// from the local network, not just this machine.
+    /// A host bound to all interfaces (reachable from the local network, not
+    /// just this machine). One source of truth for the "exposed" check —
+    /// the scanner's raw-listener path uses this too.
+    static func isWildcardHost(_ host: String) -> Bool {
+        host == "*" || host == "0.0.0.0" || host == "::"
+    }
+
+    /// True when the socket listens on all interfaces.
     var isExposed: Bool {
         guard let bindAddress else { return false }
-        return bindAddress == "*" || bindAddress == "0.0.0.0" || bindAddress == "::"
+        return Self.isWildcardHost(bindAddress)
     }
 
     init(port: Int, pid: Int, processName: String, command: String, user: String, memoryUsage: String, memorySizeKB: Int, type: PortType, projectName: String? = nil, projectPath: String? = nil, containerName: String? = nil, children: [ProcessInfo]? = nil, bindAddress: String? = nil, proto: String = "tcp", cpuPercent: Double = 0, age: String? = nil) {

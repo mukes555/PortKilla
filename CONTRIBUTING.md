@@ -109,8 +109,9 @@ Match the surrounding style.
 ## Releases (maintainers)
 
 Tag a version — `git tag v1.6.0 && git push --tags` — and
-`.github/workflows/release.yml` builds the DMG + zip and publishes a GitHub
-release automatically.
+`.github/workflows/release.yml` builds the universal DMG + zip and publishes a
+GitHub release whose notes come from `CHANGELOG.md`. Full process and the
+"What's new" standard: **[RELEASING.md](RELEASING.md)**.
 
 ## Reporting bugs & security issues
 

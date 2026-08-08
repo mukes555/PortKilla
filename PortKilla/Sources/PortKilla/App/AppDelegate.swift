@@ -294,15 +294,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     }
 
     /// URL scheme: portkilla://kill/3000[?force=1], portkilla://show
+    ///
+    /// A URL can be opened by any webpage the user visits, so a scheme-initiated
+    /// kill is never silent: it always asks for confirmation first. (In-app
+    /// kills have their own confirmation flow / explicit modifier keys.)
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
             switch url.host {
             case "kill":
-                let portNumber = Int(url.lastPathComponent)
-                let force = url.query?.contains("force=1") ?? false
-                if let portNumber {
-                    portManager.killPortNumber(portNumber, force: force)
-                }
+                guard let portNumber = Int(url.lastPathComponent) else { break }
+                let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+                let force = components?.queryItems?.contains { $0.name == "force" && $0.value == "1" } ?? false
+                confirmAndKillFromURL(port: portNumber, force: force)
             case "show":
                 if !popover.isShown {
                     togglePopover()
@@ -310,6 +313,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
             default:
                 break
             }
+        }
+    }
+
+    private func confirmAndKillFromURL(port: Int, force: Bool) {
+        NSApp.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.messageText = "Kill process on :\(port)?"
+        alert.informativeText = "A link asked PortKilla to \(force ? "force-" : "")kill whatever is listening on :\(port). Only continue if you initiated this."
+        alert.addButton(withTitle: "Kill")
+        alert.addButton(withTitle: "Cancel")
+        alert.alertStyle = .warning
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            // respectProtected: a link must not be able to kill a protected process
+            portManager.killPortNumber(port, force: force, respectProtected: true)
         }
     }
 

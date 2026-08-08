@@ -6,6 +6,17 @@ import CLibProc
 /// microseconds instead of ~100ms of fork/exec/parse.
 enum NativeScanner {
 
+    /// Reads a NUL-terminated string from a fixed-size C char tuple, bounding
+    /// the scan to the array so a (hypothetically) non-terminated kernel field
+    /// can't be read past its end.
+    static func stringFromFixedCArray<T>(_ tuple: T) -> String {
+        withUnsafeBytes(of: tuple) { raw in
+            let bytes = raw.bindMemory(to: UInt8.self)
+            let end = bytes.firstIndex(of: 0) ?? bytes.count
+            return String(decoding: bytes[..<end], as: UTF8.self)
+        }
+    }
+
     struct Listener {
         let pid: Int
         let port: Int
@@ -29,7 +40,8 @@ enum NativeScanner {
     /// CPU%: computed from the delta between successive scans; first sighting
     /// falls back to the lifetime average.
     private static var previousCPUSample: [Int32: (time: TimeInterval, cpuNS: UInt64)] = [:]
-    private static let sampleLock = NSLock()
+    private static let cpuSampleLock = NSLock()
+    private static let usernameLock = NSLock()
 
     static func listPids() -> [Int32] {
         let capacity = proc_listpids(UInt32(PROC_ALL_PIDS), 0, nil, 0)
@@ -52,8 +64,13 @@ enum NativeScanner {
         var samples: [ProcessSample] = []
         samples.reserveCapacity(pids.count)
 
-        sampleLock.lock()
-        defer { sampleLock.unlock() }
+        // Snapshot the previous CPU baseline once; the hundreds of per-PID
+        // syscalls below run WITHOUT the lock so a concurrent capture or
+        // username() lookup never stalls behind them.
+        cpuSampleLock.lock()
+        let previousSamples = previousCPUSample
+        cpuSampleLock.unlock()
+
         var newCPUSamples: [Int32: (time: TimeInterval, cpuNS: UInt64)] = [:]
 
         for pid in pids {
@@ -68,31 +85,37 @@ enum NativeScanner {
                 let cpuNS = task.pti_total_user &+ task.pti_total_system
                 newCPUSamples[pid] = (now, cpuNS)
 
-                if let previous = previousCPUSample[pid], now > previous.time {
-                    let deltaNS = Double(cpuNS &- previous.cpuNS)
-                    cpuPercent = max(0, deltaNS / ((now - previous.time) * 1_000_000_000) * 100)
+                // cpuNS < previous means the PID was recycled (the old process's
+                // counter is higher than the new one's) — a wrapping subtraction
+                // would show billions of %. Fall back to the lifetime average.
+                if let previous = previousSamples[pid], now > previous.time, cpuNS >= previous.cpuNS {
+                    let deltaNS = Double(cpuNS - previous.cpuNS)
+                    cpuPercent = deltaNS / ((now - previous.time) * 1_000_000_000) * 100
                 } else {
                     let uptime = now - TimeInterval(bsd.pbi_start_tvsec)
                     if uptime > 1 {
                         cpuPercent = Double(cpuNS) / (uptime * 1_000_000_000) * 100
                     }
                 }
+                cpuPercent = max(0, min(cpuPercent, 100 * Double(Foundation.ProcessInfo.processInfo.activeProcessorCount)))
             }
 
             if bsd.pbi_start_tvsec > 0 {
                 ageSeconds = max(0, Int(now) - Int(bsd.pbi_start_tvsec))
             }
 
-            let name = withUnsafeBytes(of: bsd.pbi_name) { raw in
-                String(cString: raw.bindMemory(to: CChar.self).baseAddress!)
-            }
-            let command = commandLine(pid) ?? executablePath(pid) ?? name
+            // pbi_name truncates at 15 chars; the executable path's basename
+            // is the full name ("Google Chrome Helper"), so prefer it.
+            let shortName = Self.stringFromFixedCArray(bsd.pbi_name)
+            let path = executablePath(pid)
+            let command = commandLine(pid) ?? path ?? shortName
+            let fullName = path.map { ($0 as NSString).lastPathComponent } ?? shortName
 
             samples.append(ProcessSample(
                 pid: Int(pid),
                 ppid: Int(bsd.pbi_ppid),
                 uid: bsd.pbi_uid,
-                name: name.isEmpty ? ((command as NSString).lastPathComponent) : name,
+                name: fullName.isEmpty ? ((command as NSString).lastPathComponent) : fullName,
                 command: command,
                 rssKB: rssKB,
                 cpuPercent: (cpuPercent * 10).rounded() / 10,
@@ -100,7 +123,9 @@ enum NativeScanner {
             ))
         }
 
+        cpuSampleLock.lock()
         previousCPUSample = newCPUSamples
+        cpuSampleLock.unlock()
         return samples
     }
 
@@ -131,9 +156,7 @@ enum NativeScanner {
             return (path as NSString).lastPathComponent
         }
         guard let bsd = bsdInfo(pid) else { return nil }
-        let name = withUnsafeBytes(of: bsd.pbi_name) { raw in
-            String(cString: raw.bindMemory(to: CChar.self).baseAddress!)
-        }
+        let name = Self.stringFromFixedCArray(bsd.pbi_name)
         return name.isEmpty ? nil : name
     }
 
@@ -178,9 +201,7 @@ enum NativeScanner {
         var info = proc_vnodepathinfo()
         let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
         guard proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, size) == size else { return nil }
-        let path = withUnsafeBytes(of: info.pvi_cdir.vip_path) { raw in
-            String(cString: raw.bindMemory(to: CChar.self).baseAddress!)
-        }
+        let path = Self.stringFromFixedCArray(info.pvi_cdir.vip_path)
         return path.isEmpty ? nil : path
     }
 
@@ -191,8 +212,8 @@ enum NativeScanner {
     private static var usernameCache: [uid_t: String] = [:]
 
     static func username(_ uid: uid_t) -> String {
-        sampleLock.lock()
-        defer { sampleLock.unlock() }
+        usernameLock.lock()
+        defer { usernameLock.unlock() }
         if let cached = usernameCache[uid] { return cached }
         let name = getpwuid(uid).map { String(cString: $0.pointee.pw_name) } ?? "\(uid)"
         usernameCache[uid] = name

@@ -30,6 +30,17 @@ final class WatchAndUpdateTests: XCTestCase {
         XCTAssertTrue(stillFree.isEmpty)
     }
 
+    func testOccupantSwapProducesOccupiedEvent() {
+        // Regression: a restart/swap (node -> python) with no idle scan between
+        // must still fire .occupied so the guard kills the replacement.
+        let events = PortManager.watchEvents(
+            watched: [3000],
+            previous: [3000: "node"],
+            current: [3000: "python"]
+        )
+        XCTAssertEqual(events, [PortManager.WatchEvent(port: 3000, kind: .occupied(by: "python"))])
+    }
+
     func testUnwatchedPortsAreIgnored() {
         let events = PortManager.watchEvents(watched: [], previous: [3000: "node"], current: [:])
         XCTAssertTrue(events.isEmpty)

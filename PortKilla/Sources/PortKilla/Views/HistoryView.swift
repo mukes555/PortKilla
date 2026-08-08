@@ -152,7 +152,7 @@ struct HistoryView: View {
                 do {
                     try csvContent.write(to: url, atomically: true, encoding: .utf8)
                 } catch {
-                    print("Failed to save history: \(error)")
+                    NSAlert(error: error).runModal()
                 }
             }
         }

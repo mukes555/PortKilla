@@ -50,8 +50,11 @@ final class GlobalHotKey {
             GetApplicationEventTarget(),
             { _, _, userData in
                 guard let userData else { return noErr }
+                // Carbon delivers hotkey events on the main run loop, so call
+                // synchronously — a deferred main.async could fire onPress()
+                // after the object was replaced (Change Hotkey) and freed.
                 let hotKey = Unmanaged<GlobalHotKey>.fromOpaque(userData).takeUnretainedValue()
-                DispatchQueue.main.async { hotKey.onPress() }
+                hotKey.onPress()
                 return noErr
             },
             1,
@@ -67,6 +70,7 @@ final class GlobalHotKey {
         )
         guard registerStatus == noErr else {
             RemoveEventHandler(eventHandler)
+            eventHandler = nil // deinit must not remove it a second time
             return nil
         }
     }

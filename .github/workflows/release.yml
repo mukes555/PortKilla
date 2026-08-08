@@ -34,6 +34,13 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent dist/PortKilla.app dist/PortKilla.app.zip
           ls -la dist
 
+      - name: Build release notes from CHANGELOG
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"      # v1.6.0 -> 1.6.0
+          bash PortKilla/scripts/release-notes.sh "$VERSION" > release-notes.md
+          echo "----- release notes preview -----"
+          cat release-notes.md
+
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
@@ -42,4 +49,7 @@ jobs:
             PortKilla/dist/*.dmg
           draft: false
           prerelease: false
+          body_path: release-notes.md
+          # Appends the auto-generated "Full Changelog" / contributors list
+          # below our authored notes.
           generate_release_notes: true

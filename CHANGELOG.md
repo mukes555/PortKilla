@@ -1,5 +1,23 @@
 # Changelog
 
+All notable changes are documented here. The GitHub Release notes for each
+version are generated automatically from the matching section below, so keep
+entries user-facing and concise.
+
+Format: one `## <version> — <date>` heading per release, with changes grouped
+under **Added**, **Changed**, **Fixed**, **Security**, or **Distribution**.
+Accumulate work-in-progress notes under **[Unreleased]** as you land PRs; on
+release, rename it to the version and date.
+
+## [Unreleased]
+
+<!-- Add entries here as PRs land, e.g.:
+### Added
+- …
+### Fixed
+- …
+-->
+
 ## 1.6.0 — 2026-08-08
 
 ### Hardening, UI polish, and contributor-readiness

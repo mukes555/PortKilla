@@ -45,3 +45,20 @@ final class PortTypeClassificationTests: XCTestCase {
         XCTAssertEqual(classify("rapportd", "/usr/libexec/rapportd"), .other)
     }
 }
+
+final class WildcardHostTests: XCTestCase {
+    func testWildcardHostDetection() {
+        XCTAssertTrue(PortInfo.isWildcardHost("*"))
+        XCTAssertTrue(PortInfo.isWildcardHost("0.0.0.0"))
+        XCTAssertTrue(PortInfo.isWildcardHost("::"))
+        XCTAssertFalse(PortInfo.isWildcardHost("127.0.0.1"))
+        XCTAssertFalse(PortInfo.isWildcardHost("::1"))
+        XCTAssertFalse(PortInfo.isWildcardHost("192.168.1.5"))
+    }
+
+    func testDockerProxyIsDocker() {
+        // Regression: docker-proxy was misclassified as .database
+        let scanner = PortScanner()
+        XCTAssertEqual(scanner.determinePortType(processName: "docker-proxy", command: "/usr/bin/docker-proxy"), .docker)
+    }
+}

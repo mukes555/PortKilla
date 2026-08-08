@@ -36,18 +36,18 @@ class ProcessKiller {
             guard let actualName = currentProcessName(pid: pid) else {
                 return // Already gone — nothing to do.
             }
-            // Prefix match in both directions because lsof truncates long names.
-            let expected = expectedName.lowercased()
-            let actual = actualName.lowercased()
-            let sameProcess = actual.hasPrefix(expected) || expected.hasPrefix(actual)
-            if !sameProcess {
+            if !Self.namesMatch(expected: expectedName, actual: actualName) {
                 throw KillError.identityMismatch(pid: pid, expected: expectedName, actual: actualName)
             }
         }
 
         if killTree {
-            for childPid in getChildPids(for: pid) {
-                try? killProcess(pid: childPid, force: force, killTree: true)
+            // Capture each child's name at enumeration time so the recursive
+            // kill still runs the PID-reuse identity check where possible.
+            // A nil name (lookup failed) means "can't verify" — kill anyway,
+            // preserving the original unconditional tree-kill behavior.
+            for (childPid, childName) in getChildProcesses(for: pid) {
+                try? killProcess(pid: childPid, force: force, killTree: true, expectedName: childName)
             }
         }
 
@@ -68,19 +68,35 @@ class ProcessKiller {
         }
     }
 
-    private func getChildPids(for pid: Int) -> [Int] {
-        // Native snapshot first; pgrep as fallback (exits 1 with no children)
-        let native = NativeScanner.childPids(of: Int32(pid))
-        if !native.isEmpty {
-            return native.map(Int.init)
+    /// Case-insensitive name match tolerant of lsof's ~9-char truncation.
+    /// An empty expected name means "cannot verify" and never matches — an
+    /// empty prefix would otherwise make the identity check always pass.
+    static func namesMatch(expected: String, actual: String) -> Bool {
+        let expectedLower = expected.lowercased()
+        let actualLower = actual.lowercased()
+        guard !expectedLower.isEmpty, !actualLower.isEmpty else { return false }
+        return actualLower.hasPrefix(expectedLower) || expectedLower.hasPrefix(actualLower)
+    }
+
+    private func getChildProcesses(for pid: Int) -> [(pid: Int, name: String?)] {
+        let children = NativeScanner.childPids(of: Int32(pid))
+        if !children.isEmpty {
+            return children.map { (Int($0), NativeScanner.processName($0)) }
         }
 
+        // pgrep -l lists "pid name"; exits 1 with no children
         let output = (try? CommandRunner.run(
-            "/usr/bin/pgrep", ["-P", "\(pid)"], timeout: 2.0, allowedExitCodes: [0, 1]
+            "/usr/bin/pgrep", ["-lP", "\(pid)"], timeout: 2.0, allowedExitCodes: [0, 1]
         )) ?? ""
 
-        return output.components(separatedBy: .newlines)
-            .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+        return output.components(separatedBy: .newlines).compactMap { line -> (pid: Int, name: String?)? in
+            let parts = line.split(separator: " ", maxSplits: 1)
+            guard let first = parts.first, let childPid = Int(first.trimmingCharacters(in: .whitespaces)) else {
+                return nil
+            }
+            let name = parts.count > 1 ? String(parts[1]) : nil
+            return (childPid, name)
+        }
     }
 
     /// Returns the executable base name currently running under `pid`,

@@ -15,6 +15,21 @@ enum Browser {
     }
 }
 
+/// One confirmation dialog for every kill, so copy, button order, and style
+/// can't drift across the (many) call sites. Returns true if the user confirms.
+enum KillConfirm {
+    @discardableResult
+    static func run(title: String, message: String, confirmTitle: String = "Kill") -> Bool {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: confirmTitle)
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+}
+
 /// Detects installed code editors so project folders can be opened in them.
 enum EditorLauncher {
     struct Editor {

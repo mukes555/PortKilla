@@ -174,14 +174,11 @@ struct BulkKillView: View {
                     let listText = matchingPorts.prefix(12).map { "• \($0.processName) (:\($0.port))" }.joined(separator: "\n")
                     let suffix = count > 12 ? "\n\n…and \(count - 12) more." : ""
 
-                    let alert = NSAlert()
-                    alert.messageText = "Kill \(count) Process\(count == 1 ? "" : "es")?"
-                    alert.informativeText = "This will terminate the following:\n\n\(listText)\(suffix)\n\nAre you sure?"
-                    alert.addButton(withTitle: "Kill")
-                    alert.addButton(withTitle: "Cancel")
-                    alert.alertStyle = .warning
-
-                    if alert.runModal() == .alertFirstButtonReturn {
+                    let confirmed = KillConfirm.run(
+                        title: "Kill \(count) Process\(count == 1 ? "" : "es")?",
+                        message: "This will terminate the following:\n\n\(listText)\(suffix)\n\nAre you sure?"
+                    )
+                    if confirmed {
                         portManager.killPorts(matchingPorts, force: forceKill)
                         dismiss()
                     }

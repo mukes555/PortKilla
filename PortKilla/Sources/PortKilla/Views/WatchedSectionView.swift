@@ -102,14 +102,12 @@ struct WatchedSectionView: View {
             return
         }
 
-        let alert = NSAlert()
-        alert.messageText = "Guard port :\(port)?"
-        alert.informativeText = "PortKilla will automatically kill any unprotected process of yours that starts listening on :\(port), and notify you when it does."
-        alert.addButton(withTitle: "Guard")
-        alert.addButton(withTitle: "Cancel")
-        alert.alertStyle = .warning
-
-        if alert.runModal() == .alertFirstButtonReturn {
+        let confirmed = KillConfirm.run(
+            title: "Guard port :\(port)?",
+            message: "PortKilla will automatically kill any unprotected process of yours that starts listening on :\(port), and notify you when it does.",
+            confirmTitle: "Guard"
+        )
+        if confirmed {
             portManager.toggleGuard(port)
         }
     }

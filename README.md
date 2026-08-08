@@ -40,7 +40,7 @@ The whole flow works without touching the mouse: **⌥⌘P → type "3000" or "v
 *   **Project detection**: each dev server shows its actual project folder (from the process working directory) — right-click to reveal it in Finder or open it in Terminal.
 *   **Smart menu-bar count**: the badge counts your dev ports, not every macOS daemon.
 *   **Protected processes** (shield icon): IDEs and tools are skipped by bulk kills.
-*   **Launch at Login**: toggle it in the gear menu.
+*   **Launch at Login**: toggle it in Settings (⚙︎ / ⌘,).
 
 ## 🔔 Port Watchlist
 
@@ -49,12 +49,12 @@ Right-click any port → **Watch**. Watched ports are **pinned to the top of the
 ## 📡 More Signal
 
 *   **Native scanner**: ports and processes are enumerated with raw kernel syscalls (libproc) — a full scan takes ~20ms with zero subprocesses.
-*   **Pin as Floating Window**: keep the list on top while you work (gear menu).
+*   **Pin as Floating Window**: keep the list on top while you work (⋯ menu).
 *   **Port guards** 🛡⚡: opt-in per watched port — anything of yours that grabs a guarded port gets auto-killed, with a notification.
 *   **UDP ports** are listed too (tagged `UDP`; ephemeral outgoing sockets filtered out).
 *   **Age & CPU** per process in tooltips and details — Test Radar shows live CPU to expose runaway watchers.
 *   **Open Project in your editor**: VS Code, Cursor, Zed, Sublime Text, and Trae are auto-detected.
-*   **Configurable hotkey**: gear menu → Change Hotkey (default ⌥⌘P).
+*   **Configurable hotkey**: Settings → Shortcuts (default ⌥⌘P).
 
 ## ⌨️ CLI Companion
 
@@ -80,6 +80,14 @@ PortKilla checks GitHub Releases once a day (gear menu → **Check for Updates�
 
 > **First launch note:** since the app is not notarized, macOS may warn on first open. Right-click `PortKilla.app` → **Open** → **Open** (needed once), or `xattr -dr com.apple.quarantine /Applications/PortKilla.app`.
 
+## 💻 Requirements
+
+- **macOS 13 (Ventura) or newer** — including the latest macOS. (Uses Ventura-era
+  APIs: `SMAppService` for launch-at-login, `NavigationSplitView` for Settings.)
+- **Apple Silicon and Intel** — the release is a **universal binary** (arm64 +
+  x86_64), running natively on both.
+- No dependencies to install; the app is fully self-contained.
+
 ## 📦 Installation
 
 ### Build from Source
@@ -87,9 +95,13 @@ PortKilla is written in native Swift for maximum performance and minimal battery
 
 ```bash
 git clone https://github.com/mukes555/PortKilla.git
-cd PortKilla
+cd PortKilla/PortKilla     # the Swift package lives in a nested dir
 ./scripts/build.sh
 ```
+
+> Contributing? See **[CONTRIBUTING.md](CONTRIBUTING.md)** and
+> **[ARCHITECTURE.md](ARCHITECTURE.md)** — `swift run PortKilla` launches the
+> app in ~60s, and `swift test --disable-sandbox` runs the suite.
 
 Build output lands in `dist/`:
 
@@ -103,7 +115,7 @@ Drag `PortKilla.app` to `/Applications`.
 ./scripts/build.sh --dmg
 ```
 
-This produces `dist/PortKilla-1.5.0.dmg`.
+This produces `dist/PortKilla-1.6.0.dmg`.
 
 To distribute to other Macs without Gatekeeper prompts, you’ll eventually want Developer ID signing + notarization.
 
@@ -116,12 +128,13 @@ To distribute to other Macs without Gatekeeper prompts, you’ll eventually want
     *   Click **X** to kill.
     *   **Shift+Click X** to kill the entire process tree.
     *   **Option+Click X** to force kill.
-5.  **Auto-Refresh**: Use the Eye menu to choose Manual/2s/5s/10s/30s.
-6.  **History**: Click the Clock icon to view and export history.
+5.  **Row density & Settings**: toggle **Simple / Advanced** in the header; open **Settings** with ⚙︎ or ⌘, (sidebar-style, native).
+6.  **History**: open it from the **⋯** menu to view and export past kills.
 
 ## 🤝 Contributing
 
-Contributions are welcome! If you have ideas for new process detection or UI improvements, please open an issue or Pull Request.
+Contributions welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)** for a 60-second
+clone-to-run guide and **[ARCHITECTURE.md](ARCHITECTURE.md)** for the module map.
 
 ## 📄 License
 

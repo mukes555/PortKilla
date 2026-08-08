@@ -8,7 +8,10 @@ import UserNotifications
 enum Notifier {
 
     private static var isAvailable: Bool {
-        Bundle.main.bundleIdentifier != nil
+        // A bundle identifier alone is not enough: the xctest runner has one
+        // yet UNUserNotificationCenter still throws ("bundleProxyForCurrentProcess
+        // is nil"). Only a real .app bundle can use notifications.
+        Bundle.main.bundleURL.pathExtension == "app"
     }
 
     static func requestPermission() {

@@ -90,6 +90,17 @@ PortKilla checks GitHub Releases once a day (gear menu → **Check for Updates�
 
 ## 📦 Installation
 
+### Homebrew (recommended)
+
+```bash
+brew tap mukes555/tap
+brew install --cask portkilla
+```
+
+If Homebrew asks you to trust the tap (standard for third-party casks), run
+`brew trust mukes555/tap` once. The cask always installs the latest universal
+release.
+
 ### Build from Source
 PortKilla is written in native Swift for maximum performance and minimal battery impact.
 

@@ -18,7 +18,7 @@ cask "portkilla" do
   desc "Menu bar port manager — see and kill processes occupying ports"
   homepage "https://github.com/mukes555/PortKilla"
 
-  depends_on macos: ">= :ventura"
+  depends_on macos: :ventura
 
   app "PortKilla.app"
 
@@ -30,7 +30,5 @@ cask "portkilla" do
                    sudo: false
   end
 
-  zap trash: [
-    "~/Library/Preferences/com.mukes555.PortKilla.plist",
-  ]
+  zap trash: "~/Library/Preferences/com.mukes555.PortKilla.plist"
 end

@@ -41,11 +41,18 @@ final class ProcessTableTests: XCTestCase {
     }
 
     func testElapsedHumanize() {
-        XCTAssertEqual(ElapsedFormat.humanize("00:45"), "45s")
-        XCTAssertEqual(ElapsedFormat.humanize("12:45"), "12m")
-        XCTAssertEqual(ElapsedFormat.humanize("03:12:45"), "3h 12m")
-        XCTAssertEqual(ElapsedFormat.humanize("2-03:12:45"), "2d 3h")
-        XCTAssertNil(ElapsedFormat.humanize(""))
+        // etime -> seconds
+        XCTAssertEqual(ElapsedFormat.seconds(fromEtime: "00:45"), 45)
+        XCTAssertEqual(ElapsedFormat.seconds(fromEtime: "12:45"), 765)
+        XCTAssertEqual(ElapsedFormat.seconds(fromEtime: "03:12:45"), 11565)
+        XCTAssertEqual(ElapsedFormat.seconds(fromEtime: "2-03:12:45"), 184365)
+        XCTAssertNil(ElapsedFormat.seconds(fromEtime: ""))
+
+        // seconds -> human
+        XCTAssertEqual(ElapsedFormat.humanize(seconds: 45), "45s")
+        XCTAssertEqual(ElapsedFormat.humanize(seconds: 765), "12m")
+        XCTAssertEqual(ElapsedFormat.humanize(seconds: 11565), "3h 12m")
+        XCTAssertEqual(ElapsedFormat.humanize(seconds: 184365), "2d 3h")
     }
 
     func testCaptureIncludesCurrentProcess() {

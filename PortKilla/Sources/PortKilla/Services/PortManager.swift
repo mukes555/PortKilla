@@ -202,7 +202,9 @@ class PortManager: ObservableObject {
             let now = current[port]
             if was != nil && now == nil {
                 events.append(WatchEvent(port: port, kind: .freed))
-            } else if was == nil, let now {
+            } else if let now, was != now {
+                // Newly occupied OR the occupant changed identity between scans
+                // (a restart/swap must still fire the guard, not go unnoticed).
                 events.append(WatchEvent(port: port, kind: .occupied(by: now)))
             }
         }
@@ -215,7 +217,11 @@ class PortManager: ObservableObject {
         let stillBusy = Set(ports.map { $0.port })
         let freed = pendingFreeNotifications.subtracting(stillBusy)
         for port in freed.sorted() {
-            Notifier.send(title: "Port \(port) is free", body: "The process finally exited — :\(port) is available now.")
+            // Watched ports already got a "free" notification from the watch
+            // diff this cycle — don't send a second one for the same event.
+            if !watchedPorts.contains(port) {
+                Notifier.send(title: "Port \(port) is free", body: "The process finally exited — :\(port) is available now.")
+            }
         }
         pendingFreeNotifications.subtract(freed)
     }
@@ -260,6 +266,25 @@ class PortManager: ObservableObject {
             }
         }
         watchedOccupancy = current
+    }
+
+    /// Identity of the list ignoring volatile per-scan metrics (CPU%, age).
+    /// Two scans with the same signature render identically.
+    static func stableSignature(_ ports: [PortInfo]) -> [String] {
+        ports.map { port in
+            let fields: [String] = [
+                String(port.port),
+                String(port.pid),
+                port.proto,
+                port.processName,
+                String(port.memorySizeKB),
+                port.type.rawValue,
+                port.bindAddress ?? "",
+                port.containerName ?? "",
+                String(port.children?.count ?? 0)
+            ]
+            return fields.joined(separator: "|")
+        }
     }
 
     // MARK: - System process detection
@@ -407,7 +432,11 @@ class PortManager: ObservableObject {
 
                 switch portsResult {
                 case .success(let ports):
-                    if ports != self.activePorts {
+                    // Gate on a stable projection: cpuPercent/age change nearly
+                    // every scan, so full-model `!=` would republish (and force a
+                    // whole-list SwiftUI re-diff) every 2s even when nothing
+                    // structural changed.
+                    if Self.stableSignature(ports) != Self.stableSignature(self.activePorts) {
                         self.activePorts = ports
                     }
                     self.processWatchedPorts(with: ports)

@@ -38,12 +38,20 @@ extension PortManager {
         condition.unlock()
 
         sources.forEach { $0.cancel() }
+        // Drain the source queue so no exit handler is still mutating `dead`
+        // while the sweep below reads/writes it (they share the condition lock,
+        // but the sweep must not run concurrently with a queued handler).
+        queue.sync { }
 
-        // Sweep for exits that raced the source activation
+        // Sweep for exits that raced the source activation — under the lock,
+        // serialized against any handler that fired at the deadline boundary.
+        condition.lock()
         for pid in pids where !dead.contains(pid) && !killer.isProcessRunning(pid) {
             dead.insert(pid)
         }
-        return dead
+        let result = dead
+        condition.unlock()
+        return result
     }
 
     /// Shared single-target pipeline; `subject` appears in user-facing messages.
@@ -111,16 +119,27 @@ extension PortManager {
 
     /// Kills whatever listens on a port number (used by the URL scheme).
     /// Scans fresh so it works even when the cached list is stale.
-    func killPortNumber(_ portNumber: Int, force: Bool = false) {
+    /// `respectProtected` refuses to kill a protected process — always true for
+    /// link-initiated kills so a webpage can't terminate the user's IDE/tools.
+    func killPortNumber(_ portNumber: Int, force: Bool = false, respectProtected: Bool = false) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
             let table = ProcessTable.capture()
-            let ports = (try? self.scanner.scanActivePorts(processes: table)) ?? []
+            // Fresh scanner: the shared one's cwd cache is not thread-safe
+            // against a concurrently running timer refresh.
+            let ports = (try? PortScanner().scanActivePorts(processes: table)) ?? []
 
             guard let target = ports.first(where: { $0.port == portNumber }) else {
                 DispatchQueue.main.async {
                     self.showToast(":\(portNumber) is not in use")
+                }
+                return
+            }
+
+            if respectProtected && self.isProtectedProcessName(target.processName) {
+                DispatchQueue.main.async {
+                    self.showToast(":\(portNumber) is protected — not killed")
                 }
                 return
             }

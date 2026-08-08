@@ -6,6 +6,18 @@ final class ProcessKillerTests: XCTestCase {
 
     let killer = ProcessKiller()
 
+    func testNamesMatchHandlesTruncationAndEmpties() {
+        // lsof truncation tolerance (both directions)
+        XCTAssertTrue(ProcessKiller.namesMatch(expected: "com.docker.backend", actual: "com.docke"))
+        XCTAssertTrue(ProcessKiller.namesMatch(expected: "node", actual: "node"))
+        XCTAssertTrue(ProcessKiller.namesMatch(expected: "Node", actual: "node")) // case-insensitive
+        XCTAssertFalse(ProcessKiller.namesMatch(expected: "node", actual: "python"))
+        // Empty means "can't verify" — must NOT match (was: hasPrefix("") always true)
+        XCTAssertFalse(ProcessKiller.namesMatch(expected: "", actual: "anything"))
+        XCTAssertFalse(ProcessKiller.namesMatch(expected: "anything", actual: ""))
+        XCTAssertFalse(ProcessKiller.namesMatch(expected: "", actual: ""))
+    }
+
     func testRejectsNonPositivePids() {
         // kill(0)/kill(-1) would signal whole process groups.
         XCTAssertThrowsError(try killer.killProcess(pid: 0))

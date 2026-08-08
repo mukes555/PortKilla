@@ -23,14 +23,13 @@ struct TestProcessInfo: Identifiable, Codable, Equatable {
         self.type = type
     }
 
+    // Only the runners ProcessScanner actually detects are represented here.
+    // (Go/Cargo/Swift/PyTest detection isn't implemented; add a case here when
+    // it is, so the enum never advertises capabilities that don't exist.)
     enum TestType: String, Codable {
         case jest = "Jest"
         case vitest = "Vitest"
         case mocha = "Mocha"
-        case golang = "Go Test"
-        case cargo = "Cargo Test"
-        case swift = "Swift Test"
-        case python = "PyTest"
         case other = "Other Test"
 
         var icon: String {
@@ -38,10 +37,6 @@ struct TestProcessInfo: Identifiable, Codable, Equatable {
             case .jest: return "flask.fill"
             case .vitest: return "bolt.shield.fill"
             case .mocha: return "cup.and.saucer.fill"
-            case .golang: return "g.circle.fill"
-            case .cargo: return "shippingbox.fill"
-            case .swift: return "swift"
-            case .python: return "ladybug.fill"
             case .other: return "testtube.2"
             }
         }
@@ -51,10 +46,6 @@ struct TestProcessInfo: Identifiable, Codable, Equatable {
             case .jest: return .systemRed
             case .vitest: return .systemYellow
             case .mocha: return .systemBrown
-            case .golang: return .systemCyan
-            case .cargo: return .systemOrange
-            case .swift: return .systemOrange
-            case .python: return .systemBlue
             case .other: return .systemGray
             }
         }

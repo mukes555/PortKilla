@@ -113,6 +113,13 @@ struct PortRowView: View {
         text.count > cap ? text.prefix(cap) + "…" : text
     }
 
+    /// Compact identifier shown inline in Clean mode (project ▸ container ▸ none).
+    private var cleanSubtitle: String? {
+        if let project = port.projectName { return project }
+        if let container = port.containerName { return container }
+        return nil
+    }
+
     private var rowTooltip: String {
         var lines = ["PID: \(port.pid)"]
         if let age = port.age {
@@ -134,8 +141,8 @@ struct PortRowView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                // Expand/Collapse Button (Process Tree)
-                if let children = port.children, !children.isEmpty {
+                // Expand/Collapse Button (Process Tree) — Advanced only
+                if manager.viewDensity == .advanced, let children = port.children, !children.isEmpty {
                     Button(action: { isExpanded.toggle() }) {
                         Image(systemName: "chevron.right")
                             .rotationEffect(.degrees(isExpanded ? 90 : 0))
@@ -200,10 +207,20 @@ struct PortRowView: View {
                                 .help("Listening on all interfaces (\(port.bindAddress ?? "*")) — reachable from your local network")
                             }
 
+                            // Clean mode: surface the project/container inline
+                            // since the second detail line is hidden.
+                            if manager.viewDensity == .clean, let label = cleanSubtitle {
+                                Text(label)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
                         }
 
-                        // Second line: project and container chips (the useful
-                        // bits), then the command path with leftover space.
+                        // Advanced-only second line: project/container chips
+                        // followed by the command path.
+                        if manager.viewDensity == .advanced {
                         HStack(spacing: 4) {
                             Text("└─")
                                 .foregroundColor(.secondary)
@@ -249,6 +266,7 @@ struct PortRowView: View {
                         }
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.secondary)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .help(rowTooltip)
@@ -261,8 +279,9 @@ struct PortRowView: View {
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    // Click anywhere on the row to toggle expansion if children exist
-                    if let children = port.children, !children.isEmpty {
+                    // Advanced: tap toggles the tree if there is one. Clean:
+                    // tap always opens details (no tree, no info button).
+                    if manager.viewDensity == .advanced, let children = port.children, !children.isEmpty {
                         isExpanded.toggle()
                     } else {
                         onSelect()
@@ -271,13 +290,15 @@ struct PortRowView: View {
 
                 // Action
                 HStack(spacing: 6) {
-                    Button(action: onSelect) {
-                        Image(systemName: "info.circle")
-                            .foregroundColor(.secondary)
+                    if manager.viewDensity == .advanced {
+                        Button(action: onSelect) {
+                            Image(systemName: "info.circle")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Show details for \(port.processName) on port \(port.port)")
+                        .help("Show Details")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Show details for \(port.processName) on port \(port.port)")
-                    .help("Show Details")
 
                     Button(action: {
                         // Option = force kill (SIGKILL), Shift = kill process tree

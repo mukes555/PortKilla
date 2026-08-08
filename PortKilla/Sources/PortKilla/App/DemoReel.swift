@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 /// Renders the README demo GIF: a scripted search → kill → "port is free"
 /// sequence over fabricated data, drawn offscreen (no screen recording needed).
+#if DEBUG
 extension AppDelegate {
 
     private static let demoSize = NSSize(width: 500, height: 600)
@@ -142,3 +143,4 @@ extension AppDelegate {
         return ports
     }
 }
+#endif

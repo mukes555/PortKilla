@@ -3,7 +3,7 @@
 set -euo pipefail
 
 APP_NAME="PortKilla"
-VERSION="1.5.0"
+VERSION="1.6.0"
 BUNDLE_ID="${BUNDLE_ID:-com.mukes555.$APP_NAME}"
 MAKE_DMG=0
 
@@ -45,19 +45,26 @@ rm -rf "$DIST_DIR"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
-# 2. Build with Swift PM (Release Mode)
-echo "📦 Compiling Swift sources..."
+# 2. Build with Swift PM (Release Mode, universal arm64 + x86_64)
+# A universal binary runs natively on both Apple Silicon and Intel Macs.
+# (For a single-arch build, drop the --arch flags.)
+echo "📦 Compiling Swift sources (universal: arm64 + x86_64)..."
 cd "$PROJECT_ROOT"
-swift build -c release --disable-sandbox
+swift build -c release --disable-sandbox --arch arm64 --arch x86_64
 
 if [ $? -ne 0 ]; then
     echo "❌ Build failed!"
     exit 1
 fi
 
-# 3. Copy Executable
+# 3. Copy Executable — multi-arch builds land under .build/apple/Products,
+# single-arch under .build/release; support both.
 echo "📂 Copying executable..."
-BINARY_SOURCE="$PROJECT_ROOT/.build/release/$APP_NAME"
+if [ -f "$PROJECT_ROOT/.build/apple/Products/Release/$APP_NAME" ]; then
+    BINARY_SOURCE="$PROJECT_ROOT/.build/apple/Products/Release/$APP_NAME"
+else
+    BINARY_SOURCE="$PROJECT_ROOT/.build/release/$APP_NAME"
+fi
 cp "$BINARY_SOURCE" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
 # 3b. App icon (regenerate with scripts/make_icon.swift)

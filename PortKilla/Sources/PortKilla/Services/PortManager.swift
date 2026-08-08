@@ -27,6 +27,9 @@ class PortManager: ObservableObject {
         static let protectedProcessSubstrings = "PortKilla.protectedProcessSubstrings"
         static let hideSystemProcesses = "PortKilla.hideSystemProcesses"
         static let confirmBeforeKill = "PortKilla.confirmBeforeKill"
+        static let viewDensity = "PortKilla.viewDensity"
+        static let showMenuBarCount = "PortKilla.showMenuBarCount"
+        static let notificationsEnabled = "PortKilla.notificationsEnabled"
         static let watchedPorts = "PortKilla.watchedPorts"
         static let guardedPorts = "PortKilla.guardedPorts"
     }
@@ -71,6 +74,34 @@ class PortManager: ObservableObject {
         }
     }
 
+    /// Clean = one glanceable line per port; Advanced = command path, chips,
+    /// CPU/age, tree expansion.
+    enum ViewDensity: String { case clean, advanced }
+    @Published var viewDensity: ViewDensity = .clean {
+        didSet {
+            UserDefaults.standard.set(viewDensity.rawValue, forKey: DefaultsKeys.viewDensity)
+        }
+    }
+
+    /// Show the dev-port count next to the menu bar icon.
+    @Published var showMenuBarCount: Bool = true {
+        didSet {
+            UserDefaults.standard.set(showMenuBarCount, forKey: DefaultsKeys.showMenuBarCount)
+            onMenuBarPreferenceChanged?()
+        }
+    }
+
+    /// Master switch for watch/guard notifications.
+    @Published var notificationsEnabled: Bool = true {
+        didSet {
+            UserDefaults.standard.set(notificationsEnabled, forKey: DefaultsKeys.notificationsEnabled)
+            if notificationsEnabled { Notifier.requestPermission() }
+        }
+    }
+
+    /// Set by the app delegate so a menu-bar preference change redraws it.
+    var onMenuBarPreferenceChanged: (() -> Void)?
+
     /// Ports the user starred: a system notification fires when one frees up
     /// or when something new binds it.
     @Published var watchedPorts: Set<Int> = [] {
@@ -113,6 +144,16 @@ class PortManager: ObservableObject {
         if let stored = UserDefaults.standard.object(forKey: DefaultsKeys.confirmBeforeKill) as? Bool {
             confirmBeforeKill = stored
         }
+        if let stored = UserDefaults.standard.string(forKey: DefaultsKeys.viewDensity),
+           let density = ViewDensity(rawValue: stored) {
+            viewDensity = density
+        }
+        if let stored = UserDefaults.standard.object(forKey: DefaultsKeys.showMenuBarCount) as? Bool {
+            showMenuBarCount = stored
+        }
+        if let stored = UserDefaults.standard.object(forKey: DefaultsKeys.notificationsEnabled) as? Bool {
+            notificationsEnabled = stored
+        }
         if let stored = UserDefaults.standard.array(forKey: DefaultsKeys.watchedPorts) as? [Int] {
             watchedPorts = Set(stored)
         }
@@ -121,8 +162,11 @@ class PortManager: ObservableObject {
         }
         shouldRestartTimerOnIntervalChange = true
 
-        // Demo-reel rendering drives state manually — no live scanning
-        let isDemoMode = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_DEMO_GIF"] != nil
+        // In debug, the demo-GIF hook drives state manually — no live scanning.
+        var isDemoMode = false
+        #if DEBUG
+        isDemoMode = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_DEMO_GIF"] != nil
+        #endif
         if !isDemoMode {
             startAutoRefresh()
 
@@ -220,10 +264,17 @@ class PortManager: ObservableObject {
             // Watched ports already got a "free" notification from the watch
             // diff this cycle — don't send a second one for the same event.
             if !watchedPorts.contains(port) {
-                Notifier.send(title: "Port \(port) is free", body: "The process finally exited — :\(port) is available now.")
+                notify(title: "Port \(port) is free", body: "The process finally exited — :\(port) is available now.")
             }
         }
         pendingFreeNotifications.subtract(freed)
+    }
+
+    /// Sends a notification only when the user has them enabled. Guard kills
+    /// still happen regardless — only the alert is suppressed.
+    private func notify(title: String, body: String) {
+        guard notificationsEnabled else { return }
+        Notifier.send(title: title, body: body)
     }
 
     /// A guard only ever fires against unprotected processes the user owns.
@@ -251,16 +302,16 @@ class PortManager: ObservableObject {
             for event in Self.watchEvents(watched: watchedPorts, previous: watchedOccupancy, current: current) {
                 switch event.kind {
                 case .freed:
-                    Notifier.send(title: "Port \(event.port) is free", body: "Nothing is listening on :\(event.port) anymore.")
+                    notify(title: "Port \(event.port) is free", body: "Nothing is listening on :\(event.port) anymore.")
                 case .occupied(let name):
                     if let intruder = guardKillTarget(for: event.port, in: ports) {
-                        Notifier.send(
+                        notify(
                             title: "Guard on :\(event.port)",
                             body: "Auto-killing '\(intruder.processName)' — it grabbed a guarded port."
                         )
                         killPort(intruder)
                     } else {
-                        Notifier.send(title: "Port \(event.port) in use", body: "'\(name)' started listening on :\(event.port).")
+                        notify(title: "Port \(event.port) in use", body: "'\(name)' started listening on :\(event.port).")
                     }
                 }
             }
@@ -332,6 +383,20 @@ class PortManager: ObservableObject {
 
     func resetProtectedProcessSubstrings() {
         protectedProcessSubstrings = Self.defaultProtectedProcessSubstrings
+    }
+
+    /// Restores every preference to its default and clears watch/guard state.
+    func resetAllSettings() {
+        refreshInterval = 2.0
+        hideSystemProcesses = true
+        confirmBeforeKill = true
+        viewDensity = .clean
+        showMenuBarCount = true
+        notificationsEnabled = true
+        protectedProcessSubstrings = Self.defaultProtectedProcessSubstrings
+        watchedPorts = []
+        guardedPorts = []
+        showToast("Settings reset to defaults")
     }
 
     private static func normalizeProtectedProcessSubstrings(_ values: [String]) -> [String] {

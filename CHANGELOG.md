@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.6.0 — 2026-08-08
+
+### Hardening, UI polish, and contributor-readiness
+
+**Distribution**
+- The release is now a **universal binary** (arm64 + x86_64) — runs natively on
+  both Apple Silicon and Intel Macs. Minimum macOS 13 (Ventura).
+
+**UI**
+- **Simple / Advanced row density** with a modern segmented header toggle. Simple
+  shows one clean line per port; Advanced adds command, chips, CPU, and the tree.
+- **Settings redesigned** as a native macOS System Settings-style **sidebar**
+  window (⚙︎ / ⌘,), replacing the overloaded gear menu. New: Notifications
+  master toggle, menu-bar count toggle, in-app shortcut reference, Reset all.
+- Header split into three clear controls: density toggle · **⋯ actions** ·
+  **⚙︎ settings**.
+- **Pin as Floating Window** now closes the popover instead of showing two copies.
+
+**Security & correctness** (from a multi-agent audit)
+- URL-scheme kills require confirmation and refuse protected processes.
+- Fixed a data race in `waitForExit`; tree-kill children run the identity check;
+  bounded reads on fixed kernel arrays; CPU% no longer wraps on PID reuse; guard
+  fires on occupant swaps; docker-proxy classified as Docker; CSV quotes `\r`.
+
+**Engineering & docs**
+- Dev-only snapshot/demo hooks gated behind `#if DEBUG` (out of the shipped app).
+- Deduplicated: one `KillConfirm` dialog, one `isWildcardHost` check.
+- Fixed the test-runner self-exclusion string; removed unreachable `TestType` cases.
+- Added **CONTRIBUTING.md**, **ARCHITECTURE.md**, **SECURITY.md**, issue/PR
+  templates; fixed the README build path.
+- 60 tests (+ regression coverage), universal build verified.
+
 ## 1.5.0 — 2026-08-07
 
 ### The native scanner release

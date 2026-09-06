@@ -125,6 +125,9 @@ class PortManager: ObservableObject {
     /// in time (slow shutdown, trapped SIGTERM).
     var pendingFreeNotifications: Set<Int> = []
 
+    /// Recent guard kills per port; see `guardHasStruckOut`.
+    private var guardStrikes: [Int: [Date]] = [:]
+
     /// Set when GitHub has a newer release; drives the "Download vX.Y.Z" menu item.
     @Published var updateAvailableVersion: String?
 
@@ -136,7 +139,7 @@ class PortManager: ObservableObject {
         }
 
         if let stored = UserDefaults.standard.object(forKey: DefaultsKeys.refreshIntervalSeconds) as? Double {
-            refreshInterval = stored
+            refreshInterval = Self.sanitizedRefreshInterval(stored)
         }
         if let stored = UserDefaults.standard.object(forKey: DefaultsKeys.hideSystemProcesses) as? Bool {
             hideSystemProcesses = stored
@@ -155,10 +158,12 @@ class PortManager: ObservableObject {
             notificationsEnabled = stored
         }
         if let stored = UserDefaults.standard.array(forKey: DefaultsKeys.watchedPorts) as? [Int] {
-            watchedPorts = Set(stored)
+            watchedPorts = Set(stored.filter(Self.isValidPortNumber))
         }
         if let stored = UserDefaults.standard.array(forKey: DefaultsKeys.guardedPorts) as? [Int] {
-            guardedPorts = Set(stored)
+            // A guard only makes sense on a watched port; the invariant is
+            // enforced on writes, so re-establish it for whatever was stored.
+            guardedPorts = Set(stored).intersection(watchedPorts)
         }
         shouldRestartTimerOnIntervalChange = true
 
@@ -180,12 +185,20 @@ class PortManager: ObservableObject {
     // MARK: - Updates
 
     func checkForUpdates(manual: Bool) {
-        UpdateChecker.markChecked()
-        UpdateChecker.fetchNewerVersion { [weak self] newer in
+        UpdateChecker.fetchNewerVersion { [weak self] result in
             guard let self = self else { return }
-            self.updateAvailableVersion = newer
-            if manual {
-                self.showToast(newer.map { "v\($0) available" } ?? "You're up to date")
+            switch result {
+            case .newer(let version):
+                UpdateChecker.markChecked()
+                self.updateAvailableVersion = version
+                if manual { self.showToast("v\(version) available") }
+            case .upToDate:
+                UpdateChecker.markChecked()
+                self.updateAvailableVersion = nil
+                if manual { self.showToast("You're up to date") }
+            case .failed(let reason):
+                // Not marked as checked, so the next launch tries again.
+                if manual { self.showToast("Couldn't check for updates: \(reason)") }
             }
         }
     }
@@ -277,6 +290,20 @@ class PortManager: ObservableObject {
         Notifier.send(title: title, body: body)
     }
 
+    /// A process that keeps coming back (pm2, nodemon, a launchd KeepAlive
+    /// job) would otherwise be killed and announced on every scan, forever.
+    /// After a few kills in quick succession the guard stands down instead.
+    private static let guardStrikeLimit = 3
+    private static let guardStrikeWindow: TimeInterval = 60
+
+    func guardHasStruckOut(on port: Int) -> Bool {
+        let now = Date()
+        var recent = (guardStrikes[port] ?? []).filter { now.timeIntervalSince($0) < Self.guardStrikeWindow }
+        recent.append(now)
+        guardStrikes[port] = recent
+        return recent.count > Self.guardStrikeLimit
+    }
+
     /// A guard only ever fires against unprotected processes the user owns.
     private func guardKillTarget(for port: Int, in ports: [PortInfo]) -> PortInfo? {
         guard guardedPorts.contains(port),
@@ -305,11 +332,20 @@ class PortManager: ObservableObject {
                     notify(title: "Port \(event.port) is free", body: "Nothing is listening on :\(event.port) anymore.")
                 case .occupied(let name):
                     if let intruder = guardKillTarget(for: event.port, in: ports) {
-                        notify(
-                            title: "Guard on :\(event.port)",
-                            body: "Auto-killing '\(intruder.processName)' — it grabbed a guarded port."
-                        )
-                        killPort(intruder)
+                        if guardHasStruckOut(on: event.port) {
+                            guardedPorts.remove(event.port)
+                            guardStrikes[event.port] = nil
+                            notify(
+                                title: "Guard on :\(event.port) stood down",
+                                body: "'\(intruder.processName)' keeps coming back. Stop it at the source, then re-enable the guard."
+                            )
+                        } else {
+                            notify(
+                                title: "Guard on :\(event.port)",
+                                body: "Auto-killing '\(intruder.processName)' — it grabbed a guarded port."
+                            )
+                            killPort(intruder)
+                        }
                     } else {
                         notify(title: "Port \(event.port) in use", body: "'\(name)' started listening on :\(event.port).")
                     }
@@ -425,9 +461,27 @@ class PortManager: ObservableObject {
     }
 
     private var effectiveRefreshInterval: TimeInterval {
-        if refreshInterval <= 0 { return 0 } // manual only
-        if isPopoverVisible { return refreshInterval }
-        return max(refreshInterval, Self.backgroundRefreshInterval)
+        let interval = Self.sanitizedRefreshInterval(refreshInterval)
+        if interval <= 0 { return 0 } // manual only
+        if isPopoverVisible { return interval }
+        return max(interval, Self.backgroundRefreshInterval)
+    }
+
+    /// 0 means manual refresh; anything else is clamped to 1...300 seconds.
+    /// Preferences are untrusted input: 0.01 would scan a hundred times a
+    /// second, and NaN slips past a `<= 0` check and throws inside Timer.
+    static func sanitizedRefreshInterval(_ value: Double) -> Double {
+        guard value.isFinite else { return 2.0 }
+        if value <= 0 { return 0 }
+        return min(max(value, 1.0), 300)
+    }
+
+    static func isValidPortNumber(_ port: Int) -> Bool {
+        (1...65535).contains(port)
+    }
+
+    deinit {
+        stopAutoRefresh()
     }
 
     /// Starts automatic port refreshing

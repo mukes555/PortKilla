@@ -13,6 +13,51 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+## 1.9.0 — 2026-09-06
+
+### The safety batch
+
+Every item here came out of a full audit; none removes a feature.
+
+### Fixed
+- **Subprocess timeouts leaked** a file descriptor and a blocked thread each
+  time `lsof` or `docker` hung; after enough of them, refreshes and kills
+  silently stopped. Pipe output is now collected without a blocking read.
+- **Crash on launch** from a corrupt hotkey preference, and a CPU-pegging or
+  throwing timer from an out-of-range refresh interval. Every stored
+  preference is validated (hotkey, interval, watched and guarded ports).
+- `portkilla://show` during a cold launch could dereference the popover
+  before it existed. Scheme-initiated kills are now one confirmation per
+  delivery with a short cooldown, so a page can't stack dialogs.
+- **Tree kill** re-enumerated the whole process table at every node with no
+  cycle guard. It now walks one snapshot with a visited set and depth limit.
+- **Port guards** killed and notified every scan, forever, when a supervised
+  process (pm2, nodemon, launchd KeepAlive) kept rebinding. After three kills
+  in a minute the guard stands down with a single notification.
+- **Update check** reported "up to date" on any HTTP error or when offline,
+  then suppressed retries for a day. Failures are now reported as failures
+  and retried on the next launch; the URL cache is bypassed.
+- **Kill verdicts were too hasty:** a one-second wait marked healthy Node or
+  Postgres shutdowns as failures. SIGTERM now gets three seconds, SIGKILL
+  one, and the message says "still shutting down" instead of "failed".
+- A machine with zero listeners fell through to the slow `lsof` path on every
+  refresh. An empty native result is now a real answer.
+- Context-menu **Kill Process Tree** and **Force Kill**, and Test Radar
+  kills, bypassed the confirm-before-kill setting. All kills now share one
+  confirmation flow.
+- An undecodable bind address made the "exposed" badge disappear; it now
+  fails closed and shows the port as wildcard-bound.
+- **Reset all settings** promised to reset the hotkey and didn't.
+- The exit-wait had a narrow race where a late kernel event could change a
+  result after it was decided.
+
+### Security
+- The agent-attribution environment read now enforces its allowlist at the
+  byte level: no process environment is ever decoded into strings beyond the
+  five marker keys, and the buffer is zeroed after use.
+- CSV export escapes every column and treats tab and carriage return as
+  formula lead-ins. `docker stop` passes `--` before the container name.
+
 ## 1.8.3 — 2026-09-06
 
 ### Fixed

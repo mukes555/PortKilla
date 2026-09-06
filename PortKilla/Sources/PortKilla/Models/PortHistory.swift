@@ -27,7 +27,8 @@ enum CSV {
     /// otherwise execute when the export is opened in Excel).
     static func field(_ raw: String) -> String {
         var value = raw
-        if let first = value.first, "=+-@".contains(first) {
+        // Tab and carriage return are formula lead-ins for Excel as well.
+        if let first = value.first, "=+-@\t\r".contains(first) {
             value = "'" + value
         }
 

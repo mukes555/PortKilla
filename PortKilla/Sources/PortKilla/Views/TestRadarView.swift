@@ -8,6 +8,9 @@ struct TestRadarView: View {
     @Binding var selectedId: String?
     @State private var hoverId: String?
     @State private var selectedTest: TestProcessInfo?
+    /// Kill requests go up to PortListView, which owns the one confirmation
+    /// flow for every kill in the app.
+    let onKillRequest: (_ test: TestProcessInfo, _ force: Bool) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -53,7 +56,8 @@ struct TestRadarView: View {
                     portManager: portManager,
                     hoverId: $hoverId,
                     selectedId: $selectedId,
-                    onSelectTest: { test in selectedTest = test }
+                    onSelectTest: { test in selectedTest = test },
+                    onKillRequest: onKillRequest
                 )
             }
         }
@@ -69,15 +73,19 @@ struct TestListContent: View {
     @Binding var hoverId: String?
     @Binding var selectedId: String?
     let onSelectTest: (TestProcessInfo) -> Void
+    let onKillRequest: (_ test: TestProcessInfo, _ force: Bool) -> Void
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(filteredTests) { test in
-                        TestProcessRow(test: test, manager: portManager) {
-                            onSelectTest(test)
-                        }
+                        TestProcessRow(
+                            test: test,
+                            manager: portManager,
+                            onSelect: { onSelectTest(test) },
+                            onKillRequest: { force in onKillRequest(test, force) }
+                        )
                             .id(test.id)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -175,8 +183,8 @@ struct TestDetailView: View {
 struct TestProcessRow: View {
     let test: TestProcessInfo
     @ObservedObject var manager: PortManager
-    @State private var showConfirmation = false
     let onSelect: () -> Void
+    let onKillRequest: (_ force: Bool) -> Void
 
     var body: some View {
         HStack {
@@ -230,30 +238,17 @@ struct TestProcessRow: View {
                 Spacer()
                 // Kill Button
                 Button(action: {
-                    if NSEvent.modifierFlags.contains(.option) {
-                        manager.killTestProcess(test, force: true)
-                    } else if manager.confirmBeforeKill {
-                        showConfirmation = true
-                    } else {
-                        manager.killTestProcess(test)
-                    }
+                    // Option = force kill (SIGKILL)
+                    onKillRequest(NSEvent.modifierFlags.contains(.option))
                 }) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Kill \(test.processName)")
+                .help("Click to kill. Option+Click to force kill.")
             }
             .frame(width: 60, alignment: .trailing)
-            .alert(isPresented: $showConfirmation) {
-                Alert(
-                    title: Text("Kill Test Process?"),
-                    message: Text("Are you sure you want to kill '\(test.processName)' (PID: \(String(test.pid)))?"),
-                    primaryButton: .destructive(Text("Kill")) {
-                        manager.killTestProcess(test)
-                    },
-                    secondaryButton: .cancel()
-                )
-            }
         }
         .contextMenu {
             Button("Copy PID") {

@@ -14,9 +14,18 @@ enum CLICommand: Equatable {
     case list(ListOptions)
     case kill(KillOptions)
     case whoami(json: Bool)
+    case wait(port: Int, timeout: TimeInterval, json: Bool)
+    case open(port: Int)
+    case history(HistoryOptions)
     case version
     case help
     case agentDocs
+
+    struct HistoryOptions: Equatable {
+        var json = false
+        var port: Int?
+        var limit = 20
+    }
 
     struct ListOptions: Equatable {
         var json = false
@@ -32,6 +41,9 @@ enum CLICommand: Equatable {
         var force = false
         var dryRun = false
         var json = false
+        /// `free`: an already-free port is success, so `portkilla free 3000
+        /// && npm run dev` works under `set -e`.
+        var freeIsSuccess = false
     }
 }
 
@@ -75,6 +87,10 @@ enum CLIArguments {
         switch command {
         case "list": return parseList(rest)
         case "kill": return parseKill(rest)
+        case "free": return parseKill(rest, freeIsSuccess: true)
+        case "wait": return parseWait(rest)
+        case "open": return parseOpen(rest)
+        case "history": return parseHistory(rest)
         case "whoami": return parseWhoami(rest)
         case "version", "--version": return rest.isEmpty ? .success(.version) : .failure(.unknownOption(rest[0], command: command))
         case "help", "--help", "-h": return .success(.help)
@@ -109,8 +125,9 @@ enum CLIArguments {
         return .success(.list(options))
     }
 
-    private static func parseKill(_ args: [String]) -> Result<CLICommand, ParseError> {
+    private static func parseKill(_ args: [String], freeIsSuccess: Bool = false) -> Result<CLICommand, ParseError> {
         var options = CLICommand.KillOptions()
+        options.freeIsSuccess = freeIsSuccess
         var index = 0
         while index < args.count {
             let arg = args[index]
@@ -144,6 +161,70 @@ enum CLIArguments {
         return .success(.kill(options))
     }
 
+    private static func parseWait(_ args: [String]) -> Result<CLICommand, ParseError> {
+        var port: Int?
+        var timeout: TimeInterval = 30
+        var json = false
+        var index = 0
+        while index < args.count {
+            let arg = args[index]
+            if arg == "--json" {
+                json = true
+            } else if arg == "--timeout" {
+                guard index + 1 < args.count else { return .failure(.missingValue(arg)) }
+                index += 1
+                guard let seconds = TimeInterval(args[index]), seconds >= 0 else { return .failure(.invalidNumber(args[index], option: "--timeout")) }
+                timeout = seconds
+            } else if let value = valueOf(option: "--timeout", in: arg) {
+                guard let seconds = TimeInterval(value), seconds >= 0 else { return .failure(.invalidNumber(value, option: "--timeout")) }
+                timeout = seconds
+            } else if arg.hasPrefix("-") {
+                return .failure(.unknownOption(arg, command: "wait"))
+            } else if let number = Int(arg), PortManager.isValidPortNumber(number) {
+                guard port == nil else { return .failure(.tooManyTargets) }
+                port = number
+            } else {
+                return .failure(.invalidNumber(arg, option: "port"))
+            }
+            index += 1
+        }
+        guard let port else { return .failure(.missingTarget) }
+        return .success(.wait(port: port, timeout: timeout, json: json))
+    }
+
+    private static func parseOpen(_ args: [String]) -> Result<CLICommand, ParseError> {
+        guard let arg = args.first else { return .failure(.missingTarget) }
+        guard args.count == 1 else { return .failure(.unknownOption(args[1], command: "open")) }
+        guard let port = Int(arg), PortManager.isValidPortNumber(port) else { return .failure(.invalidNumber(arg, option: "port")) }
+        return .success(.open(port: port))
+    }
+
+    private static func parseHistory(_ args: [String]) -> Result<CLICommand, ParseError> {
+        var options = CLICommand.HistoryOptions()
+        var index = 0
+        while index < args.count {
+            let arg = args[index]
+            if arg == "--json" {
+                options.json = true
+            } else if arg == "--port" || arg == "--limit" {
+                guard index + 1 < args.count else { return .failure(.missingValue(arg)) }
+                index += 1
+                guard let number = Int(args[index]), number > 0 else { return .failure(.invalidNumber(args[index], option: arg)) }
+                if arg == "--port" { options.port = number } else { options.limit = number }
+            } else if let value = valueOf(option: "--port", in: arg) {
+                guard let number = Int(value), number > 0 else { return .failure(.invalidNumber(value, option: "--port")) }
+                options.port = number
+            } else if let value = valueOf(option: "--limit", in: arg) {
+                guard let number = Int(value), number > 0 else { return .failure(.invalidNumber(value, option: "--limit")) }
+                options.limit = number
+            } else {
+                return .failure(.unknownOption(arg, command: "history"))
+            }
+            index += 1
+        }
+        return .success(.history(options))
+    }
+
     private static func parseWhoami(_ args: [String]) -> Result<CLICommand, ParseError> {
         var json = false
         for arg in args {
@@ -166,6 +247,10 @@ enum CLIArguments {
       portkilla list [--json] [--mine | --agent <name> | --unowned | --orphaned]
       portkilla kill <port> [--force|-9] [--dry-run] [--json]
       portkilla kill --pid <pid> [--force|-9] [--dry-run] [--json]
+      portkilla free <port> [...]        like kill, but exit 0 if already free
+      portkilla wait <port> [--timeout 30] [--json]
+      portkilla open <port>
+      portkilla history [--json] [--port <port>] [--limit 20]
       portkilla whoami [--json]
       portkilla agent-docs
       portkilla version
@@ -173,6 +258,9 @@ enum CLIArguments {
 
     kill stops every process listening on the port (use --pid for one of
     them). --dry-run reports what would happen without signalling anything.
+    free is kill for scripts: `portkilla free 3000 && npm run dev`. wait
+    blocks until the port is free (exit 5 on timeout). history lists recent
+    kills from the app and the CLI, with who started and who stopped each.
 
     Friendly-fire guard: kill refuses to stop a port owned by a different AI
     agent session unless --force. Owners are detected from the process tree

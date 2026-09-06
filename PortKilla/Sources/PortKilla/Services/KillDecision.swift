@@ -27,10 +27,23 @@ enum KillDecision: Equatable {
         if caller.name != target.name {
             return .refuse("owned by \(target.described), not \(caller.described)")
         }
-        if let mine = caller.sessionPid, let theirs = target.sessionPid, mine != theirs {
-            return .refuse("owned by another \(target.name) session (\(theirs)), not yours (\(mine))")
+        if caller.isSameSession(as: target) == false {
+            return .refuse("owned by another \(target.name) session (\(target.sessionId)), not yours (\(caller.sessionId))")
         }
         return .allow
+    }
+
+    /// Why the guard did or did not apply, for the CLI's report: an agent
+    /// must be able to tell "checked and cleared" from "could not check".
+    static func verdict(caller: AgentOwner?, target: AgentOwner?, forced: Bool) -> String {
+        switch forAgent(caller: caller, target: target) {
+        case .refuse: return forced ? "overridden" : "refused"
+        case .warn: return "allowed"
+        case .allow:
+            if target?.isLiveAgentSession == true && caller == nil { return "not-evaluated: caller unknown" }
+            if target == nil { return "not-evaluated: target unknown" }
+            return "allowed"
+        }
     }
 
     /// A line for bulk confirmations: "2 of these belong to running AI agent

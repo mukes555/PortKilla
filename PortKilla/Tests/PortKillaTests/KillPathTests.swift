@@ -39,7 +39,7 @@ final class KillPathTests: XCTestCase {
         let start = Date()
         let dead = manager.waitForExit(pids: [Int(gone.processIdentifier), Int(alive.processIdentifier)], timeout: 0.3)
         XCTAssertEqual(dead, [Int(gone.processIdentifier)])
-        XCTAssertLessThan(Date().timeIntervalSince(start), 1.5, "must give up at the deadline")
+        XCTAssertLessThan(Date().timeIntervalSince(start), ScanBenchmarkTests.budget(1.5), "must give up at the deadline")
     }
 
     // MARK: - guardKillTarget

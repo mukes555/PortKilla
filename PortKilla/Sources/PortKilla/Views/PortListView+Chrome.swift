@@ -54,7 +54,14 @@ extension PortListView {
             Divider()
 
             if let newer = portManager.updateAvailableVersion {
-                Button("Download v\(newer)…") { NSWorkspace.shared.open(UpdateChecker.releasesPageURL) }
+                if InstallSource.detect() == .homebrew {
+                    Button("Update to v\(newer) (copy brew command)") {
+                        Pasteboard.copy("brew reinstall --cask portkilla")
+                        portManager.showToast("Copied: brew reinstall --cask portkilla")
+                    }
+                } else {
+                    Button("Download v\(newer)…") { NSWorkspace.shared.open(UpdateChecker.releasesPageURL) }
+                }
             }
             Button("Quit PortKilla") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q")

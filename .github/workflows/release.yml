@@ -26,6 +26,9 @@ jobs:
           xcodebuild -version
           swift --version
 
+      - name: Tag, build.sh, and CHANGELOG must agree on the version
+        run: bash PortKilla/scripts/check-version.sh "$GITHUB_REF_NAME"
+
       - name: Build and Package
         run: |
           cd PortKilla
@@ -33,6 +36,23 @@ jobs:
           ./scripts/build.sh --dmg
           ditto -c -k --sequesterRsrc --keepParent dist/PortKilla.app dist/PortKilla.app.zip
           ls -la dist
+
+      - name: Verify what is about to ship
+        run: |
+          cd PortKilla
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCHS="$(lipo -archs dist/PortKilla.app/Contents/MacOS/PortKilla)"
+          echo "archs: $ARCHS"
+          case "$ARCHS" in *x86_64*arm64*|*arm64*x86_64*) ;; *) echo "not universal" >&2; exit 1;; esac
+          codesign --verify --strict --verbose=2 dist/PortKilla.app
+          PLIST_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' dist/PortKilla.app/Contents/Info.plist)"
+          test "$PLIST_VERSION" = "$VERSION" || { echo "Info.plist says $PLIST_VERSION, tag says $VERSION" >&2; exit 1; }
+          (cd dist && shasum -a 256 PortKilla.app.zip "PortKilla-$VERSION.dmg" | tee SHA256SUMS)
+
+      - name: Pre-release tags stay out of "latest"
+        id: kind
+        run: |
+          case "$GITHUB_REF_NAME" in *-rc*|*-beta*|*-alpha*) echo "prerelease=true" >> "$GITHUB_OUTPUT";; *) echo "prerelease=false" >> "$GITHUB_OUTPUT";; esac
 
       - name: Build release notes from CHANGELOG
         run: |
@@ -47,8 +67,9 @@ jobs:
           files: |
             PortKilla/dist/*.zip
             PortKilla/dist/*.dmg
+            PortKilla/dist/SHA256SUMS
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.kind.outputs.prerelease }}
           body_path: release-notes.md
           # Appends the auto-generated "Full Changelog" / contributors list
           # below our authored notes.

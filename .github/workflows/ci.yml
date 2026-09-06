@@ -8,9 +8,14 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: macos-14
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -24,6 +29,16 @@ jobs:
         run: |
           xcodebuild -version
           swift --version
+
+      - name: Cache SwiftPM build
+        uses: actions/cache@v4
+        with:
+          path: PortKilla/.build
+          key: spm-${{ runner.os }}-${{ hashFiles('PortKilla/Package.swift', 'PortKilla/Package.resolved') }}-6.0.2
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: build.sh and CHANGELOG must agree on the version
+        run: bash PortKilla/scripts/check-version.sh
 
       - name: Build app
         run: |
@@ -49,4 +64,24 @@ jobs:
         with:
           name: ui-smoke
           path: /tmp/ui-smoke.png
+
+  # The release ships an x86_64 slice; run the suite through Rosetta so it
+  # has executed at least once. Advisory until an Intel runner is available.
+  tests-x86_64:
+    runs-on: macos-14
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.0.2'
+
+      - name: Run tests under Rosetta
+        run: |
+          cd PortKilla
+          arch -x86_64 swift test --disable-sandbox --arch x86_64
 

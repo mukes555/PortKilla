@@ -143,7 +143,7 @@ enum CLIKill {
         report.action = action
         report.exitCode = exit
         if json {
-            PortKillaCLI.printJSON(report)
+            if !PortKillaCLI.printJSON(report) { return CLIExit.internalError }
         } else if toStderr {
             PortKillaCLI.printError(text)
         } else {

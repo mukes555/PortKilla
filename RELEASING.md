@@ -28,12 +28,12 @@ Changed / Fixed / Security / Distribution**. Accumulate them under
    ```bash
    git tag v<version> && git push origin v<version>
    ```
-5. The release workflow does the rest. Verify the published binary is universal:
-   ```bash
-   gh release download v<version> --pattern 'PortKilla.app.zip'
-   unzip -q PortKilla.app.zip && lipo -archs PortKilla.app/Contents/MacOS/PortKilla
-   # → x86_64 arm64
-   ```
+5. The release workflow does the rest: it refuses to run unless the tag,
+   `build.sh`, and the newest CHANGELOG section agree (`scripts/check-version.sh`,
+   also run by CI on every PR), verifies the binary is universal and signed
+   and that Info.plist carries the tag's version, publishes `SHA256SUMS`, and
+   marks `-rc` / `-beta` / `-alpha` tags as pre-releases so `latest` (and the
+   Homebrew cask) skip them.
 
 ## Preview release notes locally
 

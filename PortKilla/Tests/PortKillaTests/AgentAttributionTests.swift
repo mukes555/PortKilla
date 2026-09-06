@@ -182,7 +182,8 @@ final class AgentAttributionTests: XCTestCase {
     }
 
     func testSessionPidIgnoredWhenNotNumeric() {
-        let owner = AgentAttribution.ownerFromEnvironment(["CLAUDECODE": "1", "CLAUDE_PID": "nope"], in: .empty)
+        let claudeRunning = table([(1, 1, "claude")])
+        let owner = AgentAttribution.ownerFromEnvironment(["CLAUDECODE": "1", "CLAUDE_PID": "nope"], in: claudeRunning)
         XCTAssertEqual(owner?.name, "Claude Code")
         XCTAssertNil(owner?.sessionPid)
         XCTAssertFalse(owner?.sessionEnded ?? true)
@@ -191,7 +192,7 @@ final class AgentAttributionTests: XCTestCase {
     func testOnlyAllowlistedKeysAreRequested() {
         XCTAssertEqual(AgentSignatures.markerKeys, [
             "CLAUDECODE", "CURSOR_AGENT", "GEMINI_CLI", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED",
-            "CURSOR_TRACE_ID", "TERM_PROGRAM", "PORTKILLA_OWNER", "CLAUDE_PID",
+            "CURSOR_TRACE_ID", "TERM_PROGRAM", "PORTKILLA_OWNER", "CLAUDE_PID", "CLAUDE_CODE_SESSION_ID",
             "VSCODE_GIT_ASKPASS_MAIN", "VSCODE_GIT_ASKPASS_NODE",
         ])
     }

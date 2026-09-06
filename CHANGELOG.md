@@ -13,6 +13,43 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+## 1.14.0 — 2026-09-06
+
+### The guard batch
+
+Closes the holes a fresh audit found in the friendly-fire guard.
+
+### Changed
+- **Session identity uses `CLAUDE_CODE_SESSION_ID`** where Claude Code
+  provides it: a UUID is never recycled the way a pid is and survives a
+  restart in place. Pids remain the fallback.
+- A session pid reused by a *different* agent is no longer trusted.
+- **Markerless sessions expire.** Owners detected from a marker with no
+  session (Cursor, Gemini, Codex, older Claude Code) used to block other
+  agents forever. If no process of that agent is running at all, the
+  session is reported as ended.
+- **tmux, screen, zellij, and ssh are attribution barriers.** Markers seen
+  through a multiplexer belong to whoever started it, not the pane, so the
+  name is kept and the session dropped; the tree walk stops there.
+- `list --mine` means exactly what `kill` would allow without `--force`,
+  and says so on stderr (exit 1) when the caller isn't identified.
+- The `kill` report gains `guardVerdict` ("refused", "allowed",
+  "overridden", "not-evaluated: caller unknown", "not-evaluated: target
+  unknown"), and an unidentified caller killing an agent's live server is
+  told on stderr that the guard could not apply.
+- Refusals suggest the next step (ask the user, or use a free port).
+
+### Added
+- **`portkilla free <port>`**: kill for scripts; exit 0 when the port was
+  already free, so `portkilla free 3000 && npm run dev` works under `set -e`.
+- **`portkilla wait <port> [--timeout 30]`** blocks until the port is free.
+- **`portkilla open <port>`** opens localhost in the browser.
+- **`portkilla history [--port N] [--json]`**: the CLI now records its kills
+  in the same store as the app, so the History window shows agent kills and
+  an agent can find out who stopped its server.
+- `agent-docs` covers `--dry-run`, `--pid`, stderr, same-tool sessions,
+  `free`, `wait`, `history`, and `PORTKILLA_OWNER` for tools without markers.
+
 ## 1.13.1 — 2026-09-06
 
 ### Fixed

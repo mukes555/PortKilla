@@ -68,6 +68,16 @@ enum AgentSignatures {
     /// Names the Claude Code process itself; equals the pid the tree walk
     /// finds, which is what makes the two signals agree on a session.
     static let claudeSessionKey = "CLAUDE_PID"
+    /// A UUID per Claude Code session: never recycled the way a pid is, and
+    /// stable across a restart in place. Preferred identity when both sides
+    /// have it.
+    static let claudeSessionIdKey = "CLAUDE_CODE_SESSION_ID"
+
+    /// Multiplexers and remote shells freeze the environment they were
+    /// started with and re-parent everything under themselves, so markers
+    /// and ancestry seen through one of these say nothing about which pane
+    /// or session started a server.
+    static let attributionBarriers: Set<String> = ["tmux", "screen", "zellij", "sshd"]
 
     /// VS Code forks point these at their own app bundle, which names the
     /// fork when only `TERM_PROGRAM=vscode` is set.
@@ -75,7 +85,7 @@ enum AgentSignatures {
 
     /// The only environment keys ever read from another process.
     static let markerKeys: Set<String> = Set(
-        envMarkers.map(\.key) + [declaredOwnerKey, claudeSessionKey] + vscodeForkHintKeys
+        envMarkers.map(\.key) + [declaredOwnerKey, claudeSessionKey, claudeSessionIdKey] + vscodeForkHintKeys
     )
 
     /// Turns whatever someone typed into PORTKILLA_OWNER into the display

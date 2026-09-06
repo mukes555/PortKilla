@@ -1,0 +1,136 @@
+import AppKit
+import PortKillaCore
+import SwiftUI
+
+/// Every visible port as a sortable table. Selecting a row fills the
+/// inspector; the context menu is the popover's.
+struct WorkbenchPortsTable: View {
+    @ObservedObject var portManager: PortManager
+    @Binding var selection: String?
+    @Binding var searchText: String
+    @State private var sortOrder = [KeyPathComparator(\PortInfo.port)]
+
+    private var rows: [PortInfo] {
+        let needle = searchText.trimmingCharacters(in: .whitespaces)
+        let filtered = needle.isEmpty ? portManager.visiblePorts : portManager.visiblePorts.filter { PortSearch.matches($0, needle) }
+        return filtered.sorted(using: sortOrder)
+    }
+
+    private var selectedPort: PortInfo? {
+        rows.first { $0.id == selection }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            toolbar
+            Divider()
+            table
+        }
+    }
+
+    private var toolbar: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").foregroundColor(.secondary)
+                TextField("Filter ports, processes, projects, agents", text: $searchText)
+                    .textFieldStyle(.plain)
+            }
+            .padding(6)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .cornerRadius(6)
+            .frame(maxWidth: 360)
+
+            Text("\(rows.count) of \(portManager.visiblePorts.count) · \(portManager.totalPortsMemory)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Spacer()
+            if let port = selectedPort {
+                Button {
+                    KillFlow(portManager: portManager).requestKill(port, force: false, killTree: false)
+                } label: {
+                    Label("Kill :\(String(port.port))", systemImage: "xmark.circle")
+                }
+                .controlSize(.small)
+            }
+            Button {
+                portManager.refresh(showToast: true)
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .controlSize(.small)
+        }
+        .padding(10)
+    }
+
+    private var table: some View {
+        Table(rows, selection: $selection, sortOrder: $sortOrder) {
+            TableColumn("Port", value: \.port) { port in
+                HStack(spacing: 4) {
+                    Image(systemName: port.type.icon)
+                        .foregroundColor(Color(nsColor: port.type.color))
+                    Text(":\(String(port.port))")
+                        .font(.system(.body, design: .monospaced))
+                }
+            }
+            .width(min: 76, ideal: 84)
+
+            TableColumn("Process", value: \.processName) { port in
+                HStack(spacing: 6) {
+                    Text(port.processName).fontWeight(.medium)
+                    if portManager.isProtectedProcessName(port.processName) {
+                        Image(systemName: "shield.fill").font(.caption2).foregroundColor(.orange)
+                    }
+                    if port.isExposed {
+                        Chip(icon: "wifi.exclamationmark", text: "exposed", tint: .chipOrange)
+                    }
+                    if port.connections > 0 {
+                        Chip(icon: "person.2", text: "\(port.connections)", tint: .chipBlue)
+                    }
+                }
+            }
+            .width(min: 140, ideal: 148)
+
+            TableColumn("Project", value: \.projectLabel)
+                .width(min: 90, ideal: 94)
+
+            TableColumn("Agent", value: \.agentLabel) { port in
+                if let agent = port.agentOwner {
+                    Chip(icon: agent.sessionEnded ? "moon.zzz" : "sparkles", text: agent.label,
+                         tint: agent.isLiveAgentSession ? .chipTeal : .secondary)
+                }
+            }
+            .width(min: 100, ideal: 116)
+
+            TableColumn("Managed", value: \.managedLabel) { port in
+                if let managed = port.managedBy {
+                    Chip(icon: managed.kind == .docker ? "shippingbox" : "arrow.triangle.2.circlepath",
+                         text: managed.short, tint: managed.kind == .docker ? .chipBlue : .chipOrange)
+                        .help("\(managed.label): \(managed.consequence)")
+                }
+            }
+            .width(min: 80, ideal: 92)
+
+            TableColumn("Memory", value: \.memorySizeKB) { port in
+                Text(port.memoryUsage).monospacedDigit()
+            }
+            .width(min: 64, ideal: 66)
+
+            TableColumn("CPU", value: \.cpuPercent) { port in
+                Text(String(format: "%.1f%%", port.cpuPercent)).monospacedDigit()
+            }
+            .width(min: 50, ideal: 52)
+
+            TableColumn("Age", value: \.ageLabel)
+                .width(min: 54, ideal: 58)
+        }
+        .contextMenu(forSelectionType: String.self) { ids in
+            if let id = ids.first, let port = rows.first(where: { $0.id == id }) {
+                PortRowContextMenu(port: port, manager: portManager, onSelect: { selection = port.id }) { force, tree in
+                    KillFlow(portManager: portManager).requestKill(port, force: force, killTree: tree)
+                }
+            }
+        } primaryAction: { ids in
+            selection = ids.first
+        }
+    }
+}

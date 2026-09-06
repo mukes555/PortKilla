@@ -12,6 +12,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     var popover: NSPopover!
     var historyWindow: NSWindow?
     private var settingsWindow: NSWindow?
+    private var workbenchWindow: NSWindow?
     private(set) var pinnedPanel: NSPanel?
     @Published var isPinned = false
     private var hotKey: GlobalHotKey?
@@ -113,7 +114,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
             portManager.setUIVisible(true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
                 self?.writeSnapshot(of: viewName, to: snapshotPath)
-                NSApp.terminate(nil)
+                // The live capture quits on its own once it has drawn.
+                if viewName != "workbench-live" { NSApp.terminate(nil) }
             }
         }
 
@@ -143,6 +145,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
             view = NSHostingView(rootView: ProtectedProcessListView(portManager: portManager))
         case "settings":
             view = NSHostingView(rootView: SettingsView(portManager: portManager).environmentObject(self))
+        case "workbench":
+            view = NSHostingView(rootView: WorkbenchView(portManager: portManager).environmentObject(self).frame(width: 1320, height: 720))
+        case "workbench-live":
+            // Sidebar material is composited by the window server, so an
+            // offscreen render shows it blank: open the real window and let
+            // screencapture photograph it (needs Screen Recording permission).
+            openWorkbench()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                if let number = self?.workbenchWindow?.windowNumber {
+                    _ = try? CommandRunner.run("/usr/sbin/screencapture", ["-x", "-o", "-l", "\(number)", path], timeout: 10)
+                }
+                NSApp.terminate(nil)
+            }
+            return
         case "detail":
             let port = portManager.activePorts.first ?? PortInfo(
                 port: 3000, pid: 1234, processName: "node",
@@ -155,7 +171,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
             // PORTKILLA_SNAPSHOT_TEXTSIZE=large renders at an accessibility
             // text size to check that the rows reflow instead of clipping.
             let textSize: DynamicTypeSize = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_TEXTSIZE"] == "large" ? .accessibility1 : .medium
-            view = NSHostingView(rootView: PortListView(portManager: portManager).environmentObject(self).dynamicTypeSize(textSize))
+            // PORTKILLA_SNAPSHOT_SEARCH seeds the search field, so the palette
+            // bar ("kill 3000", "> ...") can be rendered.
+            let search = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_SEARCH"] ?? ""
+            view = NSHostingView(rootView: PortListView(portManager: portManager, initialSearchText: search).environmentObject(self).dynamicTypeSize(textSize))
         }
 
         let size = view.fittingSize == .zero ? NSSize(width: 500, height: 600) : view.fittingSize
@@ -204,8 +223,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     }
 
     func popoverDidClose(_ notification: Notification) {
-        // A pinned window keeps the fast refresh cadence alive
-        portManager.setUIVisible(isPinned)
+        // A pinned window or the Workbench keeps the fast refresh cadence alive
+        portManager.setUIVisible(isPinned || workbenchIsVisible)
+    }
+
+    private var workbenchIsVisible: Bool {
+        workbenchWindow?.isVisible ?? false
     }
 
     // MARK: - Pinned floating window
@@ -252,10 +275,43 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     }
 
     func windowWillClose(_ notification: Notification) {
-        guard (notification.object as? NSWindow) === pinnedPanel else { return }
+        let closing = notification.object as? NSWindow
+        if closing === workbenchWindow {
+            portManager.setUIVisible(popover.isShown || isPinned)
+            return
+        }
+        guard closing === pinnedPanel else { return }
         pinnedPanel = nil
         isPinned = false
-        portManager.setUIVisible(popover.isShown)
+        portManager.setUIVisible(popover.isShown || workbenchIsVisible)
+    }
+
+    // MARK: - Workbench
+
+    /// The full-size window: table, projects, agent sessions, watchlist,
+    /// history, and an inspector. One instance, remembered position.
+    func openWorkbench() {
+        popover.performClose(nil)
+        if workbenchWindow == nil {
+            let view = WorkbenchView(portManager: portManager).environmentObject(self)
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 1320, height: 720),
+                styleMask: [.titled, .closable, .resizable, .miniaturizable],
+                backing: .buffered, defer: false
+            )
+            window.title = "PortKilla Workbench"
+            window.isReleasedWhenClosed = false
+            window.contentViewController = NSHostingController(rootView: view)
+            window.setFrameAutosaveName("PortKillaWorkbench")
+            if !window.setFrameUsingName("PortKillaWorkbench") {
+                window.center()
+            }
+            window.delegate = self
+            workbenchWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        workbenchWindow?.makeKeyAndOrderFront(nil)
+        portManager.setUIVisible(true)
     }
 
     @objc func togglePopover() {

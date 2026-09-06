@@ -129,8 +129,12 @@ PortKilla/Sources/
     App/               AppDelegate (@main), RefusalWatcher (CLI refusals
                        become actionable notifications), DemoReel (dev-only)
     Services/          GlobalHotKey
-    Views/             SwiftUI; PortListView is the root, +Actions / +Chrome
-                       are its extensions; PortRowViews, SettingsView, etc.
+    Views/             SwiftUI; PortListView is the root, +Actions / +Chrome /
+                       +Palette are its extensions; KillFlow holds the
+                       confirmations every window shares; PaletteQuery parses
+                       the search field's verbs
+    Workbench/         The full-size window: sidebar, table, projects, agent
+                       sessions, watchlist, inspector (WorkbenchModel groups)
   portkilla-cli/       main.swift, the standalone CLI
 PortKilla/Tests/PortKillaTests/
                        Unit tests, plus ScenarioTests which spawn real servers

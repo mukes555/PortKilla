@@ -3,6 +3,8 @@ import SwiftUI
 
 struct HistoryView: View {
     @ObservedObject var portManager: PortManager
+    /// Inside the Workbench the pane sizes itself; alone it is a fixed window.
+    var embedded = false
     @ObservedObject private var history = HistoryManager.shared
 
     private static let timeFormatter: DateFormatter = {
@@ -113,7 +115,7 @@ struct HistoryView: View {
             .padding(12)
             .background(Color(nsColor: .windowBackgroundColor))
         }
-        .frame(width: 430, height: 400)
+        .frame(width: embedded ? nil : 430, height: embedded ? nil : 400)
         .onAppear { history.reload() } // picks up kills the CLI recorded
     }
 

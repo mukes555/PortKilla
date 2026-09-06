@@ -33,8 +33,15 @@ enum PortKillaCLI {
     }
 
     private static func scan() -> [PortInfo] {
+        scanWithTable().ports
+    }
+
+    /// Scan plus the underlying process snapshot (needed to attribute the
+    /// caller's own agent for the friendly-fire guard).
+    private static func scanWithTable() -> (ports: [PortInfo], table: ProcessTable) {
         let table = ProcessTable.capture()
-        return (try? PortScanner().scanActivePorts(processes: table)) ?? []
+        let ports = (try? PortScanner().scanActivePorts(processes: table)) ?? []
+        return (ports, table)
     }
 
     private static func list(json: Bool) -> Int32 {
@@ -54,7 +61,7 @@ enum PortKillaCLI {
             return 0
         }
 
-        print("PORT   PROTO  PID     PROCESS               MEMORY    BIND")
+        print("PORT   PROTO  PID     PROCESS               MEMORY    AGENT         BIND")
         for port in ports {
             let line = [
                 ":\(port.port)".padding(toLength: 7, withPad: " ", startingAt: 0),
@@ -62,6 +69,7 @@ enum PortKillaCLI {
                 "\(port.pid)".padding(toLength: 8, withPad: " ", startingAt: 0),
                 port.processName.padding(toLength: 22, withPad: " ", startingAt: 0),
                 port.memoryUsage.padding(toLength: 10, withPad: " ", startingAt: 0),
+                (port.agentOwner?.name ?? "—").padding(toLength: 14, withPad: " ", startingAt: 0),
                 port.bindAddress ?? ""
             ].joined()
             print(line)
@@ -78,9 +86,23 @@ enum PortKillaCLI {
             return 2
         }
 
-        guard let target = scan().first(where: { $0.port == portNumber }) else {
+        let (ports, table) = scanWithTable()
+        guard let target = ports.first(where: { $0.port == portNumber }) else {
             print("Nothing is listening on :\(portNumber).")
             return 1
+        }
+
+        // Friendly-fire guard: refuse to kill a port owned by a different agent
+        // session unless --force. Prevents AI agents from killing each other's
+        // dev servers. (Set PORTKILLA_OWNER to declare the caller's identity.)
+        let callerPid = Int(Foundation.ProcessInfo.processInfo.processIdentifier)
+        let caller = AgentAttribution.callerOwner(callerPid: callerPid, in: table)
+        if !force, AgentAttribution.isFriendlyFire(caller: caller, target: target.agentOwner) {
+            let owner = target.agentOwner?.name ?? "another agent"
+            FileHandle.standardError.write(Data(
+                ":\(portNumber) is owned by \(owner) (a different session than \(caller?.name ?? "you")). Pass --force to override.\n".utf8
+            ))
+            return 3
         }
 
         let killer = ProcessKiller()
@@ -111,10 +133,14 @@ enum PortKillaCLI {
         PortKilla — macOS port manager
 
         Usage:
-          portkilla list [--json]        List listening TCP ports
+          portkilla list [--json]          List listening ports (with owning agent)
           portkilla kill <port> [--force]  Kill the process on a port
-          portkilla version              Print version
-          portkilla help                 Show this help
+          portkilla version                Print version
+          portkilla help                   Show this help
+
+        Friendly-fire guard: `kill` refuses to stop a port owned by a different
+        AI-agent session unless --force. Set PORTKILLA_OWNER to declare who you
+        are; otherwise the owner is detected from the process tree.
 
         The GUI launches when run with no arguments.
         """)

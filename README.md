@@ -46,6 +46,22 @@ The whole flow works without touching the mouse: **⌥⌘P → type "3000" or "v
 
 Right-click any port → **Watch**. Watched ports are **pinned to the top of the list with live status** — including "free ✓" — and PortKilla notifies you the moment a watched port **frees up** (no more `EADDRINUSE` retry-loops) or when **something new grabs it**. Searching a free port number offers to watch it in one click, and a kill that's slow to finish notifies you when the port is finally available.
 
+## 🤖 Agent-Aware (friendly-fire protection)
+
+Running multiple AI coding agents? PortKilla attributes each dev server to the
+**agent that started it** (Claude Code, Cursor, VS Code, Windsurf, Zed, Trae,
+Aider) by walking the process tree — no launcher or setup needed. Ports show a
+✨ agent chip, and the CLI **won't let one agent kill another's server**:
+
+```bash
+portkilla kill 3000
+# :3000 is owned by Cursor (a different session than Claude Code).
+# Pass --force to override.
+```
+
+Set `PORTKILLA_OWNER=<name>` to declare who you are, or it's detected
+automatically. Detached servers (nohup/pm2) show no owner rather than a guess.
+
 ## 📡 More Signal
 
 *   **Native scanner**: ports and processes are enumerated with raw kernel syscalls (libproc) — a full scan takes ~20ms with zero subprocesses.
@@ -126,7 +142,7 @@ Drag `PortKilla.app` to `/Applications`.
 ./scripts/build.sh --dmg
 ```
 
-This produces `dist/PortKilla-1.6.0.dmg`.
+This produces `dist/PortKilla-1.7.0.dmg`.
 
 To distribute to other Macs without Gatekeeper prompts, you’ll eventually want Developer ID signing + notarization.
 

@@ -84,9 +84,11 @@ struct PortSectionView: View {
                     .onHover { isHovering in
                         hoverId = isHovering ? port.id : nil
                     }
+                    .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .top)), removal: .opacity))
                 Divider()
             }
         }
+        .animation(.easeInOut(duration: 0.18), value: ports.map(\.id))
     }
 
     private func expansionBinding(for id: String) -> Binding<Bool> {

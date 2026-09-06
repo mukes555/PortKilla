@@ -71,7 +71,10 @@ extension PortListView {
                 return true
             }
             return false
-        case KeyCode.return: // kills the selection; ⌘⏎ force kills
+        case KeyCode.return: // runs the typed verb, else kills the selection; ⌘⏎ force kills
+            if runPaletteAction() {
+                return true
+            }
             if filter == .tests, let test = selectedTest {
                 requestKillTest(test, force: hasCommand)
                 return true
@@ -130,26 +133,14 @@ extension PortListView {
         selectedId = ids[next]
     }
 
-    /// Single entry point for killing a port: applies the confirm-before-kill
-    /// setting (with a "don't ask again" checkbox) and then delegates.
+    var killFlow: KillFlow { KillFlow(portManager: portManager) }
+
+    /// Kills go through the shared flow; the view only keeps the keyboard
+    /// position on a neighbour when the killed row disappears.
     func requestKill(_ port: PortInfo, force: Bool, killTree: Bool) {
-        // A supervisor would undo a plain kill; Docker's backend is never the target.
-        if let managed = port.managedBy, !force || managed.kind == .docker, requestManagedStop(port, managed: managed) {
-            return
+        if killFlow.requestKill(port, force: force, killTree: killTree) {
+            moveSelectionOff(port.id)
         }
-        var message = "This will terminate '\(port.processName)' (PID \(port.pid))."
-        if port.connections > 0 {
-            message += "\n\n\(port.connections) client\(port.connections == 1 ? " is" : "s are") connected to it right now."
-        }
-        let confirmed = confirmIfNeeded(
-            title: "Kill Process on :\(port.port)?",
-            message: message,
-            owner: port.agentOwner,
-            alwaysAsk: port.connections > 0
-        )
-        guard confirmed else { return }
-        moveSelectionOff(port.id)
-        portManager.killPort(port, force: force, killTree: killTree)
     }
 
     /// The killed row disappears; keep the keyboard position on its neighbour
@@ -168,94 +159,21 @@ extension PortListView {
     }
 
     func requestKillTest(_ test: TestProcessInfo, force: Bool = false) {
-        let confirmed = confirmIfNeeded(
-            title: "Kill \(test.processName)?",
-            message: "This will terminate '\(test.processName)' (PID \(test.pid)).",
-            owner: test.agentOwner
-        )
-        guard confirmed else { return }
-        portManager.killTestProcess(test, force: force)
-    }
-
-    /// Honours confirm-before-kill, and always asks when another agent's
-    /// live session owns the target, whatever the setting says.
-    private func confirmIfNeeded(title: String, message: String, owner: AgentOwner?, alwaysAsk: Bool = false) -> Bool {
-        let decision = KillDecision.forHuman(target: owner)
-        guard portManager.confirmBeforeKill || decision != .allow || alwaysAsk else { return true }
-
-        var text = message
-        if case .warn(let reason) = decision {
-            text += "\n\n\(reason)"
-        }
-        return runKillConfirmation(title: title, message: text)
+        killFlow.requestKillTest(test, force: force)
     }
 
     func requestKillChild(_ child: PortInfo.ProcessInfo) {
-        if portManager.confirmBeforeKill {
-            let confirmed = runKillConfirmation(
-                title: "Kill \(child.name)?",
-                message: "This will terminate '\(child.name)' (PID \(child.pid))."
-            )
-            guard confirmed else { return }
-        }
-        portManager.killProcess(pid: child.pid, name: child.name)
-    }
-
-    func runKillConfirmation(title: String, message: String) -> Bool {
-        KillConfirm.run(title: title, message: message) { dontAskAgain in
-            if dontAskAgain { portManager.confirmBeforeKill = false }
-        }
+        killFlow.requestKillChild(child)
     }
 
     /// ⌘K and the footer button kill what the active filter shows, never
     /// web servers from behind the Databases tab.
     func killAllForCurrentFilter() {
         if filter == .tests {
-            killAllTests()
+            killFlow.requestKillAllTests()
             return
         }
-
-        let targets = portManager.visiblePorts.filter {
-            filter.includesInBulkKill($0) && !portManager.isProtectedProcessName($0.processName)
-        }
-        if targets.isEmpty {
-            KillConfirm.inform(title: "Nothing to Kill", message: "There are no unprotected processes matching this filter.")
-            return
-        }
-
-        let processList = targets.map { "• \($0.processName) (:\($0.port))" }.joined(separator: "\n")
-        let agentNote = KillDecision.liveAgentNote(for: targets.map(\.agentOwner)).map { "\n\n\($0)" } ?? ""
-        let confirmed = KillConfirm.run(
-            title: "\(filter.bulkKillLabel): \(targets.count) process\(targets.count == 1 ? "" : "es")?",
-            message: "This will terminate the following processes:\n\n\(processList)\(agentNote)\n\nAre you sure?",
-            confirmTitle: "Kill All"
-        )
-        if confirmed {
-            portManager.killPorts(targets)
-        }
-    }
-
-    func killAllTests() {
-        let testProcesses = portManager.activeTests
-        let killableTests = testProcesses.filter { !portManager.isProtectedProcessName($0.processName) }
-
-        if killableTests.isEmpty {
-            KillConfirm.inform(
-                title: "No Test Processes Found",
-                message: testProcesses.isEmpty ? "There are no active test processes to kill." : "All active test processes are protected."
-            )
-            return
-        }
-
-        let processList = killableTests.map { "• \($0.processName) (PID: \($0.pid))" }.joined(separator: "\n")
-        let agentNote = KillDecision.liveAgentNote(for: killableTests.map(\.agentOwner)).map { "\n\n\($0)" } ?? ""
-        let confirmed = KillConfirm.run(
-            title: "Kill \(killableTests.count) Test Processes?",
-            message: "This will terminate the following processes:\n\n\(processList)\(agentNote)\n\nAre you sure?",
-            confirmTitle: "Kill All"
-        )
-        if confirmed {
-            portManager.killTestProcesses(killableTests)
-        }
+        let targets = portManager.visiblePorts.filter { filter.includesInBulkKill($0) }
+        killFlow.requestKillAll(targets, label: filter.bulkKillLabel)
     }
 }

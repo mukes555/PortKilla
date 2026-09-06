@@ -13,6 +13,14 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+## 1.8.3 — 2026-09-06
+
+### Fixed
+- A restarted agent could not kill its own older dev server without `--force`:
+  the server's `CLAUDE_PID` marker pointed at the previous session. When that
+  session process no longer exists, the owner keeps the agent name but no
+  longer pins a session, so the same tool is allowed through.
+
 ## 1.8.2 — 2026-09-06
 
 ### Fixed

@@ -92,13 +92,37 @@ final class AgentAttributionTests: XCTestCase {
     func testDetachedServerAttributedByEnvironment() {
         // The shell that started the server is gone: server(300) -> launchd.
         // The CLAUDECODE marker it inherited still names the owner.
-        let t = table([(300, 1, "node server.js")])
+        let t = table([(4242, 1, "claude"), (300, 1, "node server.js")])
         let owner = AgentAttribution.owner(ofPid: 300, in: t) { pid in
             pid == 300 ? ["CLAUDECODE": "1", "CLAUDE_PID": "4242"] : [:]
         }
         XCTAssertEqual(owner?.name, "Claude Code")
         XCTAssertEqual(owner?.sessionPid, 4242)
         XCTAssertEqual(owner?.source, .environment)
+    }
+
+    func testDeadSessionDropsSessionPidButKeepsName() {
+        // The agent process named by CLAUDE_PID has exited: a restarted agent
+        // (new pid) must still be allowed to kill its old server.
+        let t = table([(300, 1, "node server.js")])
+        let owner = AgentAttribution.owner(ofPid: 300, in: t) { _ in ["CLAUDECODE": "1", "CLAUDE_PID": "1433"] }
+        XCTAssertEqual(owner?.name, "Claude Code")
+        XCTAssertNil(owner?.sessionPid)
+        let restarted = AgentOwner(name: "Claude Code", sessionPid: 9000, source: .processTree)
+        XCTAssertFalse(AgentAttribution.isFriendlyFire(caller: restarted, target: owner))
+    }
+
+    func testReusedSessionPidIsNotTrusted() {
+        // pid 1433 is alive but is no longer an agent: treat the session as gone.
+        let t = table([(1433, 1, "/usr/bin/sleep 100"), (300, 1, "node server.js")])
+        let owner = AgentAttribution.owner(ofPid: 300, in: t) { _ in ["CLAUDECODE": "1", "CLAUDE_PID": "1433"] }
+        XCTAssertNil(owner?.sessionPid)
+    }
+
+    func testLiveSessionKeepsSessionPid() {
+        let t = table([(4242, 1, "claude"), (300, 1, "node server.js")])
+        let owner = AgentAttribution.owner(ofPid: 300, in: t) { _ in ["CLAUDECODE": "1", "CLAUDE_PID": "4242"] }
+        XCTAssertEqual(owner?.sessionPid, 4242)
     }
 
     func testAncestryWinsOverEnvironment() {

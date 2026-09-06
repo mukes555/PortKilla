@@ -88,6 +88,7 @@ extension PortManager {
                 let timeout = Self.exitTimeout(force: force)
                 let died = self.waitForExit(pids: [pid], timeout: timeout).contains(pid)
 
+                Log.kill.info("\(subject, privacy: .public) pid \(pid) force=\(force) tree=\(killTree) exited=\(died)")
                 DispatchQueue.main.async {
                     self.terminatingPids.remove(pid)
                     if died {

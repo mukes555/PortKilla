@@ -35,5 +35,16 @@ cask "portkilla" do
                    sudo: false
   end
 
-  zap trash: "~/Library/Preferences/com.mukes555.PortKilla.plist"
+  # `brew reinstall` replaces the bundle; quit the running copy first so the
+  # menu-bar icon isn't left running from a deleted bundle, and drop the
+  # login-item registration that pointed at it.
+  uninstall quit:       "com.mukes555.PortKilla",
+            login_item: "PortKilla"
+
+  zap trash: [
+    "~/Library/Caches/com.mukes555.PortKilla",
+    "~/Library/HTTPStorages/com.mukes555.PortKilla",
+    "~/Library/Preferences/com.mukes555.PortKilla.plist",
+    "~/Library/Saved Application State/com.mukes555.PortKilla.savedState",
+  ]
 end

@@ -5,11 +5,6 @@ import AppKit
 // MARK: - Header, settings menu, footer, empty state
 extension PortListView {
 
-    var appVersionText: String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-        return "v\(version ?? "dev")"
-    }
-
     var headerView: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
@@ -90,19 +85,6 @@ extension PortListView {
         .buttonStyle(.plain)
         .keyboardShortcut(",", modifiers: .command)
         .help("Settings")
-    }
-
-    var launchAtLoginBinding: Binding<Bool> {
-        Binding(
-            get: { launchAtLogin },
-            set: { newValue in
-                if LoginItem.setEnabled(newValue) {
-                    launchAtLogin = newValue
-                } else {
-                    portManager.showToast("Needs the installed .app bundle")
-                }
-            }
-        )
     }
 
     var hotkeyTip: some View {

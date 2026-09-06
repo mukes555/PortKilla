@@ -6,7 +6,7 @@ A tour of how the app is put together, for anyone touching the code.
 
 `AppDelegate` is the `@main` entry point, but before the GUI launches,
 [`CLI.swift`](PortKilla/Sources/PortKilla/App/CLI.swift) inspects `argv`: if the
-first argument is a known subcommand (`list`, `kill`, `version`), it runs the CLI
+first argument is a known subcommand (`list`, `kill`, `whoami`, `agent-docs`, `version`, `help`), it runs the CLI
 and exits. Otherwise the menu-bar app starts. So `PortKilla` and
 `portkilla list` are the same executable.
 

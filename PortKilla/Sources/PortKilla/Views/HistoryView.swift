@@ -2,7 +2,7 @@ import SwiftUI
 
 struct HistoryView: View {
     @ObservedObject var portManager: PortManager
-    @State private var historyItems: [PortHistoryItem] = []
+    @ObservedObject private var history = HistoryManager.shared
 
     private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -37,7 +37,7 @@ struct HistoryView: View {
 
             Divider()
 
-            if historyItems.isEmpty {
+            if history.history.isEmpty {
                 VStack {
                     Spacer()
                     Text("No history yet")
@@ -46,7 +46,7 @@ struct HistoryView: View {
                 }
             } else {
                 List {
-                    ForEach(historyItems) { item in
+                    ForEach(history.history) { item in
                         HStack {
                             Text(formatDate(item.timestamp))
                                 .font(.system(size: 11, design: .monospaced))
@@ -72,7 +72,7 @@ struct HistoryView: View {
                                 Spacer()
                                 Text(item.action.rawValue)
                                     .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(item.action == .killed ? .red : .green)
+                                    .foregroundColor(.red)
 
                                 // The same server tends to come back — offer a re-kill
                                 if isPortActiveAgain(item.port) {
@@ -105,7 +105,6 @@ struct HistoryView: View {
 
                 Button("Clear History") {
                     HistoryManager.shared.clearHistory()
-                    loadHistory()
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -114,14 +113,8 @@ struct HistoryView: View {
             .background(Color(nsColor: .windowBackgroundColor))
         }
         .frame(width: 430, height: 400)
-        .onAppear {
-            loadHistory()
-        }
     }
 
-    private func loadHistory() {
-        historyItems = HistoryManager.shared.history
-    }
 
     private func isPortActiveAgain(_ port: Int) -> Bool {
         portManager.activePorts.contains { $0.port == port }
@@ -161,7 +154,7 @@ struct HistoryView: View {
         
         panel.begin { response in
             if response == .OK, let url = panel.url {
-                let csvContent = generateCSV()
+                let csvContent = CSV.historyDocument(history.history, formatter: Self.exportFormatter)
                 do {
                     try csvContent.write(to: url, atomically: true, encoding: .utf8)
                 } catch {
@@ -171,20 +164,4 @@ struct HistoryView: View {
         }
     }
     
-    private func generateCSV() -> String {
-        var csv = "Timestamp,Port,Process,Action\n"
-
-        for item in historyItems {
-            // Every column goes through CSV.field so a future column can't
-            // silently bypass the formula-injection defence.
-            let fields = [
-                Self.exportFormatter.string(from: item.timestamp),
-                "\(item.port)",
-                item.processName,
-                item.action.rawValue
-            ].map(CSV.field)
-            csv.append(fields.joined(separator: ",") + "\n")
-        }
-        return csv
-    }
 }

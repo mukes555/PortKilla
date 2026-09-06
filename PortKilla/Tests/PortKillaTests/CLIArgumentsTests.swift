@@ -1,4 +1,5 @@
 import XCTest
+@testable import PortKillaCore
 @testable import PortKilla
 
 final class CLIArgumentsTests: XCTestCase {

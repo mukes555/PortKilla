@@ -1,4 +1,5 @@
 import Foundation
+@testable import PortKillaCore
 @testable import PortKilla
 
 /// Test doubles that keep the suite away from the developer's real

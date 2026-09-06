@@ -1,5 +1,6 @@
 import XCTest
 import Foundation
+@testable import PortKillaCore
 @testable import PortKilla
 
 final class ProcessKillerTests: XCTestCase {

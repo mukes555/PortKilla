@@ -1,3 +1,4 @@
+import PortKillaCore
 import SwiftUI
 
 struct PortDetailView: View {
@@ -55,6 +56,7 @@ struct PortDetailView: View {
                     DetailRow(label: "Bind", value: port.isExposed ? "\(bind) (exposed to network)" : bind)
                 }
                 DetailRow(label: "Proto", value: port.proto.uppercased())
+                DetailRow(label: "Clients", value: port.connections == 0 ? "none connected" : "\(port.connections) connected")
                 DetailRow(label: "CPU", value: String(format: "%.1f%%", port.cpuPercent))
                 if let age = port.age {
                     DetailRow(label: "Age", value: age)

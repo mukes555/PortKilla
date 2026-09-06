@@ -1,29 +1,49 @@
 // swift-tools-version: 5.9
-// The swift-tools-version declares the minimum version of Swift required to build this package.
-
 import PackageDescription
 
+// Three products, one core:
+// - PortKillaCore: models, scanner, attribution, kill decision, history, the
+//   CLI and the MCP server. Foundation only, no AppKit, so it is testable
+//   without the app and links light.
+// - PortKilla: the menu bar app (AppKit/SwiftUI) on top of the core. It also
+//   answers CLI invocations, so existing symlinks keep working.
+// - portkilla: the standalone CLI binary the cask links; no AppKit, so
+//   `portkilla mcp` stays small when an agent keeps one running.
 let package = Package(
     name: "PortKilla",
     platforms: [
         .macOS(.v13)
     ],
     products: [
-        .executable(name: "PortKilla", targets: ["PortKilla"])
+        .executable(name: "PortKilla", targets: ["PortKilla"]),
+        // Not "portkilla": on a case-insensitive volume that is the same file
+        // as the app's "PortKilla" and the two links clobber each other.
+        .executable(name: "portkilla-cli", targets: ["portkilla-cli"]),
+        .library(name: "PortKillaCore", targets: ["PortKillaCore"]),
     ],
     targets: [
         .target(
             name: "CLibProc",
             path: "Sources/CLibProc"
         ),
+        .target(
+            name: "PortKillaCore",
+            dependencies: ["CLibProc"],
+            path: "Sources/PortKillaCore"
+        ),
         .executableTarget(
             name: "PortKilla",
-            dependencies: ["CLibProc"],
+            dependencies: ["PortKillaCore"],
             path: "Sources/PortKilla"
+        ),
+        .executableTarget(
+            name: "portkilla-cli",
+            dependencies: ["PortKillaCore"],
+            path: "Sources/portkilla-cli"
         ),
         .testTarget(
             name: "PortKillaTests",
-            dependencies: ["PortKilla"]
+            dependencies: ["PortKillaCore", "PortKilla"]
         ),
     ]
 )

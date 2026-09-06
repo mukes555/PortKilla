@@ -1,3 +1,4 @@
+import PortKillaCore
 import SwiftUI
 import AppKit
 
@@ -131,6 +132,7 @@ struct PortRowView: View {
         if let project = port.projectName { parts.append("project \(project)") }
         if let agent = port.agentOwner { parts.append(agent.sessionEnded ? "started by \(agent.name), session ended" : "owned by \(agent.name)") }
         if port.isExposed { parts.append("exposed on all interfaces") }
+        if port.connections > 0 { parts.append("\(port.connections) clients connected") }
         if isTerminating { parts.append("shutting down") }
         return parts.joined(separator: ", ")
     }
@@ -226,6 +228,13 @@ struct PortRowView: View {
                             if port.isExposed {
                                 Chip(icon: "wifi.exclamationmark", text: "exposed", tint: .chipOrange)
                                     .help("Listening on all interfaces (\(port.bindAddress ?? "*")) — reachable from your local network")
+                            }
+
+                            // Clients talking to it right now: the strongest
+                            // hint that killing this would break something.
+                            if port.connections > 0 {
+                                Chip(icon: "person.2", text: "\(port.connections)", tint: .chipBlue)
+                                    .help("\(port.connections) client\(port.connections == 1 ? "" : "s") connected right now")
                             }
 
                             // Which AI agent spawned this: the friendly-fire

@@ -1,3 +1,4 @@
+import PortKillaCore
 import SwiftUI
 
 /// The Protected pane of Settings: substrings of process names that bulk

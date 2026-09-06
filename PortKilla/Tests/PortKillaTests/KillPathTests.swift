@@ -1,4 +1,5 @@
 import XCTest
+@testable import PortKillaCore
 @testable import PortKilla
 
 /// Tests for the code that can end a process without a person in the loop.

@@ -1,3 +1,4 @@
+import PortKillaCore
 import SwiftUI
 
 struct HistoryView: View {

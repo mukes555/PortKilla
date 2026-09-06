@@ -1,4 +1,5 @@
 import XCTest
+@testable import PortKillaCore
 @testable import PortKilla
 
 final class KillDecisionTests: XCTestCase {
@@ -29,9 +30,20 @@ final class KillDecisionTests: XCTestCase {
         XCTAssertEqual(KillDecision.forAgent(caller: agent("Claude Code", session: 10), target: agent("Claude Code", session: 10)), .allow)
     }
 
-    func testUnknownOnEitherSideNeverBlocks() {
+    func testUnknownCallerNeverBlocks() {
         XCTAssertEqual(KillDecision.forAgent(caller: nil, target: agent("Claude Code", session: 10)), .allow)
-        XCTAssertEqual(KillDecision.forAgent(caller: agent("Claude Code", session: 10), target: nil), .allow)
+        XCTAssertEqual(KillDecision.forAgent(caller: nil, target: nil), .allow)
+    }
+
+    func testAgentMayNotKillWhatNobodyClaims() {
+        // Most unattributed servers are a person's; the agent can ask.
+        if case .refuse(let reason) = KillDecision.forAgent(caller: agent("Claude Code", session: 10), target: nil) {
+            XCTAssertTrue(reason.contains("not attributed"))
+        } else {
+            XCTFail("an identified agent must not kill an unattributed server without --force")
+        }
+        XCTAssertEqual(KillDecision.forAgent(caller: terminal("VS Code"), target: nil), .allow, "a person in an editor terminal is not an agent")
+        XCTAssertTrue(KillDecision.forAgent(caller: AgentOwner(name: "my-bot", source: .declared), target: nil).isRefusal, "declared owners are agents")
     }
 
     func testSameNameUnknownSessionAllowed() {

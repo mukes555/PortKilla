@@ -43,8 +43,10 @@ public enum PortKillaCLI {
         case .success(.mcpSetup(let agent)):
             print(MCPSetup.instructions(for: agent))
             return CLIExit.ok
-        case .success(.doctor(let json)):
-            return doctor(json: json)
+        case .success(.doctor(let json, let agents)):
+            return agents ? DoctorAgents.run(json: json) : doctor(json: json)
+        case .success(.whois(let options)):
+            return CLIWhois.run(options)
         case .success(.completions(let shell)):
             print(CLICompletions.script(for: shell) ?? "")
             return CLIExit.ok
@@ -377,10 +379,16 @@ public enum PortKillaCLI {
     - `portkilla list --json` lists every listener with its owning agent;
       `portkilla list --mine` shows only the ones you may stop. Use `--pid` when two
       processes share a port.
+    - `portkilla whois <port>` explains who started a server and why PortKilla thinks
+      so (ancestry, markers, declaration), and what `kill` would do for you.
+    - `portkilla kill --orphaned` stops every server left behind by an agent session
+      that has ended; safe for anyone, exit 0 when there is nothing to clean up.
     - `portkilla history --port <port>` shows who started and who stopped a server
       that has vanished.
-    - `portkilla whoami` shows how PortKilla identifies you. Codex, Windsurf and Trae
-      leave no reliable marker: export `PORTKILLA_OWNER=<your name>` before starting
-      servers so they are attributed to you.
+    - `portkilla whoami` shows how PortKilla identifies you; `portkilla doctor
+      --agents` shows how every tool is recognised. Codex, Windsurf and Trae leave
+      no reliable marker: export `PORTKILLA_OWNER=<your name>` before starting
+      servers so they are attributed to you, and `PORTKILLA_SESSION=<unique>` so
+      two of your sessions are told apart.
     """
 }

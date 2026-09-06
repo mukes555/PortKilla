@@ -25,7 +25,7 @@ final class DistributionTests: XCTestCase {
         XCTAssertEqual(CLIArguments.parse(["help", "wait"]), .success(.help(topic: "wait")))
         XCTAssertEqual(CLIArguments.parse(["-v"]), .success(.version(json: false)))
         XCTAssertEqual(CLIArguments.parse(["version", "--json"]), .success(.version(json: true)))
-        XCTAssertEqual(CLIArguments.parse(["doctor"]), .success(.doctor(json: false)))
+        XCTAssertEqual(CLIArguments.parse(["doctor"]), .success(.doctor(json: false, agents: false)))
         XCTAssertEqual(CLIArguments.parse(["completions", "zsh"]), .success(.completions(shell: "zsh")))
         XCTAssertEqual(CLIArguments.parse(["completions", "ksh"]), .failure(.unknownOption("ksh", command: "completions")))
         for topic in ["list", "kill", "free", "wait", "history", "whoami", "doctor"] {

@@ -39,9 +39,14 @@ public struct AgentOwner: Codable, Equatable {
         self.sessionEnded = sessionEnded
     }
 
-    /// Stable identity string, e.g. "Claude Code#845" or "Claude Code".
+    /// Stable identity string, e.g. "Claude Code@3f2a9c1d", "Claude Code#845",
+    /// or "Claude Code". A long key (a UUID) is shortened; a short one (a
+    /// declared PORTKILLA_SESSION) is shown whole so two do not look alike.
     public var sessionId: String {
-        if let sessionKey { return "\(name)@\(sessionKey.prefix(8))" }
+        if let sessionKey {
+            let shown = sessionKey.count <= 16 ? sessionKey : String(sessionKey.prefix(8))
+            return "\(name)@\(shown)"
+        }
         return sessionPid.map { "\(name)#\($0)" } ?? name
     }
 
@@ -100,7 +105,7 @@ public enum AgentAttribution {
     public typealias EnvironmentLookup = (_ pid: Int) -> [String: String]
 
     /// Deepest ancestor we'll walk before giving up (guards against cycles).
-    private static let maxDepth = 24
+    static let maxDepth = 24
 
     public static func liveEnvironment(pid: Int) -> [String: String] {
         ProcessFacts.shared.markers(for: Int32(pid), keys: AgentSignatures.markerKeys)
@@ -146,6 +151,9 @@ public enum AgentAttribution {
             // The caller's own environment is the same session the tree found.
             if fromTree.name == "Claude Code" {
                 fromTree.sessionKey = environment[AgentSignatures.claudeSessionIdKey]
+            }
+            if fromTree.sessionKey == nil {
+                fromTree.sessionKey = declaredSession(in: environment)
             }
             return fromTree
         }
@@ -225,6 +233,11 @@ public enum AgentAttribution {
         if owner.confidence == .agent, owner.sessionPid == nil, !owner.sessionEnded, !anyProcessRunning(named: marker.name, in: processes) {
             owner.sessionEnded = true
         }
+        // A tool without a session id of its own may still have been given
+        // one by whoever started it.
+        if owner.sessionKey == nil, !owner.sessionEnded {
+            owner.sessionKey = declaredSession(in: environment)
+        }
         return owner
     }
 
@@ -238,7 +251,14 @@ public enum AgentAttribution {
         guard let raw = environment[AgentSignatures.declaredOwnerKey] else { return nil }
         let name = AgentSignatures.canonicalName(raw)
         guard !name.isEmpty else { return nil }
-        return AgentOwner(name: name, source: .declared)
+        return AgentOwner(name: name, sessionKey: declaredSession(in: environment), source: .declared)
+    }
+
+    /// PORTKILLA_SESSION, cleaned; nil when unset or blank.
+    static func declaredSession(in environment: [String: String]) -> String? {
+        guard let raw = environment[AgentSignatures.declaredSessionKey] else { return nil }
+        let cleaned = AgentSignatures.cleanedLabel(raw)
+        return cleaned.isEmpty ? nil : cleaned
     }
 
     private static func vscodeFork(in environment: [String: String]) -> String? {

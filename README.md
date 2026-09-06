@@ -90,7 +90,10 @@ portkilla kill 3000
 # Refusing to kill another agent's server. Pass --force to override, or run `portkilla whoami` ...
 ```
 
-- `portkilla whoami` shows how the guard sees the caller.
+- `portkilla whoami` shows how the guard sees the caller; `portkilla whois <port>`
+  shows the evidence behind an owner. Tools that export no session id can set
+  `PORTKILLA_SESSION`; the full compatibility matrix is in
+  [docs/AGENTS.md](docs/AGENTS.md).
 - `portkilla list --mine`, `--agent <name>`, `--unowned`, `--orphaned` filter by owner.
 - `portkilla kill <port> --dry-run [--json]` reports the decision without signalling.
 - `portkilla free <port>` (exit 0 if already free), `wait <port>`, and
@@ -144,8 +147,11 @@ portkilla free 3000 && npm run dev   # exit 0 when already free
 portkilla wait 3000 --timeout 30     # block until the port is free
 portkilla history --port 3000        # who started it, who stopped it
 portkilla whoami          # which agent the friendly-fire guard thinks you are
+portkilla whois 3000      # who started it, and why PortKilla thinks so
+portkilla kill --orphaned # stop servers left behind by agent sessions that ended
 portkilla free-port --prefer 3000    # first free port in 3000-3999, nothing else printed
 portkilla schema kill     # every field of `kill --json`, documented
+portkilla doctor --agents # how every AI tool is recognised on this machine
 ```
 
 Exit codes: 0 done, 1 nothing listening, 2 usage, 3 refused (another agent's

@@ -25,6 +25,13 @@ release, rename it to the version and date.
 - The demo-GIF hook renders against a throwaway preference suite instead
   of the real one.
 
+### Added
+- `portkilla mcp` announces itself on stderr when run from a terminal
+  (it used to wait in silence), and `portkilla mcp --setup [claude|cursor|
+  codex]` prints the registration for each agent. There is no background
+  mode by design: each agent starts its own copy over stdin/stdout when it
+  needs one and stops it afterwards.
+
 ### Distribution
 - The release workflow can pin the Homebrew cask to each release with its
   SHA-256 (`packaging/homebrew/portkilla.rb.tmpl`, `livecheck`,

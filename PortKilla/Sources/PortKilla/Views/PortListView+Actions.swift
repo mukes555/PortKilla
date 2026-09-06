@@ -31,8 +31,16 @@ extension PortListView {
         guard activeSheet == nil else { return false }
         // Both the popover and the pinned panel host this view; only the
         // copy whose window is key may act, or every shortcut fires twice.
-        let pinnedIsKey = appDelegate.pinnedPanel != nil && NSApp.keyWindow === appDelegate.pinnedPanel
-        guard pinnedIsKey == hostedInPinnedWindow else { return false }
+        // With no key window at all (one just closed) the panel copy still
+        // answers, as long as the popover isn't the thing on screen.
+        let keyWindow = NSApp.keyWindow
+        let pinnedIsKey = keyWindow != nil && keyWindow === appDelegate.pinnedPanel
+        if hostedInPinnedWindow {
+            let nothingIsKey = keyWindow == nil && !appDelegate.popover.isShown
+            guard pinnedIsKey || nothingIsKey else { return false }
+        } else {
+            guard !pinnedIsKey else { return false }
+        }
 
         let hasCommand = event.modifierFlags.contains(.command)
 

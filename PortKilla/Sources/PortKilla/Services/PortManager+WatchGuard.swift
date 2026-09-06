@@ -117,8 +117,10 @@ extension PortManager {
     static func ownersOfGuardedOccupants(_ guarded: Set<Int>, in ports: [PortInfo], processes: ProcessTable) -> [Int: AgentOwner] {
         var owners: [Int: AgentOwner] = [:]
         for port in ports where guarded.contains(port.port) {
+            // Keyed by pid: a port number can carry a TCP listener and a UDP
+            // binder from different processes.
             if let owner = port.agentOwner ?? AgentAttribution.owner(ofPid: port.pid, in: processes) {
-                owners[port.port] = owner
+                owners[port.pid] = owner
             }
         }
         return owners
@@ -143,7 +145,7 @@ extension PortManager {
                     notify(title: "Port \(event.port) is free", body: "Nothing is listening on :\(event.port) anymore.")
                 case .occupied(let name):
                     if let intruder = guardKillTarget(for: event.port, in: ports) {
-                        let owner = intruder.agentOwner ?? guardOwners[event.port]
+                        let owner = intruder.agentOwner ?? guardOwners[intruder.pid]
                         if case .warn(let reason) = KillDecision.forHuman(target: owner) {
                             // The only unattended kill in the app never takes
                             // another agent's live server; the person decides.

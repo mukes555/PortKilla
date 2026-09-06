@@ -15,15 +15,20 @@ final class PerformanceFixesTests: XCTestCase {
             readMarkers: { _, _ in [:] }
         )
 
-        let first = cache.facts(for: 42, startedAt: 1000)
-        let again = cache.facts(for: 42, startedAt: 1000)
+        let first = cache.facts(for: 42, startedAt: 1000, shortName: "node")
+        let again = cache.facts(for: 42, startedAt: 1000, shortName: "node")
         XCTAssertEqual(first, again)
         XCTAssertEqual(pathReads, 1)
         XCTAssertEqual(commandReads, 1)
 
         // Same pid, new start time: a recycled pid is a different process.
-        _ = cache.facts(for: 42, startedAt: 2000)
+        _ = cache.facts(for: 42, startedAt: 2000, shortName: "node")
         XCTAssertEqual(pathReads, 2)
+
+        // Same pid and start time, new kernel name: exec without fork
+        // (sh -c 'exec node …') must not keep serving the shell's facts.
+        _ = cache.facts(for: 42, startedAt: 2000, shortName: "sh")
+        XCTAssertEqual(pathReads, 3)
 
         cache.prune(keeping: [])
         XCTAssertEqual(cache.count, 0)
@@ -36,7 +41,7 @@ final class PerformanceFixesTests: XCTestCase {
             readCommand: { _ in nil },
             readMarkers: { _, _ in markerReads += 1; return ["CLAUDECODE": "1"] }
         )
-        _ = cache.facts(for: 7, startedAt: 1)
+        _ = cache.facts(for: 7, startedAt: 1, shortName: "node")
         XCTAssertEqual(cache.markers(for: 7, keys: ["CLAUDECODE"]), ["CLAUDECODE": "1"])
         XCTAssertEqual(cache.markers(for: 7, keys: ["CLAUDECODE"]), ["CLAUDECODE": "1"])
         XCTAssertEqual(markerReads, 1)
@@ -88,8 +93,8 @@ final class PerformanceFixesTests: XCTestCase {
     }
 
     func testVisiblePortsAreCachedAndFollowTheSetting() {
-        let manager = PortManager()
-        defer { manager.stopAutoRefresh() }
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
         let mine = PortInfo(port: 3000, pid: 1, processName: "node", command: "/Users/me/node", user: NSUserName(),
                             memoryUsage: "", memorySizeKB: 0, type: .nodejs)
         let daemon = PortInfo(port: 5353, pid: 2, processName: "mDNSResponder", command: "/usr/sbin/mDNSResponder",
@@ -112,8 +117,8 @@ final class PerformanceFixesTests: XCTestCase {
                                 memoryUsage: "", memorySizeKB: 0, type: .nodejs)
 
         let owners = PortManager.ownersOfGuardedOccupants([3000], in: [occupant, port(4000)], processes: table)
-        XCTAssertEqual(owners[3000]?.name, "Claude Code")
-        XCTAssertNil(owners[4000], "only guarded ports are attributed")
+        XCTAssertEqual(owners[300]?.name, "Claude Code", "keyed by the occupant's pid")
+        XCTAssertNil(owners[1], "only guarded ports are attributed")
     }
 
     func testTestsSignatureIgnoresCPU() {

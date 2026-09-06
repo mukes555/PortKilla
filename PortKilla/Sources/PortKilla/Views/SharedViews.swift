@@ -83,7 +83,7 @@ struct Chip: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let label = colorScheme == .light ? tint.darkened(by: 0.3) : tint
+        let label = colorScheme == .light ? Self.darkenedLabel(for: tint) : tint
         HStack(spacing: 2) {
             if let icon {
                 Image(systemName: icon)
@@ -100,6 +100,18 @@ struct Chip: View {
         .background(tint.opacity(0.14))
         .overlay(RoundedRectangle(cornerRadius: 4).stroke(tint.opacity(0.35), lineWidth: 0.5))
         .cornerRadius(4)
+    }
+}
+
+private extension Chip {
+    /// Blending goes through AppKit; done once per tint, not once per render.
+    static var darkenedLabels: [Color: Color] = [:]
+
+    static func darkenedLabel(for tint: Color) -> Color {
+        if let cached = darkenedLabels[tint] { return cached }
+        let darkened = tint.darkened(by: 0.3)
+        darkenedLabels[tint] = darkened
+        return darkened
     }
 }
 

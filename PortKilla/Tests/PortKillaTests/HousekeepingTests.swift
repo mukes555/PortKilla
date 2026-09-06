@@ -6,8 +6,8 @@ import XCTest
 final class HousekeepingTests: XCTestCase {
 
     func testEveryKnownEditorIsClassifiedAsIDEAndProtectedByDefault() {
-        let manager = PortManager()
-        defer { manager.stopAutoRefresh() }
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
         manager.resetProtectedProcessSubstrings()
         let scanner = PortScanner()
         for editor in KnownEditors.substrings {
@@ -31,7 +31,7 @@ final class HousekeepingTests: XCTestCase {
     func testHistoryManagerCapsAndOrdersWithoutTouchingRealDefaults() throws {
         let suite = "PortKillaTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        defer { UserDefaults.discardSuite(named: suite, defaults: defaults) }
 
         let manager = HistoryManager(defaults: defaults)
         manager.maxHistoryItems = 3
@@ -62,8 +62,8 @@ final class HousekeepingTests: XCTestCase {
     }
 
     func testNormalizeProtectedSubstrings() {
-        let manager = PortManager()
-        defer { manager.stopAutoRefresh() }
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
         manager.protectedProcessSubstrings = [" Xcode ", "xcode", "", "Slack\n"]
         XCTAssertEqual(manager.protectedProcessSubstrings, ["xcode", "slack"])
     }

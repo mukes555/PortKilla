@@ -133,9 +133,17 @@ class ProcessKiller {
     }
 
     /// Checks if a process is currently running
+    /// SZOMB from sys/proc.h: exited, not yet reaped by its parent. kill(2)
+    /// still succeeds on a zombie, so the CLI would otherwise wait the full
+    /// timeout and report a dead process as "still running".
+    private static let zombieStatus: UInt32 = 5
+
     func isProcessRunning(_ pid: Int) -> Bool {
         guard pid > 0 else { return false }
 
+        if let bsd = NativeScanner.bsdInfo(Int32(pid)) {
+            return bsd.pbi_status != Self.zombieStatus
+        }
         if kill(pid_t(pid), 0) == 0 {
             return true
         }

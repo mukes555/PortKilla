@@ -12,6 +12,9 @@ enum CLIKill {
         var caller: AgentOwner?
         var targets: [Target]
         var reasons: [String]
+        /// Refusals that --force overrode: the audit trail of whose server
+        /// was killed against the guard's advice.
+        var overriddenRefusals: [String] = []
         var exitCode: Int32
 
         struct Target: Encodable {
@@ -50,6 +53,11 @@ enum CLIKill {
                 + "\nRefusing to kill another agent's server. Pass --force to override, or run `portkilla whoami` to check how you are identified."
             let action = options.dryRun ? "would-refuse" : "refused"
             return finish(&report, action: action, exit: CLIExit.refused, json: options.json, text: text, toStderr: !options.dryRun)
+        }
+
+        if options.force && !refusals.isEmpty {
+            report.overriddenRefusals = refusals
+            report.reasons = []
         }
 
         if options.dryRun {
@@ -91,7 +99,7 @@ enum CLIKill {
         var lines = killed.map { "Killed \($0.processName) (PID \($0.pid)) on :\($0.port)." }
         lines += signalled.filter { stillRunning.contains($0.pid) }.map { "\($0.processName) (PID \($0.pid)) is still running. Try --force." }
         lines += failures.map { "Failed to kill \($0)" }
-        report.reasons = failures
+        report.reasons += failures
 
         if signalled.isEmpty {
             return finish(&report, action: "failed", exit: CLIExit.killFailed, json: options.json, text: lines.joined(separator: "\n"), toStderr: true)

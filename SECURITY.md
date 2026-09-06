@@ -31,3 +31,25 @@ is `AgentSignatures.markerKeys`; nothing else in a process environment is
 read, stored, logged, or displayed; the allowlist is applied to the raw
 bytes and the buffer is zeroed afterwards. Environments of other users' processes are
 not readable by the kernel to begin with.
+
+## What PortKilla can and cannot see
+
+PortKilla runs as your user with no elevated privileges, no helper tool, and
+no TCC prompts. It can see every process's name, path, arguments, and
+listening sockets (through libproc, as `lsof` and `ps` do). It can read the
+environment only of processes you own, and only the handful of keys in the
+allowlist. It cannot signal root or other users' processes (the kill fails
+with EPERM). It never reads file contents, network traffic, or the
+clipboard. Nothing leaves the machine except one GET to
+`api.github.com/repos/mukes555/PortKilla/releases/latest` for the update
+check.
+
+## The friendly-fire guard is a cooperation protocol
+
+The guard stops well-behaved AI agents from killing each other's servers by
+accident. It is not a security boundary: any process running as your user
+can call `kill(2)` directly, and `PORTKILLA_OWNER` is a self-declaration that
+PortKilla takes at face value. A hostile local process could declare an
+owner to make its port refusable to other agents, or declare a victim's name
+to bypass the guard. Both require code already running as you, at which
+point PortKilla is not what stands between it and your processes.

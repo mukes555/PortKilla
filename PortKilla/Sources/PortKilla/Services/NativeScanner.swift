@@ -120,7 +120,7 @@ enum NativeScanner {
             // per-process cache. pbi_name truncates at 15 chars; the path's
             // basename is the full name ("Google Chrome Helper").
             let shortName = Self.stringFromFixedCArray(bsd.pbi_name)
-            let facts = ProcessFacts.shared.facts(for: pid, startedAt: bsd.pbi_start_tvsec)
+            let facts = ProcessFacts.shared.facts(for: pid, startedAt: bsd.pbi_start_tvsec, shortName: shortName)
             let command = facts.command ?? facts.executablePath ?? shortName
             let fullName = facts.executablePath.map { ($0 as NSString).lastPathComponent } ?? shortName
 
@@ -137,8 +137,12 @@ enum NativeScanner {
             listeners.append(contentsOf: socketListeners(pid, fdBuffer: &fdBuffer))
         }
 
+        // Merge rather than replace: a link-initiated kill captures on its own
+        // queue, and a wholesale replacement milliseconds apart would zero the
+        // timer's deltas for a cycle.
         cpuSampleLock.lock()
-        previousCPUSample = newCPUSamples
+        previousCPUSample.merge(newCPUSamples) { _, new in new }
+        previousCPUSample = previousCPUSample.filter { newCPUSamples[$0.key] != nil }
         cpuSampleLock.unlock()
         ProcessFacts.shared.prune(keeping: Set(pids))
         return Snapshot(samples: samples, listeners: listeners)

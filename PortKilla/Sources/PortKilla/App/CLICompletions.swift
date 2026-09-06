@@ -41,6 +41,7 @@ enum CLICompletions {
       wait) _arguments '--json' '--timeout[seconds]:seconds' ;;
       history) _arguments '--json' '--port[port]:port' '--limit[count]:count' ;;
       whoami|version) _arguments '--json' ;;
+      mcp) _arguments '--setup[registration for an agent]:agent:(claude cursor codex)' ;;
       completions) _values 'shell' zsh bash fish ;;
     esac
     """
@@ -58,6 +59,7 @@ enum CLICompletions {
         wait) COMPREPLY=( $(compgen -W "--json --timeout" -- "$cur") ) ;;
         history) COMPREPLY=( $(compgen -W "--json --port --limit" -- "$cur") ) ;;
         whoami|version) COMPREPLY=( $(compgen -W "--json" -- "$cur") ) ;;
+        mcp) COMPREPLY=( $(compgen -W "--setup claude cursor codex" -- "$cur") ) ;;
         completions) COMPREPLY=( $(compgen -W "zsh bash fish" -- "$cur") ) ;;
       esac
     }
@@ -72,6 +74,7 @@ enum CLICompletions {
     complete -c portkilla -n '__fish_seen_subcommand_from wait' -l json -l timeout
     complete -c portkilla -n '__fish_seen_subcommand_from history' -l json -l port -l limit
     complete -c portkilla -n '__fish_seen_subcommand_from whoami version' -l json
+    complete -c portkilla -n '__fish_seen_subcommand_from mcp' -l setup -a 'claude cursor codex'
     complete -c portkilla -n '__fish_seen_subcommand_from completions' -a 'zsh bash fish'
     """
 }

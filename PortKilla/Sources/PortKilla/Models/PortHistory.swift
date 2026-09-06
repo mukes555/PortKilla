@@ -86,9 +86,23 @@ final class HistoryManager: ObservableObject {
 
     func addEntry(port: Int, processName: String, action: PortHistoryItem.HistoryAction,
                   owner: String? = nil, killedBy: String? = nil) {
+        // The CLI and the app share this store; re-read before writing so
+        // neither clobbers what the other appended.
+        loadHistory()
         let item = PortHistoryItem(port: port, processName: processName, action: action, owner: owner, killedBy: killedBy)
         history.insert(item, at: 0)
         trimAndSave()
+    }
+
+    func reload() {
+        loadHistory()
+    }
+
+    /// The store the app itself uses. From the CLI, `UserDefaults.standard`
+    /// would not resolve to the app's domain (the binary is reached through
+    /// a symlink), so the domain is named explicitly.
+    static func appStore() -> HistoryManager {
+        HistoryManager(defaults: UserDefaults(suiteName: "com.mukes555.PortKilla") ?? .standard)
     }
 
     private func trimAndSave() {

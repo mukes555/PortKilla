@@ -72,6 +72,12 @@ portkilla kill 3000
 - `portkilla whoami` shows how the guard sees the caller.
 - `portkilla list --mine`, `--agent <name>`, `--unowned`, `--orphaned` filter by owner.
 - `portkilla kill <port> --dry-run [--json]` reports the decision without signalling.
+- `portkilla free <port>` (exit 0 if already free), `wait <port>`, and
+  `history --port <port>` (who started and who stopped it) round out the
+  agent workflow. Kills from the CLI appear in the app's History too.
+- Markers seen through tmux, screen, zellij, or ssh name the agent but not
+  the session, since a multiplexer inherits the environment of whoever
+  started it.
 - `portkilla agent-docs` prints a snippet for your CLAUDE.md / AGENTS.md so
   agents call `portkilla kill` instead of `kill -9 $(lsof -ti:PORT)`.
 - Export `PORTKILLA_OWNER=<name>` to declare who you are and to label every
@@ -103,6 +109,9 @@ portkilla list --json     # JSON output for scripts
 portkilla kill 3000       # graceful kill of everything on :3000 (SIGTERM, verified)
 portkilla kill 3000 --force
 portkilla kill --pid 812 --dry-run --json
+portkilla free 3000 && npm run dev   # exit 0 when already free
+portkilla wait 3000 --timeout 30     # block until the port is free
+portkilla history --port 3000        # who started it, who stopped it
 portkilla whoami          # which agent the friendly-fire guard thinks you are
 ```
 
@@ -169,7 +178,7 @@ Drag `PortKilla.app` to `/Applications`.
 ./scripts/build.sh --dmg
 ```
 
-This produces `dist/PortKilla-1.13.1.dmg`.
+This produces `dist/PortKilla-1.14.0.dmg`.
 
 To distribute to other Macs without Gatekeeper prompts, you’ll eventually want Developer ID signing + notarization.
 

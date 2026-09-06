@@ -8,8 +8,11 @@ class PortScanner {
         case commandFailed(Int32)
     }
 
-    /// pid -> working directory, cached because PIDs are stable across refreshes.
+    /// pid -> working directory, cached because PIDs are stable across
+    /// refreshes. Guarded by `cwdLock`: the timer refresh and a link-initiated
+    /// kill can scan on different queues at the same time.
     private var cwdCache: [Int: String] = [:]
+    private let cwdLock = NSLock()
 
     /// True when the last scan had to shell out to lsof (libproc unavailable),
     /// so the UI can say why it is slower.
@@ -161,7 +164,7 @@ class PortScanner {
             let children = isFull ? processes.children(of: raw.pid).map {
                 PortInfo.ProcessInfo(pid: $0.pid, name: $0.name, command: $0.command)
             } : []
-            let projectPath = isFull ? projectWorthyPath(cwdCache[raw.pid]) : nil
+            let projectPath = isFull ? projectWorthyPath(cachedWorkingDirectory(raw.pid)) : nil
 
             let type = determinePortType(processName: processName, command: command)
             let containerName = isFull ? DockerService.shared.getContainerName(forPort: raw.port) : nil
@@ -202,6 +205,8 @@ class PortScanner {
     /// Resolves working directories for PIDs not yet cached — native syscall
     /// first, one lsof batch as fallback — and drops entries for dead PIDs.
     private func refreshWorkingDirectories(for pids: [Int], processes: ProcessTable) {
+        cwdLock.lock()
+        defer { cwdLock.unlock() }
         let live = Set(pids)
         cwdCache = cwdCache.filter { live.contains($0.key) }
 
@@ -235,6 +240,12 @@ class PortScanner {
         for pid in pids where cwdCache[pid] == nil {
             cwdCache[pid] = ""
         }
+    }
+
+    private func cachedWorkingDirectory(_ pid: Int) -> String? {
+        cwdLock.lock()
+        defer { cwdLock.unlock() }
+        return cwdCache[pid]
     }
 
     static func parseCwdOutput(_ output: String) -> [Int: String] {
@@ -278,96 +289,44 @@ class PortScanner {
         return nil
     }
 
-    private static let ideTools = [
-        "antigravi", // Google's internal tool
-        "cursor",
-        "trae",
-        "code helper", // VS Code
-        "xcode",
-        "electron",
-        "google chrome",
-        "slack",
-        "intellij",
-        "idea",
-        "pycharm",
-        "webstorm",
-        "phpstorm",
-        "goland",
-        "rider",
-        "rubymine",
-        "datagrip",
-        "appcode",
-        "clion",
-        "android studio",
-        "sublime text",
-        "atom",
-        "nova",
-        "bbedit",
-        "coteditor",
-        "textmate",
-        "zed",
-        "fleet",
-        "windsurf"
+    /// One rule per line, checked in order: the first match wins. Editors
+    /// come first because their names would otherwise substring-match the
+    /// runtime keywords further down ("Code Helper" is not a Go server).
+    /// Runtimes match on the executable's base name, never on substrings of
+    /// the whole command ("go" used to classify Google Chrome as Go).
+    private static let typeRules: [(type: PortInfo.PortType, matches: (ProcessSignals) -> Bool)] = [
+        (.ide, { KnownEditors.matches($0.processName) }),
+        (.nodejs, { ["node", "npm", "npx", "yarn", "pnpm", "next", "vite", "webpack", "bun", "deno"].contains($0.executable) }),
+        // docker-proxy is intentionally not a database: it fronts published
+        // ports and is classified as .docker below, container name attached.
+        (.database, { signals in
+            ["postgres", "mysqld", "mysql", "mongod", "redis-server", "mariadbd", "mariadb"]
+                .contains { signals.executable == $0 || signals.processLower.contains($0) }
+        }),
+        (.webserver, { signals in ["apache", "nginx", "httpd", "caddy"].contains { signals.processLower.contains($0) } }),
+        (.python, { $0.executable.hasPrefix("python") || $0.executable == "gunicorn" || $0.executable == "uvicorn" }),
+        (.java, { $0.executable == "java" || $0.commandLower.contains("gradle") }),
+        (.ruby, { $0.executable == "ruby" || $0.commandLower.contains("rails") }),
+        (.php, { $0.executable.hasPrefix("php") }),
+        (.go, { $0.executable == "go" || $0.commandLower.hasPrefix("go run ") }),
+        (.docker, { $0.processLower.contains("docker") || $0.processLower.contains("com.docker") }),
     ]
 
-    /// Determines port type based on process information.
-    ///
-    /// Matching is done on the executable's base name (exact) rather than
-    /// substrings of the whole command: substring "go" used to classify
-    /// "Google Chrome" as a Go server, which then fed the bulk-kill filters.
+    private struct ProcessSignals {
+        let processName: String
+        let processLower: String
+        let commandLower: String
+        let executable: String
+    }
+
     func determinePortType(processName: String, command: String) -> PortInfo.PortType {
-        let lowerProcess = processName.lowercased()
-        let lowerCommand = command.lowercased()
-        let executable = executableName(processName: processName, command: command)
-
-        // IDEs and desktop apps first — their names would otherwise
-        // substring-match runtime keywords below.
-        if Self.ideTools.contains(where: { lowerProcess.contains($0) }) {
-            return .ide
-        }
-
-        let nodeExecutables: Set = ["node", "npm", "npx", "yarn", "pnpm", "next", "vite", "webpack", "bun", "deno"]
-        if nodeExecutables.contains(executable) {
-            return .nodejs
-        }
-
-        // docker-proxy intentionally excluded: it fronts Docker-published ports
-        // and is classified below as .docker (with the container name attached).
-        let databases = ["postgres", "mysqld", "mysql", "mongod", "redis-server", "mariadbd", "mariadb"]
-        if databases.contains(where: { executable == $0 || lowerProcess.contains($0) }) {
-            return .database
-        }
-
-        let webServers = ["apache", "nginx", "httpd", "caddy"]
-        if webServers.contains(where: { lowerProcess.contains($0) }) {
-            return .webserver
-        }
-
-        if executable.hasPrefix("python") || executable == "gunicorn" || executable == "uvicorn" {
-            return .python
-        }
-
-        if executable == "java" || lowerCommand.contains("gradle") {
-            return .java
-        }
-
-        if executable == "ruby" || lowerCommand.contains("rails") {
-            return .ruby
-        }
-
-        if executable.hasPrefix("php") {
-            return .php
-        }
-
-        if executable == "go" || lowerCommand.hasPrefix("go run ") {
-            return .go
-        }
-
-        if lowerProcess.contains("docker") || lowerProcess.contains("com.docker") {
-            return .docker
-        }
-
-        return .other
+        let signals = ProcessSignals(
+            processName: processName,
+            processLower: processName.lowercased(),
+            commandLower: command.lowercased(),
+            executable: executableName(processName: processName, command: command)
+        )
+        return Self.typeRules.first { $0.matches(signals) }?.type ?? .other
     }
 
     /// lsof truncates COMMAND to ~9 chars ("com.docke"). When the ps snapshot

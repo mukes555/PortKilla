@@ -15,11 +15,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     @Published var isPinned = false
     private var hotKey: GlobalHotKey?
 
-    private enum HotKeyDefaults {
-        static let keyCode = "PortKilla.hotkeyKeyCode"
-        static let modifiers = "PortKilla.hotkeyModifiers"
-        static let display = "PortKilla.hotkeyDisplay"
-    }
 
     @Published var hotkeyDisplay: String = GlobalHotKey.defaultDisplay
 
@@ -80,7 +75,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
 
         // First launch: open the popover once so the user finds the app,
         // instead of it silently vanishing into the menu bar.
-        let hasLaunchedKey = "PortKilla.hasLaunchedBefore"
+        let hasLaunchedKey = DefaultsKey.hasLaunchedBefore
         if !UserDefaults.standard.bool(forKey: hasLaunchedKey) {
             UserDefaults.standard.set(true, forKey: hasLaunchedKey)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
@@ -110,7 +105,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
             let viewName = env["PORTKILLA_SNAPSHOT_VIEW"] ?? "main"
             // Render what an open popover shows: full scans, not the light
             // hidden-state ones.
-            portManager.setPopoverVisible(true)
+            portManager.setUIVisible(true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
                 self?.writeSnapshot(of: viewName, to: snapshotPath)
                 NSApp.terminate(nil)
@@ -197,12 +192,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     }
 
     func popoverWillShow(_ notification: Notification) {
-        portManager.setPopoverVisible(true)
+        portManager.setUIVisible(true)
     }
 
     func popoverDidClose(_ notification: Notification) {
         // A pinned window keeps the fast refresh cadence alive
-        portManager.setPopoverVisible(isPinned)
+        portManager.setUIVisible(isPinned)
     }
 
     // MARK: - Pinned floating window
@@ -245,14 +240,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         // The pinned window replaces the popover — close it so there aren't
         // two identical copies on screen.
         popover.performClose(nil)
-        portManager.setPopoverVisible(true)
+        portManager.setUIVisible(true)
     }
 
     func windowWillClose(_ notification: Notification) {
         guard (notification.object as? NSWindow) === pinnedPanel else { return }
         pinnedPanel = nil
         isPinned = false
-        portManager.setPopoverVisible(popover.isShown)
+        portManager.setUIVisible(popover.isShown)
     }
 
     @objc func togglePopover() {
@@ -307,10 +302,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
 
     private func registerStoredHotKey() {
         let defaults = UserDefaults.standard
-        let keyCode = defaults.object(forKey: HotKeyDefaults.keyCode) as? Int
-        let modifiers = defaults.object(forKey: HotKeyDefaults.modifiers) as? Int
+        let keyCode = defaults.object(forKey: DefaultsKey.hotkeyKeyCode) as? Int
+        let modifiers = defaults.object(forKey: DefaultsKey.hotkeyModifiers) as? Int
 
-        hotkeyDisplay = defaults.string(forKey: HotKeyDefaults.display) ?? GlobalHotKey.defaultDisplay
+        hotkeyDisplay = defaults.string(forKey: DefaultsKey.hotkeyDisplay) ?? GlobalHotKey.defaultDisplay
         hotKey = GlobalHotKey(
             keyCode: keyCode.flatMap(Self.storedKeyCode) ?? GlobalHotKey.defaultKeyCode,
             modifiers: modifiers.flatMap(UInt32.init(exactly:)) ?? GlobalHotKey.defaultModifiers
@@ -342,17 +337,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         hotKey = newHotKey
         hotkeyDisplay = display
         let defaults = UserDefaults.standard
-        defaults.set(Int(keyCode), forKey: HotKeyDefaults.keyCode)
-        defaults.set(Int(carbonModifiers), forKey: HotKeyDefaults.modifiers)
-        defaults.set(display, forKey: HotKeyDefaults.display)
+        defaults.set(Int(keyCode), forKey: DefaultsKey.hotkeyKeyCode)
+        defaults.set(Int(carbonModifiers), forKey: DefaultsKey.hotkeyModifiers)
+        defaults.set(display, forKey: DefaultsKey.hotkeyDisplay)
         return true
     }
 
     func resetHotKey() {
         let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: HotKeyDefaults.keyCode)
-        defaults.removeObject(forKey: HotKeyDefaults.modifiers)
-        defaults.removeObject(forKey: HotKeyDefaults.display)
+        defaults.removeObject(forKey: DefaultsKey.hotkeyKeyCode)
+        defaults.removeObject(forKey: DefaultsKey.hotkeyModifiers)
+        defaults.removeObject(forKey: DefaultsKey.hotkeyDisplay)
         hotKey = nil
         registerStoredHotKey()
     }
@@ -365,24 +360,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     func application(_ application: NSApplication, open urls: [URL]) {
         var askedThisDelivery = false
         for url in urls {
-            switch url.host {
-            case "kill":
+            switch URLCommand.parse(url) {
+            case .kill(let port, let force):
                 // One confirmation per delivery, and a cooldown after it: a page
                 // could otherwise stack modal dialogs until one is clicked through.
-                guard !askedThisDelivery, urlKillCooldownElapsed,
-                      let portNumber = Int(url.lastPathComponent) else { break }
+                guard !askedThisDelivery, urlKillCooldownElapsed else { break }
                 askedThisDelivery = true
                 lastURLKillAsked = Date()
-                let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-                let force = components?.queryItems?.contains { $0.name == "force" && $0.value == "1" } ?? false
-                confirmAndKillFromURL(port: portNumber, force: force)
-            case "show":
+                confirmAndKillFromURL(port: port, force: force)
+            case .show:
                 // The URL can arrive during launch, before the popover exists.
                 guard popover != nil else { break }
                 if !popover.isShown {
                     togglePopover()
                 }
-            default:
+            case nil:
                 break
             }
         }

@@ -11,7 +11,7 @@ extension AppDelegate {
     private static let demoSize = NSSize(width: 500, height: 600)
 
     func renderDemoReel(to path: String) {
-        UserDefaults.standard.set(true, forKey: "PortKilla.didDismissHotkeyTip")
+        UserDefaults.standard.set(true, forKey: DefaultsKey.didDismissHotkeyTip)
 
         let manager = PortManager()
         manager.stopAutoRefresh()

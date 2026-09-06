@@ -104,7 +104,14 @@ enum AgentAttribution {
         if let fromTree = ownerFromAncestry(ofPid: pid, in: processes) {
             return fromTree
         }
-        return ownerFromEnvironment(environmentOf(pid))
+        guard var fromEnvironment = ownerFromEnvironment(environmentOf(pid)) else { return nil }
+        // A marker outlives the session that set it (a restarted agent, or
+        // Docker launched from an agent shell weeks ago). There is no live
+        // session to protect then, so keep the name but drop the session:
+        // the same tool may kill it again without --force.
+        let sessionIsAlive = fromEnvironment.sessionPid.map { isAgentProcess($0, in: processes) } ?? false
+        if !sessionIsAlive { fromEnvironment.sessionPid = nil }
+        return fromEnvironment
     }
 
     /// The agent invoking the CLI: `PORTKILLA_OWNER` if set, else detected
@@ -119,6 +126,13 @@ enum AgentAttribution {
             return fromTree
         }
         return ownerFromEnvironment(environment)
+    }
+
+    /// True when `pid` is running and still an agent (guards against the pid
+    /// having been reused by an unrelated process).
+    private static func isAgentProcess(_ pid: Int, in processes: ProcessTable) -> Bool {
+        guard let command = processes.command(for: pid) else { return false }
+        return match(command: command, executableName: processes.name(for: pid)) != nil
     }
 
     static func ownerFromAncestry(ofPid pid: Int, in processes: ProcessTable) -> AgentOwner? {

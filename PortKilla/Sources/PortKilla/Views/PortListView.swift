@@ -57,6 +57,10 @@ struct PortListView: View {
     @State var selectedId: String?
     @State var expandedIds: Set<String> = []
     @State var isOnScreen = false
+    @ScaledMetric(relativeTo: .body) var gutterWidth: CGFloat = 16
+    @ScaledMetric(relativeTo: .body) var portColumnWidth: CGFloat = 80
+    @ScaledMetric(relativeTo: .body) var memoryColumnWidth: CGFloat = 70
+    @ScaledMetric(relativeTo: .body) var actionColumnWidth: CGFloat = 80
     @AppStorage(DefaultsKey.didDismissHotkeyTip) var didDismissHotkeyTip = false
     @FocusState var isSearchFocused: Bool
 
@@ -222,19 +226,19 @@ struct PortListView: View {
 
     var portsContentView: some View {
         VStack(spacing: 0) {
-            // Column Headers (leading 16pt matches the rows' tree-chevron gutter)
+            // Column headers; the widths scale with the rows' text size.
             HStack {
-                Spacer().frame(width: 16)
+                Spacer().frame(width: gutterWidth)
                 Text("Port")
-                    .frame(width: 80, alignment: .leading)
+                    .frame(width: portColumnWidth, alignment: .leading)
                 Text("Process")
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text("Memory")
-                    .frame(width: 70, alignment: .trailing)
+                    .frame(width: memoryColumnWidth, alignment: .trailing)
                 Text("Action")
-                    .frame(width: 80, alignment: .trailing)
+                    .frame(width: actionColumnWidth, alignment: .trailing)
             }
-            .font(.system(size: 10, weight: .medium))
+            .font(.caption.weight(.medium))
             .foregroundColor(.secondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 4)

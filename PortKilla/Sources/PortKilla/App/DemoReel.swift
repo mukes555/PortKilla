@@ -11,10 +11,12 @@ extension AppDelegate {
     private static let demoSize = NSSize(width: 500, height: 600)
 
     func renderDemoReel(to path: String) {
-        UserDefaults.standard.set(true, forKey: DefaultsKey.didDismissHotkeyTip)
-
-        let manager = PortManager()
-        manager.stopAutoRefresh()
+        // A throwaway suite: the demo must not touch the real preferences
+        // (it sets the watchlist, density, and the tips flag).
+        let demoDefaults = UserDefaults(suiteName: "com.mukes555.PortKilla.demo") ?? .standard
+        demoDefaults.set(true, forKey: DefaultsKey.didDismissHotkeyTip)
+        let manager = PortManager(defaults: demoDefaults, history: HistoryManager(defaults: demoDefaults), autoStart: false)
+        manager.hasCompletedFirstScan = true // no live scan: skip the loading state
         manager.hideSystemProcesses = true
         manager.activeTests = [Self.demoTest]
         manager.watchedPorts = [3000]

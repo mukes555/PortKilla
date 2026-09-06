@@ -147,7 +147,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
             )
             view = NSHostingView(rootView: PortDetailView(port: port))
         default:
-            view = NSHostingView(rootView: PortListView(portManager: portManager).environmentObject(self))
+            // PORTKILLA_SNAPSHOT_TEXTSIZE=large renders at an accessibility
+            // text size to check that the rows reflow instead of clipping.
+            let textSize: DynamicTypeSize = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_TEXTSIZE"] == "large" ? .accessibility1 : .medium
+            view = NSHostingView(rootView: PortListView(portManager: portManager).environmentObject(self).dynamicTypeSize(textSize))
         }
 
         let size = view.fittingSize == .zero ? NSSize(width: 500, height: 600) : view.fittingSize

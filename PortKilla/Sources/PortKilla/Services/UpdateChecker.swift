@@ -65,6 +65,9 @@ enum UpdateChecker {
         }
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             // 403 is GitHub's unauthenticated rate limit; common on shared IPs.
+            if http.statusCode == 403 || http.statusCode == 429 {
+                return .failed("GitHub rate limit reached, try again in an hour")
+            }
             return .failed("GitHub responded with \(http.statusCode)")
         }
         guard let data, let latest = parseTagName(data) else {
@@ -90,9 +93,12 @@ enum UpdateChecker {
         return tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
     }
 
-    /// Numeric semver comparison: "1.10.0" > "1.9.9".
+    /// Numeric semver comparison: "1.10.0" > "1.9.9". A tag with a
+    /// non-numeric component ("2.0.0-rc1") is never offered as an update.
     static func isVersion(_ candidate: String, newerThan current: String) -> Bool {
-        let a = candidate.split(separator: ".").map { Int($0) ?? 0 }
+        let parts = candidate.split(separator: ".").map { Int($0) }
+        guard !parts.contains(nil) else { return false }
+        let a = parts.compactMap { $0 }
         let b = current.split(separator: ".").map { Int($0) ?? 0 }
 
         for index in 0..<max(a.count, b.count) {

@@ -124,6 +124,17 @@ struct PortRowView: View {
         manager.terminatingPids.contains(port.pid)
     }
 
+    /// What VoiceOver reads for the row: the custom stack of Texts has no
+    /// label of its own, and arrow-key selection is otherwise silent.
+    private var accessibilityLabel: String {
+        var parts = ["Port \(port.port)", port.processName, port.memoryUsage]
+        if let project = port.projectName { parts.append("project \(project)") }
+        if let agent = port.agentOwner { parts.append(agent.sessionEnded ? "started by \(agent.name), session ended" : "owned by \(agent.name)") }
+        if port.isExposed { parts.append("exposed on all interfaces") }
+        if isTerminating { parts.append("shutting down") }
+        return parts.joined(separator: ", ")
+    }
+
     private var rowTooltip: String {
         var lines = ["PID: \(port.pid)"]
         if let age = port.age {
@@ -310,6 +321,9 @@ struct PortRowView: View {
                 .frame(width: 80, alignment: .trailing)
             }
             .opacity(isTerminating ? 0.5 : 1)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
             .contextMenu {
                 PortRowContextMenu(port: port, manager: manager, onSelect: onSelect, onKillRequest: onKillRequest)
             }

@@ -8,6 +8,8 @@ enum CLIExit {
     static let refused: Int32 = 3
     static let killFailed: Int32 = 4
     static let stillRunning: Int32 = 5
+    /// EX_SOFTWARE: PortKilla itself failed (e.g. could not encode JSON).
+    static let internalError: Int32 = 70
 }
 
 enum CLICommand: Equatable {
@@ -17,9 +19,11 @@ enum CLICommand: Equatable {
     case wait(port: Int, timeout: TimeInterval, json: Bool)
     case open(port: Int)
     case history(HistoryOptions)
-    case version
-    case help
+    case version(json: Bool)
+    case help(topic: String?)
     case agentDocs
+    case doctor(json: Bool)
+    case completions(shell: String)
 
     struct HistoryOptions: Equatable {
         var json = false
@@ -79,10 +83,14 @@ enum CLIArguments {
     /// mistyped subcommand is reported instead of quietly opening a window.
     static func parse(_ arguments: [String]) -> Result<CLICommand, ParseError>? {
         guard let command = arguments.first else { return nil }
-        if command.hasPrefix("-") && !["--help", "-h", "--version"].contains(command) {
+        if command.hasPrefix("-") && !["--help", "-h", "--version", "-v"].contains(command) {
             return nil
         }
         let rest = Array(arguments.dropFirst())
+        // `portkilla kill --help` is the first thing people (and agents) try.
+        if rest.contains("--help") || rest.contains("-h") {
+            return .success(.help(topic: command))
+        }
 
         switch command {
         case "list": return parseList(rest)
@@ -92,9 +100,17 @@ enum CLIArguments {
         case "open": return parseOpen(rest)
         case "history": return parseHistory(rest)
         case "whoami": return parseWhoami(rest)
-        case "version", "--version": return rest.isEmpty ? .success(.version) : .failure(.unknownOption(rest[0], command: command))
-        case "help", "--help", "-h": return .success(.help)
+        case "version", "--version", "-v":
+            if rest.isEmpty { return .success(.version(json: false)) }
+            return rest == ["--json"] ? .success(.version(json: true)) : .failure(.unknownOption(rest[0], command: "version"))
+        case "help", "--help", "-h": return .success(.help(topic: rest.first))
         case "agent-docs": return rest.isEmpty ? .success(.agentDocs) : .failure(.unknownOption(rest[0], command: command))
+        case "doctor":
+            if rest.isEmpty { return .success(.doctor(json: false)) }
+            return rest == ["--json"] ? .success(.doctor(json: true)) : .failure(.unknownOption(rest[0], command: "doctor"))
+        case "completions":
+            guard let shell = rest.first, rest.count == 1 else { return .failure(.missingValue("completions <zsh|bash|fish>")) }
+            return CLICompletions.script(for: shell) == nil ? .failure(.unknownOption(shell, command: "completions")) : .success(.completions(shell: shell))
         default: return .failure(.unknownCommand(command))
         }
     }
@@ -240,6 +256,64 @@ enum CLIArguments {
         return String(arg.dropFirst(option.count + 1))
     }
 
+    /// Per-command help; nil topic (or an unknown one) gives the overview.
+    static func usage(for topic: String?) -> String {
+        switch topic {
+        case "list": return """
+            portkilla list [--json] [--mine | --agent <name> | --unowned | --orphaned]
+
+            Lists listening TCP ports and bound UDP sockets with process, memory,
+            owning AI agent, and bind address. --json prints the same as an array
+            (stable field names; new fields are only ever added). The header is
+            omitted when stdout is not a terminal.
+              --mine      ports kill would let you stop without --force
+              --agent X   ports owned by that agent (names are case-insensitive)
+              --unowned   ports with no known owner
+              --orphaned  ports whose owning session has ended
+            """
+        case "kill", "free": return """
+            portkilla kill <port> [--force|-9] [--dry-run] [--json]
+            portkilla kill --pid <pid> [...]
+            portkilla free <port> [...]
+
+            Stops every process listening on the port (SIGTERM, verified; --force
+            sends SIGKILL). Refuses (exit 3) when another AI agent's running
+            session owns it, unless --force. --dry-run reports the decision
+            without signalling. free is the same command with exit 0 when the
+            port was already free, for `portkilla free 3000 && npm run dev`.
+
+            Exit codes: 0 done, 1 nothing listening, 2 usage, 3 refused, 4 kill
+            failed, 5 still running after the wait, 70 internal error.
+            """
+        case "wait": return """
+            portkilla wait <port> [--timeout 30] [--json]
+
+            Blocks until nothing listens on the port. Exit 0 when free, 5 on timeout.
+            """
+        case "history": return """
+            portkilla history [--json] [--port <port>] [--limit 20]
+
+            Recent kills from the app and the CLI, newest first, with who started
+            and who stopped each process.
+            """
+        case "whoami": return """
+            portkilla whoami [--json]
+
+            How the friendly-fire guard identifies the calling process: agent name,
+            session, and whether it was detected from the process tree, the
+            environment, or declared via PORTKILLA_OWNER.
+            """
+        case "doctor": return """
+            portkilla doctor [--json]
+
+            Version, macOS, architecture, install source, quarantine state, which
+            scanner is in use and how long a scan takes, PATH resolution, and login
+            item status. Paste it into bug reports.
+            """
+        default: return usage
+        }
+    }
+
     static let usage = """
     PortKilla — macOS port manager
 
@@ -252,9 +326,11 @@ enum CLIArguments {
       portkilla open <port>
       portkilla history [--json] [--port <port>] [--limit 20]
       portkilla whoami [--json]
+      portkilla doctor [--json]
       portkilla agent-docs
-      portkilla version
-      portkilla help
+      portkilla completions <zsh|bash|fish>
+      portkilla version [--json]
+      portkilla help [command]
 
     kill stops every process listening on the port (use --pid for one of
     them). --dry-run reports what would happen without signalling anything.
@@ -269,7 +345,8 @@ enum CLIArguments {
 
     Exit codes: 0 done, 1 nothing listening, 2 usage, 3 refused (another
     agent's live session owns it), 4 kill failed, 5 still running after the
-    wait. --dry-run exits 0 when it would kill and 3 when it would refuse.
+    wait, 70 internal error. --dry-run exits 0 when it would kill and 3 when
+    it would refuse. `portkilla help <command>` or `<command> --help` for more.
 
     The GUI launches when run with no arguments.
     """

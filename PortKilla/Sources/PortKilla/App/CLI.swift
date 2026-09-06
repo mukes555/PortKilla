@@ -27,14 +27,18 @@ enum PortKillaCLI {
             return CLIExit.ok
         case .success(.history(let options)):
             return history(options)
-        case .success(.help):
-            print(CLIArguments.usage)
+        case .success(.help(let topic)):
+            print(CLIArguments.usage(for: topic))
             return CLIExit.ok
-        case .success(.version):
-            print(UpdateChecker.currentVersion ?? "dev")
-            return CLIExit.ok
+        case .success(.version(let json)):
+            return version(json: json)
         case .success(.agentDocs):
             print(agentDocs)
+            return CLIExit.ok
+        case .success(.doctor(let json)):
+            return doctor(json: json)
+        case .success(.completions(let shell)):
+            print(CLICompletions.script(for: shell) ?? "")
             return CLIExit.ok
         }
     }
@@ -67,14 +71,53 @@ enum PortKillaCLI {
         FileHandle.standardError.write(Data((text + "\n").utf8))
     }
 
-    static func printJSON<T: Encodable>(_ value: T) {
+    /// False when encoding failed: a JSON consumer must never see exit 0 with
+    /// empty output.
+    @discardableResult
+    static func printJSON<T: Encodable>(_ value: T) -> Bool {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(value), let text = String(data: data, encoding: .utf8) else {
             printError("portkilla: could not encode output as JSON")
-            return
+            return false
         }
         print(text)
+        return true
+    }
+
+    static var stdoutIsTerminal: Bool { isatty(1) != 0 }
+
+    struct VersionReport: Encodable {
+        let schema = 1
+        let version: String
+        let bundleIdentifier = "com.mukes555.PortKilla"
+        let installSource: String
+        let architecture: String
+    }
+
+    private static func version(json: Bool) -> Int32 {
+        let version = UpdateChecker.currentVersion ?? "dev"
+        guard json else {
+            print(version)
+            return CLIExit.ok
+        }
+        let arch = Diagnostics.report().first { $0.label == "Architecture" }?.value ?? "unknown"
+        let report = VersionReport(version: version, installSource: InstallSource.detect().rawValue, architecture: arch)
+        return printJSON(report) ? CLIExit.ok : CLIExit.internalError
+    }
+
+    // MARK: - doctor
+
+    private static func doctor(json: Bool) -> Int32 {
+        let lines = Diagnostics.report()
+        if json {
+            let object = Dictionary(uniqueKeysWithValues: lines.map { ($0.label, $0.value) })
+            return printJSON(object) ? CLIExit.ok : CLIExit.internalError
+        }
+        for line in lines {
+            print("\(line.label.padding(toLength: 18, withPad: " ", startingAt: 0)) \(line.value)")
+        }
+        return CLIExit.ok
     }
 
     // MARK: - list
@@ -92,8 +135,7 @@ enum PortKillaCLI {
         if options.json {
             // The array shape is a stable contract (scripts and the Raycast
             // extension depend on it); new fields are only ever added.
-            printJSON(ports)
-            return CLIExit.ok
+            return printJSON(ports) ? CLIExit.ok : CLIExit.internalError
         }
 
         if ports.isEmpty {
@@ -101,7 +143,10 @@ enum PortKillaCLI {
             return CLIExit.ok
         }
 
-        print("PORT   PROTO  PID     PROCESS               MEMORY    AGENT                 BIND")
+        // Piped output gets rows only, so `portkilla list | grep 3000` is clean.
+        if stdoutIsTerminal {
+            print("PORT   PROTO  PID     PROCESS               MEMORY    AGENT                 BIND")
+        }
         for port in ports {
             let line = [
                 ":\(port.port)".padding(toLength: 7, withPad: " ", startingAt: 0),
@@ -159,8 +204,7 @@ enum PortKillaCLI {
         let me = AgentAttribution.callerOwner(callerPid: callerPid, in: table, environment: environment)
 
         if json {
-            printJSON(WhoAmI(detected: me != nil, owner: me))
-            return CLIExit.ok
+            return printJSON(WhoAmI(detected: me != nil, owner: me)) ? CLIExit.ok : CLIExit.internalError
         }
         guard let me else {
             print("Not running under a known AI agent. Export PORTKILLA_OWNER=<name> to declare one.")
@@ -196,7 +240,7 @@ enum PortKillaCLI {
         let waited = Date().timeIntervalSince(start)
         let exit = isFree ? CLIExit.ok : CLIExit.stillRunning
         if json {
-            printJSON(WaitReport(port: port, free: isFree, waitedSeconds: (waited * 100).rounded() / 100, exitCode: exit))
+            return printJSON(WaitReport(port: port, free: isFree, waitedSeconds: (waited * 100).rounded() / 100, exitCode: exit)) ? exit : CLIExit.internalError
         } else if isFree {
             print(":\(port) is free.")
         } else {
@@ -218,8 +262,7 @@ enum PortKillaCLI {
         items = Array(items.prefix(options.limit))
 
         if options.json {
-            printJSON(items)
-            return CLIExit.ok
+            return printJSON(items) ? CLIExit.ok : CLIExit.internalError
         }
         if items.isEmpty {
             print(options.port.map { "No recorded kills on :\($0)." } ?? "No recorded kills.")
@@ -227,7 +270,9 @@ enum PortKillaCLI {
         }
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        print("WHEN                 PORT   PROCESS               STARTED BY            KILLED BY")
+        if stdoutIsTerminal {
+            print("WHEN                 PORT   PROCESS               STARTED BY            KILLED BY")
+        }
         for item in items {
             let line = [
                 formatter.string(from: item.timestamp).padding(toLength: 21, withPad: " ", startingAt: 0),

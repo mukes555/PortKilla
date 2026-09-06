@@ -2,6 +2,17 @@
 
 # PortKilla - macOS Port Manager
 
+<p align="center">
+<a href="https://github.com/mukes555/PortKilla/actions/workflows/ci.yml"><img src="https://github.com/mukes555/PortKilla/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+<a href="https://github.com/mukes555/PortKilla/releases/latest"><img src="https://img.shields.io/github/v/release/mukes555/PortKilla?display_name=tag" alt="Latest release"></a>
+<img src="https://img.shields.io/badge/macOS-13%2B-blue" alt="macOS 13+">
+<img src="https://img.shields.io/badge/arch-universal-blue" alt="Universal binary">
+<a href="LICENSE"><img src="https://img.shields.io/github/license/mukes555/PortKilla" alt="License"></a>
+</p>
+
+`lsof -ti:3000 | xargs kill -9` frees the port. PortKilla does the same, and
+tells you *whose* server you are about to kill.
+
 <p align="center"><img src="assets/demo.gif" width="500" alt="PortKilla demo: search port 3000, kill it, watch it come back free"></p>
 
 **PortKilla** is a lightweight, native macOS menu bar app that helps developers identify and kill processes occupying ports. Instantly fix `EADDRINUSE` errors, terminate stuck Node.js servers, and free up localhost ports without touching the terminal.
@@ -124,7 +135,10 @@ There's also a URL scheme: `open "portkilla://kill/3000"` or `portkilla://show`.
 
 PortKilla checks GitHub Releases once a day (Settings → About → **Check for Updates…**) and shows a **Download vX.Y.Z** item when a newer version exists. No auto-installer — the app is unsigned (no Apple Developer program), so updates stay a deliberate download.
 
-> **First launch note:** since the app is not notarized, macOS may warn on first open. Right-click `PortKilla.app` → **Open** → **Open** (needed once), or `xattr -dr com.apple.quarantine /Applications/PortKilla.app`.
+> **First launch note:** the app is not notarized, so macOS warns once. On
+> macOS 15+ use System Settings → Privacy & Security → **Open Anyway**; on
+> 13 and 14, right-click → **Open**. Homebrew skips all of this. Details and
+> uninstall steps: [docs/FIRST-RUN.md](docs/FIRST-RUN.md).
 
 ## 💻 Requirements
 
@@ -144,8 +158,9 @@ brew install --cask portkilla
 ```
 
 If Homebrew asks you to trust the tap (standard for third-party casks), run
-`brew trust mukes555/tap` once. The cask installs the latest universal release
-and puts the `portkilla` CLI on your PATH. To update later:
+`brew trust mukes555/tap` once. The cask installs the latest universal release,
+clears the Gatekeeper quarantine, and puts the `portkilla` CLI on your PATH.
+Shell completions: `portkilla completions zsh` (also bash, fish). To update later:
 
 ```bash
 brew reinstall --cask portkilla
@@ -178,9 +193,33 @@ Drag `PortKilla.app` to `/Applications`.
 ./scripts/build.sh --dmg
 ```
 
-This produces `dist/PortKilla-1.14.0.dmg`.
+This produces `dist/PortKilla-1.15.0.dmg`.
 
 To distribute to other Macs without Gatekeeper prompts, you’ll eventually want Developer ID signing + notarization.
+
+## ❓ FAQ
+
+**Why is it unsigned?** Notarization needs a paid Apple Developer account, which
+this project does not have. The build is ad-hoc signed and reproducible
+(`scripts/build.sh`), releases ship `SHA256SUMS`, and the source is here.
+See [docs/FIRST-RUN.md](docs/FIRST-RUN.md).
+
+**Why menu bar only?** It is a tool you reach for from any app, so it lives
+in the menu bar (`LSUIElement`) with a global hotkey instead of a Dock icon.
+Pin it as a floating window when you want it to stay.
+
+**What does "exposed" mean?** The socket is bound to `0.0.0.0` or `*`, so it
+is reachable from your local network, not just this machine. It is the one
+badge that is a security signal rather than a convenience.
+
+**How does agent attribution work without a launcher?** Two passive
+signals: the process tree (server → shell → agent) and the environment
+markers agents leave on their children (`CLAUDECODE=1` and friends), which
+survive being reparented. No daemon, no registry. When PortKilla doesn't
+know, it says so.
+
+**Something looks wrong. How do I report it?** `portkilla doctor` (or
+Settings → About → Copy debug info) gives the facts a bug report needs.
 
 ## 🖥 Usage
 

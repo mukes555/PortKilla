@@ -8,6 +8,16 @@ enum LoginItem {
         SMAppService.mainApp.status == .enabled
     }
 
+    /// macOS returns this after the app bundle was replaced (a Homebrew
+    /// reinstall re-signs it) until the user re-approves it in Login Items.
+    static var requiresApproval: Bool {
+        SMAppService.mainApp.status == .requiresApproval
+    }
+
+    static func openLoginItemsSettings() {
+        SMAppService.openSystemSettingsLoginItems()
+    }
+
     /// Returns false when registration isn't possible — e.g. when running the
     /// bare SwiftPM binary during development instead of the .app bundle.
     @discardableResult

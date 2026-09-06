@@ -13,6 +13,51 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+## 1.15.0 — 2026-09-06
+
+### The distribution batch
+
+### Added
+- `portkilla doctor` (and Settings → About → **Copy debug info**): version,
+  macOS, architecture, install source, quarantine state, scanner path and
+  timing, PATH resolution, login item status. Paste it into bug reports.
+- `portkilla <command> --help` and `portkilla help <command>`;
+  `portkilla completions zsh|bash|fish`; `version --json`.
+- Structured logging into the unified log (`log stream --predicate
+  'subsystem == "com.mukes555.PortKilla"'`) for the scan path, kills, guard
+  events, and update checks. Process names are marked private.
+- VoiceOver reads each port row as one labelled element ("Port 3000, node,
+  45 MB, owned by Claude Code, exposed on all interfaces") and announces
+  the keyboard selection.
+- `docs/FIRST-RUN.md`: the one page for Gatekeeper on macOS 13/14 versus
+  15+, Homebrew, login-item re-approval, and uninstall. README badges and
+  an FAQ.
+
+### Changed
+- **Updates know where you installed from.** A Homebrew install is offered
+  the `brew reinstall` command instead of a DMG that would overwrite the
+  cask's bundle. A GitHub rate limit is explained as such. Development
+  builds no longer show a dead Check for Updates button. Pre-release tags
+  are never offered as updates.
+- Settings shows when macOS is waiting for you to re-approve the login item
+  (common after an update) with a button to Login Items.
+- `list` and `history` omit their header when piped; a JSON encoding
+  failure exits 70 instead of 0 with no output.
+
+### Distribution
+- The release workflow refuses to run unless the tag, `build.sh`, and the
+  newest CHANGELOG section agree; CI checks the same on every PR.
+- The release verifies the binary is universal and signed and that
+  Info.plist carries the tag's version, publishes `SHA256SUMS`, and marks
+  `-rc`/`-beta`/`-alpha` tags as pre-releases.
+- CI caches the SwiftPM build and runs the suite once through Rosetta, so
+  the x86_64 slice has executed at least once (advisory).
+- The Homebrew cask quits the running app and drops its login item before
+  replacing the bundle, and `zap` removes saved state, caches, and HTTP
+  storage as well as preferences.
+- `CFBundleVersion` follows the release version (it was always 1); the
+  bundle declares the Developer Tools category.
+
 ## 1.14.0 — 2026-09-06
 
 ### The guard batch

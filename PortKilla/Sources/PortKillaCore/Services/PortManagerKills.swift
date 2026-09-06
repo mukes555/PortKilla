@@ -174,13 +174,15 @@ extension PortManager {
         }
     }
 
-    /// Kills an arbitrary process (used for children in the process tree).
-    public func killProcess(pid: Int, name: String, force: Bool = false) {
+    /// Kills an arbitrary process (used for children in the process tree, and
+    /// for a reloader together with everything under it).
+    public func killProcess(pid: Int, name: String, force: Bool = false, killTree: Bool = false) {
         performSingleKill(
             pid: pid,
             expectedName: name,
             subject: name,
             force: force,
+            killTree: killTree,
             errorContext: "Kill failed for \(name)",
             onKilled: { [weak self] in
                 self?.showToast("Killed \(name)")

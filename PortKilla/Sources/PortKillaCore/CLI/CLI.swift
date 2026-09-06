@@ -326,7 +326,7 @@ public enum PortKillaCLI {
     /// agent finds out what happened to a server that vanished.
     private static func history(_ options: CLICommand.HistoryOptions) -> Int32 {
         let store = HistoryManager.appStore()
-        var items = store.history
+        var items = store.events
         if let port = options.port {
             items = items.filter { $0.port == port }
         }
@@ -350,7 +350,7 @@ public enum PortKillaCLI {
                 ":\(item.port)".padding(toLength: 7, withPad: " ", startingAt: 0),
                 item.processName.padding(toLength: 22, withPad: " ", startingAt: 0),
                 (item.owner ?? "—").padding(toLength: 22, withPad: " ", startingAt: 0),
-                item.killedBy ?? "—"
+                (item.action == .refused ? "refused: " : "") + (item.killedBy ?? "—")
             ].joined()
             print(line)
         }
@@ -375,6 +375,9 @@ public enum PortKillaCLI {
       `portkilla free-port --prefer 3000`. "Another Claude Code session" is still
       another session: it is not you. Servers you start are attributed to you
       automatically; if PortKilla can't see that, export PORTKILLA_OWNER first.
+    - Exit code 6 means a supervisor (pm2, launchd, Docker, or a reloader such as
+      nodemon) would undo a plain kill and its tool is not on PATH; stderr names
+      the command to run instead. When the tool is there, PortKilla runs it.
     - `portkilla wait <port> --timeout 30` blocks until the port is free.
     - `portkilla list --json` lists every listener with its owning agent;
       `portkilla list --mine` shows only the ones you may stop. Use `--pid` when two

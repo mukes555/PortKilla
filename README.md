@@ -54,6 +54,7 @@ The whole flow works without touching the mouse: **⌥⌘P → type "3000" or "v
 *   **Exposed badge**: ports bound to `0.0.0.0`/`*` are flagged — they're reachable from your local network, not just localhost.
 *   **Project detection**: each dev server shows its actual project folder (from the process working directory) — right-click to reveal it in Finder or open it in Terminal.
 *   **Connected clients**: every listener shows how many connections are open to it, and killing a server that still has clients always asks first.
+*   **Supervisors understood**: a pm2 app, a launchd job, a Docker container, or a reloader (nodemon, `next dev`, `uvicorn --reload`) would undo a plain kill, so PortKilla stops it the way its supervisor expects and shows why.
 *   **Secrets stay private**: command lines are redacted (`--token=...`, `KEY=...`, URL passwords, bearer tokens) before they are shown, exported, or handed to an agent.
 *   **Smart menu-bar count**: the badge counts your dev ports, not every macOS daemon.
 *   **Protected processes** (shield icon): IDEs and tools are skipped by bulk kills.
@@ -156,7 +157,8 @@ portkilla doctor --agents # how every AI tool is recognised on this machine
 
 Exit codes: 0 done, 1 nothing listening, 2 usage, 3 refused (another agent's
 live session owns it, or nobody PortKilla can name), 4 kill failed, 5 still
-running after the wait.
+running after the wait, 6 managed (a supervisor would undo the kill and its
+tool is not on PATH; the command to run is printed).
 
 There's also a URL scheme: `open "portkilla://kill/3000"` or `portkilla://show`.
 

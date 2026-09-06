@@ -40,6 +40,9 @@ final class CLIArgumentsTests: XCTestCase {
         XCTAssertEqual(parse("kill abc"), .failure(.invalidNumber("abc", option: "port")))
         XCTAssertEqual(parse("kill --pid"), .failure(.missingValue("--pid")))
         XCTAssertEqual(parse("kill --pid x"), .failure(.invalidNumber("x", option: "--pid")))
+        XCTAssertEqual(parse("kill 0"), .failure(.invalidNumber("0", option: "port")))
+        XCTAssertEqual(parse("kill 99999"), .failure(.invalidNumber("99999", option: "port")))
+        XCTAssertEqual(parse("kill 3000 --pid 42"), .failure(.conflictingTargets))
     }
 
     func testListParsing() {

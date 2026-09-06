@@ -47,6 +47,7 @@ enum CLIArguments {
         case invalidNumber(String, option: String)
         case missingTarget
         case tooManyTargets
+        case conflictingTargets
 
         var message: String {
             switch self {
@@ -56,6 +57,7 @@ enum CLIArguments {
             case .invalidNumber(let value, let option): return "'\(value)' is not a valid number for \(option)"
             case .missingTarget: return "kill needs a port number (or --pid <pid>)"
             case .tooManyTargets: return "kill takes one port number"
+            case .conflictingTargets: return "use a port number or --pid, not both"
             }
         }
     }
@@ -129,6 +131,7 @@ enum CLIArguments {
                     return .failure(.unknownOption(arg, command: "kill"))
                 } else if let port = Int(arg) {
                     guard options.port == nil else { return .failure(.tooManyTargets) }
+                    guard PortManager.isValidPortNumber(port) else { return .failure(.invalidNumber(arg, option: "port")) }
                     options.port = port
                 } else {
                     return .failure(.invalidNumber(arg, option: "port"))
@@ -137,6 +140,7 @@ enum CLIArguments {
             index += 1
         }
         guard options.port != nil || options.pid != nil else { return .failure(.missingTarget) }
+        guard options.port == nil || options.pid == nil else { return .failure(.conflictingTargets) }
         return .success(.kill(options))
     }
 

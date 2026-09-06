@@ -15,8 +15,20 @@ class PortScanner {
     private let cwdLock = NSLock()
 
     /// True when the last scan had to shell out to lsof (libproc unavailable),
-    /// so the UI can say why it is slower.
-    private(set) var lastScanUsedFallback = false
+    /// so the UI can say why it is slower. Written from scan queues, read on
+    /// main; guarded by `cwdLock`.
+    private var usedFallback = false
+    var lastScanUsedFallback: Bool {
+        cwdLock.lock()
+        defer { cwdLock.unlock() }
+        return usedFallback
+    }
+
+    private func setUsedFallback(_ value: Bool) {
+        cwdLock.lock()
+        usedFallback = value
+        cwdLock.unlock()
+    }
 
     /// How much enrichment a scan does. While nothing is on screen only the
     /// badge count and the watchlist consume the result, and they need six
@@ -33,7 +45,7 @@ class PortScanner {
         // nil means libproc is unavailable; an empty list is a real answer and
         // must not fall through to lsof on every refresh of a quiet machine.
         if let native = processes.listeners ?? NativeScanner.allListeners() {
-            lastScanUsedFallback = false
+            setUsedFallback(false)
             var raws: [RawListener] = []
             for listener in native {
                 let raw = RawListener(
@@ -50,7 +62,7 @@ class PortScanner {
         }
 
         // Fallback: the lsof pipeline
-        lastScanUsedFallback = true
+        setUsedFallback(true)
         return try scanWithLsof(processes: processes)
     }
 
@@ -206,13 +218,9 @@ class PortScanner {
     /// first, one lsof batch as fallback — and drops entries for dead PIDs.
     private func refreshWorkingDirectories(for pids: [Int], processes: ProcessTable) {
         cwdLock.lock()
-        defer { cwdLock.unlock() }
         let live = Set(pids)
         cwdCache = cwdCache.filter { live.contains($0.key) }
-
         var missing = pids.filter { cwdCache[$0] == nil }
-        guard !missing.isEmpty else { return }
-
         for pid in missing {
             if let path = NativeScanner.workingDirectory(Int32(pid)) {
                 cwdCache[pid] = path
@@ -222,7 +230,11 @@ class PortScanner {
         // so asking would only fork a subprocess that returns nothing.
         let me = getuid()
         missing = missing.filter { cwdCache[$0] == nil && (processes.uid(for: $0) ?? me) == me }
+        cwdLock.unlock()
 
+        // The subprocess runs outside the lock so a concurrent scan isn't
+        // held for up to three seconds.
+        var resolved: [Int: String] = [:]
         if !missing.isEmpty {
             let pidList = missing.map(String.init).joined(separator: ",")
             // -Fn machine format: "p<pid>" line, then "n<path>" line per file
@@ -230,16 +242,18 @@ class PortScanner {
                 "/usr/sbin/lsof", ["-a", "-p", pidList, "-d", "cwd", "-Fn"],
                 timeout: 3.0, allowedExitCodes: [0, 1]
             )) ?? ""
-
-            for (pid, path) in Self.parseCwdOutput(output) {
-                cwdCache[pid] = path
-            }
+            resolved = Self.parseCwdOutput(output)
         }
 
+        cwdLock.lock()
+        for (pid, path) in resolved {
+            cwdCache[pid] = path
+        }
         // Negative-cache misses so we don't re-query them every refresh
         for pid in pids where cwdCache[pid] == nil {
             cwdCache[pid] = ""
         }
+        cwdLock.unlock()
     }
 
     private func cachedWorkingDirectory(_ pid: Int) -> String? {

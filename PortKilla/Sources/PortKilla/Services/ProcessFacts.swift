@@ -18,8 +18,12 @@ final class ProcessFacts {
 
     private struct Entry {
         let startTime: UInt64
+        /// pbi_name changes on exec; start time does not (exec without fork,
+        /// as in `sh -c 'exec node …'`, keeps both pid and start time).
+        let shortName: String
         let facts: Facts
         var markers: [String: String]?
+        var markerKeys: Set<String>?
     }
 
     private let lock = NSLock()
@@ -38,9 +42,9 @@ final class ProcessFacts {
 
     /// Path and argv for `pid`, read from the kernel only the first time this
     /// (pid, start time) is seen.
-    func facts(for pid: Int32, startedAt startTime: UInt64) -> Facts {
+    func facts(for pid: Int32, startedAt startTime: UInt64, shortName: String) -> Facts {
         lock.lock()
-        if let entry = entries[pid], entry.startTime == startTime {
+        if let entry = entries[pid], entry.startTime == startTime, entry.shortName == shortName {
             lock.unlock()
             return entry.facts
         }
@@ -50,7 +54,7 @@ final class ProcessFacts {
         // same pid just does the same cheap work twice.
         let facts = Facts(executablePath: readPath(pid), command: readCommand(pid))
         lock.lock()
-        entries[pid] = Entry(startTime: startTime, facts: facts, markers: nil)
+        entries[pid] = Entry(startTime: startTime, shortName: shortName, facts: facts, markers: nil, markerKeys: nil)
         lock.unlock()
         return facts
     }
@@ -59,16 +63,21 @@ final class ProcessFacts {
     /// cache has not captured is read directly and not remembered.
     func markers(for pid: Int32, keys: Set<String>) -> [String: String] {
         lock.lock()
-        if let cached = entries[pid]?.markers {
+        if let entry = entries[pid], let cached = entry.markers, entry.markerKeys == keys {
             lock.unlock()
             return cached
         }
         lock.unlock()
 
         let markers = readMarkers(pid, keys)
-        lock.lock()
-        entries[pid]?.markers = markers
-        lock.unlock()
+        // An empty read is not remembered: the process may still have been
+        // exec'ing, and a retry next refresh is cheap.
+        if !markers.isEmpty {
+            lock.lock()
+            entries[pid]?.markers = markers
+            entries[pid]?.markerKeys = keys
+            lock.unlock()
+        }
         return markers
     }
 

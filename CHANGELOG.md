@@ -13,6 +13,47 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+## 1.12.0 — 2026-09-06
+
+### The UI batch
+
+### Added
+- **States the app had no words for:** a "Scanning ports…" state before the
+  first scan (it used to claim "No active ports" with a green check before
+  any data existed), a "compatibility scan" note in the footer when the slow
+  lsof path is in use, a "Notifications are blocked" row in Settings with a
+  button to System Settings, rows that dim with a spinner while a process
+  shuts down, and a "Refreshing…" toast when you press refresh mid-scan.
+- **Guards are reachable:** "Guard :port" in every row's context menu, and a
+  Watched ports section in Settings with guard switches and unwatch buttons.
+  Previously the only guard toggle lived in a section that disappeared on
+  any search or filter.
+- Shortcuts pane documents Option-click, Shift-click, right-click, and ⌘C,
+  and can bring the tips banner back.
+- Settings: notification sound toggle and history retention (50 to 500).
+
+### Changed
+- **Watched rows** now use the same columns, padding, chips, and context
+  menu as the rest of the list instead of a second, narrower layout.
+- **Pinned window:** keyboard shortcuts work in it (each copy of the list
+  answers only while its own window is key), it is resizable, and it
+  remembers its position and display.
+- **⌘K and the footer button honour the active filter:** "Kill All
+  Databases" on the Databases tab, "Kill All Docker" on Docker. The All tab
+  keeps the classic "Kill All Dev".
+- Killing the selected row keeps the keyboard position on its neighbour
+  instead of jumping to the top.
+- One confirmation dialog style everywhere, with a properly destructive Kill
+  button (five different idioms before).
+- Chips share one component, use system colours that adapt to the
+  appearance, and darken their label in light mode where the old ones
+  failed contrast.
+- The density toggle respects Reduce Motion.
+
+### Removed (internal)
+- Two unreachable sheet cases and the protected list's never-shown
+  standalone mode.
+
 ## 1.11.0 — 2026-09-06
 
 ### The performance batch

@@ -107,7 +107,9 @@ which enforces a hard timeout and safe pipe handling.
   occupant), see `PortManager+WatchGuard.swift`;
 - **kill orchestration** (`PortManagerKills.swift`): signal off the main thread,
   then event-driven `waitForExit` (`DispatchSourceProcess`), then report on main;
-- settings persistence and update checks.
+- settings persistence and update checks;
+- `MetricsHistory`, one CPU and memory sample per process per scan, which
+  only the sparkline views observe.
 
 Kills go through [`ProcessKiller`](PortKilla/Sources/PortKillaCore/Services/ProcessKiller.swift),
 which verifies process identity before signalling (PID reuse protection) and
@@ -132,7 +134,8 @@ PortKilla/Sources/
     Views/             SwiftUI; PortListView is the root, +Actions / +Chrome /
                        +Palette are its extensions; KillFlow holds the
                        confirmations every window shares; PaletteQuery parses
-                       the search field's verbs
+                       the search field's verbs; TourView, MascotView,
+                       SparklineView
     Workbench/         The full-size window: sidebar, table, projects, agent
                        sessions, watchlist, inspector (WorkbenchModel groups)
   portkilla-cli/       main.swift, the standalone CLI

@@ -57,6 +57,7 @@ extension PortListView {
             }
             Button("History…") { appDelegate.showHistory() }
             Button("Open Workbench") { appDelegate.openWorkbench() }
+            Button("Welcome Tour…") { appDelegate.showTour() }
 
             Divider()
 
@@ -227,12 +228,17 @@ extension PortListView {
                     .controlSize(.small)
                     .padding(.top, 6)
                 }
+            } else if searchText.isEmpty {
+                MascotView(mood: .sleepy, size: 72)
+                    .padding(.bottom, 8)
+                Text("All quiet: nothing is listening")
+                    .foregroundColor(.secondary)
             } else {
-                Image(systemName: searchText.isEmpty ? "checkmark.circle" : "magnifyingglass")
+                Image(systemName: "magnifyingglass")
                     .font(.system(size: 32))
                     .foregroundColor(.secondary)
                     .padding(.bottom, 8)
-                Text(searchText.isEmpty ? "No active ports found" : "No results found")
+                Text("No results found")
                     .foregroundColor(.secondary)
             }
             Spacer()

@@ -46,6 +46,7 @@ public enum OutputSchemas {
         "type": "classification, e.g. \"Node.js\"", "age": "human-readable process age, when known",
         "projectName": "project folder name, when known", "projectPath": "working directory, when known",
         "containerName": "Docker container, when published by one", "connections": "established TCP connections",
+        "peers": "[{host, port, kind}] remote ends of the established connections; kind is local | lan | remote",
         "children": "child processes [{pid, name, command}]", "agentOwner": "AgentOwner or absent",
         "managedBy": "ManagedRuntime or absent",
         "evidence": "AttributionEvidence (fields below)",

@@ -11,8 +11,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     var statusItem: NSStatusItem!
     var popover: NSPopover!
     var historyWindow: NSWindow?
-    private var settingsWindow: NSWindow?
-    private var workbenchWindow: NSWindow?
+    var settingsWindow: NSWindow?
+    var workbenchWindow: NSWindow?
+    var tourWindow: NSWindow?
     private(set) var pinnedPanel: NSPanel?
     @Published var isPinned = false
     private var hotKey: GlobalHotKey?
@@ -79,14 +80,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         // A refusal the CLI issues to an agent becomes a notification here.
         refusalWatcher = RefusalWatcher(portManager: portManager) { [weak self] in self?.revealPorts() }
 
-        // First launch: open the popover once so the user finds the app,
-        // instead of it silently vanishing into the menu bar.
-        let hasLaunchedKey = DefaultsKey.hasLaunchedBefore
-        if !UserDefaults.standard.bool(forKey: hasLaunchedKey) {
-            UserDefaults.standard.set(true, forKey: hasLaunchedKey)
+        // First launch: the tour, then the popover, so the app does not
+        // silently vanish into the menu bar. An upgrade skips the tour (it
+        // stays in the menu) but still sees the popover once per install.
+        let defaults = UserDefaults.standard
+        let isFirstLaunch = !defaults.bool(forKey: DefaultsKey.hasLaunchedBefore)
+        if isFirstLaunch {
+            defaults.set(true, forKey: DefaultsKey.hasLaunchedBefore)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-                self?.togglePopover()
+                self?.showTour()
             }
+        } else if defaults.object(forKey: DefaultsKey.didFinishTour) == nil {
+            defaults.set(true, forKey: DefaultsKey.didFinishTour)
         }
 
         // Developer-only rendering hooks (screenshots, README GIF, CI smoke
@@ -96,110 +101,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         #endif
     }
 
-    #if DEBUG
-    /// Offscreen render hooks, driven by PORTKILLA_* env vars. See CONTRIBUTING.md.
-    private func installDevHooks() {
-        let env = Foundation.ProcessInfo.processInfo.environment
-
-        if env["PORTKILLA_SHOW_ON_LAUNCH"] == "1" {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                self?.togglePopover()
-            }
-        }
-
-        if let snapshotPath = env["PORTKILLA_SNAPSHOT"] {
-            let viewName = env["PORTKILLA_SNAPSHOT_VIEW"] ?? "main"
-            // Render what an open popover shows: full scans, not the light
-            // hidden-state ones.
-            portManager.setUIVisible(true)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-                self?.writeSnapshot(of: viewName, to: snapshotPath)
-                // The live capture quits on its own once it has drawn.
-                if viewName != "workbench-live" { NSApp.terminate(nil) }
-            }
-        }
-
-        if let gifPath = env["PORTKILLA_DEMO_GIF"] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.renderDemoReel(to: gifPath)
-                NSApp.terminate(nil)
-            }
-        }
-    }
-
-    private func writeSnapshot(of viewName: String, to path: String) {
-        // Seed watched ports so the watched section can be rendered in snapshots
-        if let watchList = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_WATCH"] {
-            portManager.watchedPorts = Set(watchList.split(separator: ",").compactMap { Int($0) })
-        }
-        if let density = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_DENSITY"],
-           let value = PortManager.ViewDensity(rawValue: density) {
-            portManager.viewDensity = value
-        }
-
-        let view: NSView
-        switch viewName {
-        case "bulkkill":
-            view = NSHostingView(rootView: BulkKillView(portManager: portManager))
-        case "protected":
-            view = NSHostingView(rootView: ProtectedProcessListView(portManager: portManager))
-        case "settings":
-            view = NSHostingView(rootView: SettingsView(portManager: portManager).environmentObject(self))
-        case "workbench":
-            view = NSHostingView(rootView: WorkbenchView(portManager: portManager).environmentObject(self).frame(width: 1320, height: 720))
-        case "workbench-live":
-            // Sidebar material is composited by the window server, so an
-            // offscreen render shows it blank: open the real window and let
-            // screencapture photograph it (needs Screen Recording permission).
-            openWorkbench()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                if let number = self?.workbenchWindow?.windowNumber {
-                    _ = try? CommandRunner.run("/usr/sbin/screencapture", ["-x", "-o", "-l", "\(number)", path], timeout: 10)
-                }
-                NSApp.terminate(nil)
-            }
-            return
-        case "detail":
-            let port = portManager.activePorts.first ?? PortInfo(
-                port: 3000, pid: 1234, processName: "node",
-                command: "/usr/local/bin/node server.js", user: NSUserName(),
-                memoryUsage: "45MB", memorySizeKB: 46080, type: .nodejs,
-                projectName: "my-app", bindAddress: "*"
-            )
-            view = NSHostingView(rootView: PortDetailView(port: port))
-        default:
-            // PORTKILLA_SNAPSHOT_TEXTSIZE=large renders at an accessibility
-            // text size to check that the rows reflow instead of clipping.
-            let textSize: DynamicTypeSize = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_TEXTSIZE"] == "large" ? .accessibility1 : .medium
-            // PORTKILLA_SNAPSHOT_SEARCH seeds the search field, so the palette
-            // bar ("kill 3000", "> ...") can be rendered.
-            let search = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_SEARCH"] ?? ""
-            view = NSHostingView(rootView: PortListView(portManager: portManager, initialSearchText: search).environmentObject(self).dynamicTypeSize(textSize))
-        }
-
-        let size = view.fittingSize == .zero ? NSSize(width: 500, height: 600) : view.fittingSize
-
-        // Host in an offscreen window so the view gets a real appearance chain
-        // (otherwise dark-mode colors resolve against a transparent void).
-        let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: size),
-            styleMask: [.borderless], backing: .buffered, defer: false
-        )
-        switch Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_APPEARANCE"] {
-        case "light": window.appearance = NSAppearance(named: .aqua)
-        case "dark": window.appearance = NSAppearance(named: .darkAqua)
-        default: window.appearance = NSApp.effectiveAppearance
-        }
-        window.contentView = view
-        view.layoutSubtreeIfNeeded()
-
-        guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
-        view.cacheDisplay(in: view.bounds, to: rep)
-        if let data = rep.representation(using: .png, properties: [:]) {
-            try? data.write(to: URL(fileURLWithPath: path))
-        }
-    }
-    #endif
 
     private lazy var activeStatusImage = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Active Ports")
     private lazy var idleStatusImage = NSImage(systemSymbolName: "bolt", accessibilityDescription: "No Active Ports")
@@ -286,6 +187,31 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         portManager.setUIVisible(popover.isShown || workbenchIsVisible)
     }
 
+    // MARK: - Tour
+
+    func showTour() {
+        popover.performClose(nil)
+        if tourWindow == nil {
+            let view = TourView(portManager: portManager) { [weak self] in
+                self?.tourWindow?.close()
+                self?.togglePopover()
+            }
+            .environmentObject(self)
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 460, height: 400),
+                styleMask: [.titled, .closable],
+                backing: .buffered, defer: false
+            )
+            window.title = "Welcome to PortKilla"
+            window.isReleasedWhenClosed = false
+            window.contentViewController = NSHostingController(rootView: view)
+            window.center()
+            tourWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        tourWindow?.makeKeyAndOrderFront(nil)
+    }
+
     // MARK: - Workbench
 
     /// The full-size window: table, projects, agent sessions, watchlist,
@@ -295,7 +221,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         if workbenchWindow == nil {
             let view = WorkbenchView(portManager: portManager).environmentObject(self)
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 1320, height: 720),
+                contentRect: NSRect(x: 0, y: 0, width: 1380, height: 740),
                 styleMask: [.titled, .closable, .resizable, .miniaturizable],
                 backing: .buffered, defer: false
             )

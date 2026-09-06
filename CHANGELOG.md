@@ -13,6 +13,44 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+## 1.11.0 — 2026-09-06
+
+### The performance batch
+
+Same features, a fraction of the work. Measured on a machine with ~600
+processes and ~60 listeners, a refresh went from roughly 5,100 syscalls and
+30,000 short-lived strings to about 1,400 syscalls and a few hundred strings.
+
+### Changed
+- **One native pass.** The process table and the listening sockets are
+  gathered in a single walk over the pid list (two before), with a reusable
+  descriptor buffer instead of a size probe per process.
+- **Facts that can't change aren't re-read.** Executable path, argv, and the
+  environment markers are cached per (pid, start time), so a refresh only
+  pays for processes it hasn't seen. A recycled pid gets a fresh entry.
+- **No render storm.** An unread published flag and an always-changing
+  timestamp forced three whole-tree re-renders per refresh even when nothing
+  changed. The flag is plain, the timestamp lives on its own object that
+  only the footer observes, the visible-port filter is cached instead of
+  recomputed thousands of times a minute, and the Tests list republishes on
+  structural change (or every 10s for the CPU column).
+- **Docker off the hot path.** `docker ps` runs on a background queue, only
+  when a Docker process is listening, and backs off (5s to 60s) when the
+  daemon is down, instead of blocking every refresh for up to three seconds.
+- **Hidden means light.** With nothing on screen a refresh gathers the six
+  fields the badge and watchlist need; working directories, Docker names,
+  children, and agent attribution wait for the popover. Closing the popover
+  no longer triggers a scan nobody sees.
+- **Quiet launch.** No notification-permission prompt just for launching
+  (it is asked when you turn notifications on or arm a watch), no
+  preferences written back to disk on read, and the update check is
+  deferred ten seconds.
+- The menu-bar icon is drawn from two cached images and only when its state
+  changes; `lsof` is no longer asked for working directories of other
+  users' processes (it can't read them either).
+- `portkilla whoami` walks its own ancestor chain instead of snapshotting
+  every process; `kill` skips the Docker lookup it doesn't print.
+
 ## 1.10.0 — 2026-09-06
 
 ### The agent batch

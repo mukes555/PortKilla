@@ -42,6 +42,7 @@ struct PortListView: View {
     @State var activeSheet: ActiveSheet?
     @State var selectedId: String?
     @State var expandedIds: Set<String> = []
+    @State var isOnScreen = false
     @State var launchAtLogin = LoginItem.isEnabled
     @AppStorage("PortKilla.didDismissHotkeyTip") var didDismissHotkeyTip = false
     @FocusState var isSearchFocused: Bool
@@ -72,25 +73,28 @@ struct PortListView: View {
         if searchText.isEmpty {
             return ports
         }
+        let needle = searchText
+        // Plain case-insensitive matching: the locale-aware variant is an
+        // ICU call per field per port per keystroke.
+        func matches(_ text: String?) -> Bool {
+            text?.range(of: needle, options: .caseInsensitive) != nil
+        }
         return ports.filter { port in
-            String(port.port).contains(searchText) ||
-            port.processName.localizedCaseInsensitiveContains(searchText) ||
-            port.command.localizedCaseInsensitiveContains(searchText) ||
-            (port.projectName?.localizedCaseInsensitiveContains(searchText) ?? false) ||
-            (port.containerName?.localizedCaseInsensitiveContains(searchText) ?? false) ||
-            (port.agentOwner?.name.localizedCaseInsensitiveContains(searchText) ?? false)
+            String(port.port).contains(needle) ||
+            matches(port.processName) ||
+            matches(port.command) ||
+            matches(port.projectName) ||
+            matches(port.containerName) ||
+            matches(port.agentOwner?.name)
         }
     }
 
+    // Web first, then IDE, then DB, then Other
+    private static let categoryRank: [PortInfo.PortCategory: Int] = [.web: 0, .ide: 1, .database: 2, .other: 3]
+
     var groupedPorts: [(key: PortInfo.PortCategory, value: [PortInfo])] {
-        let grouped = Dictionary(grouping: filteredPorts) { $0.type.category }
-        // Sort categories logically: Web first, then IDE, then DB, then Other
-        return grouped.sorted { (first, second) -> Bool in
-            let order: [PortInfo.PortCategory] = [.web, .ide, .database, .other]
-            let firstIndex = order.firstIndex(of: first.key) ?? 999
-            let secondIndex = order.firstIndex(of: second.key) ?? 999
-            return firstIndex < secondIndex
-        }
+        Dictionary(grouping: filteredPorts) { $0.type.category }
+            .sorted { (Self.categoryRank[$0.key] ?? 999) < (Self.categoryRank[$1.key] ?? 999) }
     }
 
     var filteredTests: [TestProcessInfo] {
@@ -164,6 +168,7 @@ struct PortListView: View {
         // Opaque background so list rows never sit on unpredictable popover material
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
+            isOnScreen = true
             installKeyMonitorIfNeeded()
             launchAtLogin = LoginItem.isEnabled
             DispatchQueue.main.async {
@@ -171,6 +176,7 @@ struct PortListView: View {
             }
         }
         .onDisappear {
+            isOnScreen = false
             if let monitor = eventMonitor {
                 NSEvent.removeMonitor(monitor)
                 eventMonitor = nil
@@ -269,7 +275,7 @@ struct PortListView: View {
         return formatter
     }()
 
-    func timeAgo(from date: Date) -> String {
+    static func timeAgo(from date: Date) -> String {
         // The formatter says "in 0 seconds" for just-written timestamps
         if Date().timeIntervalSince(date) < 10 {
             return "just now"

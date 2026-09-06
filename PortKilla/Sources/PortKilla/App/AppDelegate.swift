@@ -52,13 +52,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
             button.target = self
         }
 
-        // Observe port changes to update icon
-        portManager.$activePorts
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.updateMenuBar()
-            }
-            .store(in: &cancellables)
+        // Redraw the icon after the port list has changed. (A Combine sink on
+        // $activePorts fires before the new value lands, so it needed a
+        // run-loop hop; a callback from didSet needs none.)
+        portManager.onPortsChanged = { [weak self] in self?.updateMenuBar() }
 
         // Create popover
         popover = NSPopover()
@@ -111,6 +108,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
 
         if let snapshotPath = env["PORTKILLA_SNAPSHOT"] {
             let viewName = env["PORTKILLA_SNAPSHOT_VIEW"] ?? "main"
+            // Render what an open popover shows: full scans, not the light
+            // hidden-state ones.
+            portManager.setPopoverVisible(true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
                 self?.writeSnapshot(of: viewName, to: snapshotPath)
                 NSApp.terminate(nil)
@@ -179,16 +179,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     }
     #endif
 
+    private lazy var activeStatusImage = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Active Ports")
+    private lazy var idleStatusImage = NSImage(systemSymbolName: "bolt", accessibilityDescription: "No Active Ports")
+    private var menuBarState: (active: Bool, title: String)?
+
     func updateMenuBar() {
         guard let button = statusItem.button else { return }
         let count = portManager.menuBarBadgeCount
         let active = count > 0
+        let title = (active && portManager.showMenuBarCount) ? "\(count)" : ""
 
-        button.image = NSImage(
-            systemSymbolName: active ? "bolt.fill" : "bolt",
-            accessibilityDescription: active ? "Active Ports" : "No Active Ports"
-        )
-        button.title = (active && portManager.showMenuBarCount) ? "\(count)" : ""
+        // Same state, same drawing: skip the AppKit work.
+        if let state = menuBarState, state.active == active, state.title == title { return }
+        menuBarState = (active, title)
+        button.image = active ? activeStatusImage : idleStatusImage
+        button.title = title
     }
 
     func popoverWillShow(_ notification: Notification) {

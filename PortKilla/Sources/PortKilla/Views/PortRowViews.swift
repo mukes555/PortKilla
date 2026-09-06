@@ -282,6 +282,14 @@ struct PortRowView: View {
                                     .fixedSize()
                                     .help(container)
                             }
+                            // A supervisor that would undo a plain kill; Docker
+                            // already shows as its container.
+                            if let managed = port.managedBy, managed.kind != .docker {
+                                Chip(icon: "arrow.triangle.2.circlepath", text: Self.chipText(managed.short), tint: .chipOrange)
+                                    .fixedSize()
+                                    .help("Managed by \(managed.label): \(managed.consequence)")
+                                    .accessibilityLabel("managed by \(managed.label)")
+                            }
                             Text(port.command)
                                 .lineLimit(1)
                                 .truncationMode(.tail)

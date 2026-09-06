@@ -78,6 +78,10 @@ What to export, by tool:
   free), `portkilla kill <port> --dry-run --json` to see the decision first.
 - `portkilla whois <port>` when a kill is refused: who owns it and why
   PortKilla thinks so, and whether it runs in your working directory.
+- Exit 6 means a supervisor (pm2, launchd, Docker, a reloader such as
+  nodemon) would undo a plain kill and its tool is not on PATH; stderr names
+  the command to run. When the tool is there, `kill` runs it for you and
+  reports `action: "stopped"`.
 - `portkilla free-port --prefer 3000` to pick a port instead of fighting
   for one.
 - `portkilla kill --orphaned` to clean up servers left behind by sessions

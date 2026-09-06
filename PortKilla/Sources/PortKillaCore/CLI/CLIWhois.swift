@@ -30,6 +30,7 @@ public enum CLIWhois {
         let connections: Int
         let children: [PortInfo.ProcessInfo]?
         let agentOwner: AgentOwner?
+        let managedBy: ManagedRuntime?
         let evidence: AttributionEvidence
         /// What `kill` would do for the calling process, and why.
         let verdict: String
@@ -73,6 +74,7 @@ public enum CLIWhois {
             age: port.age, projectName: port.projectName, projectPath: port.projectPath,
             containerName: port.containerName, connections: port.connections, children: port.children,
             agentOwner: port.agentOwner,
+            managedBy: port.managedBy,
             evidence: evidence(for: port, table: table),
             verdict: KillDecision.verdict(caller: caller, target: port.agentOwner, forced: false),
             reason: reason,
@@ -118,6 +120,10 @@ public enum CLIWhois {
             lines.append(row("children", children.map { "\($0.name) (\($0.pid))" }.joined(separator: ", ")))
         }
         lines += ownerLines(dossier)
+        if let managed = dossier.managedBy {
+            let verb = managed.stopCommand.map { "; stop it with `\($0)`" } ?? ""
+            lines.append(row("managed by", "\(managed.label): \(managed.consequence)\(verb)"))
+        }
         let why = dossier.reason.map { ": \($0)" } ?? ""
         lines.append(row("kill", "\(dossier.verdict)\(why)"))
         return lines.joined(separator: "\n")

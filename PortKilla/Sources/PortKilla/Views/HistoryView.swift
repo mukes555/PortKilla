@@ -38,7 +38,7 @@ struct HistoryView: View {
 
             Divider()
 
-            if history.history.isEmpty {
+            if history.events.isEmpty {
                 VStack {
                     Spacer()
                     Text("No history yet")
@@ -47,7 +47,7 @@ struct HistoryView: View {
                 }
             } else {
                 List {
-                    ForEach(history.history) { item in
+                    ForEach(history.events) { item in
                         HStack {
                             Text(formatDate(item.timestamp))
                                 .font(.system(size: 11, design: .monospaced))
@@ -73,7 +73,7 @@ struct HistoryView: View {
                                 Spacer()
                                 Text(item.action.rawValue)
                                     .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.red)
+                                    .foregroundColor(item.action == .refused ? .orange : .red)
 
                                 // The same server tends to come back — offer a re-kill
                                 if isPortActiveAgain(item.port) {
@@ -126,7 +126,9 @@ struct HistoryView: View {
     private func provenance(of item: PortHistoryItem) -> String? {
         var parts: [String] = []
         if let owner = item.owner { parts.append("started by \(owner)") }
-        if let killedBy = item.killedBy, killedBy != KillInitiator.user.rawValue { parts.append("killed by \(killedBy)") }
+        if let killedBy = item.killedBy, killedBy != KillInitiator.user.rawValue {
+            parts.append(item.action == .refused ? "refused \(killedBy)" : "killed by \(killedBy)")
+        }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 

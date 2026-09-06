@@ -14,6 +14,23 @@ release, rename it to the version and date.
 <!-- next -->
 
 ### Added
+- **Supervisors understood.** PortKilla recognises what would undo a plain
+  kill: pm2 apps, launchd jobs (Homebrew services and your own
+  LaunchAgents), Docker containers, and reloaders (nodemon, `next dev`,
+  `uvicorn --reload`, `--watch` modes, Flask's and Django's reloaders,
+  gunicorn, puma, and nginx masters). Rows show an orange chip and the
+  detail view says why. `portkilla kill` stops a reloader together with its
+  child and runs `pm2 stop`, `brew services stop`, `launchctl bootout`, or
+  `docker stop` for the rest; when the tool is not on PATH it prints the
+  command and exits 6. `--force` kills the listener itself, except for
+  Docker, where it means `docker kill`. The app asks "Stop via pm2" or
+  "Kill anyway". Docker's backend is never killed through a port.
+- **Refusals reach you.** When the guard refuses an agent, the running app
+  shows a notification with "Stop it anyway" and "Show in PortKilla", the
+  History window lists the refusal in orange with who was refused, and
+  `portkilla history` includes it.
+- `portkilla whois` shows the supervisor and its stop command; `list --json`
+  carries `managedBy`.
 - **`portkilla whois <port>`** (or `--pid`): everything PortKilla knows about
   a listener, including the evidence behind its owner (the ancestry walked,
   the markers found, what was declared) and what `kill` would do for the

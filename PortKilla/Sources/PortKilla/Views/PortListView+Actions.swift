@@ -133,6 +133,10 @@ extension PortListView {
     /// Single entry point for killing a port: applies the confirm-before-kill
     /// setting (with a "don't ask again" checkbox) and then delegates.
     func requestKill(_ port: PortInfo, force: Bool, killTree: Bool) {
+        // A supervisor would undo a plain kill; Docker's backend is never the target.
+        if let managed = port.managedBy, !force || managed.kind == .docker, requestManagedStop(port, managed: managed) {
+            return
+        }
         var message = "This will terminate '\(port.processName)' (PID \(port.pid))."
         if port.connections > 0 {
             message += "\n\n\(port.connections) client\(port.connections == 1 ? " is" : "s are") connected to it right now."

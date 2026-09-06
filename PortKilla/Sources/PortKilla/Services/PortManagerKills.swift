@@ -80,6 +80,7 @@ extension PortManager {
         onKilled: @escaping () -> Void,
         onNotTerminated: (() -> Void)? = nil
     ) {
+        terminatingPids.insert(pid)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             do {
@@ -88,6 +89,7 @@ extension PortManager {
                 let died = self.waitForExit(pids: [pid], timeout: timeout).contains(pid)
 
                 DispatchQueue.main.async {
+                    self.terminatingPids.remove(pid)
                     if died {
                         self.lastErrorMessage = nil
                         onKilled()
@@ -101,6 +103,7 @@ extension PortManager {
                 }
             } catch {
                 DispatchQueue.main.async {
+                    self.terminatingPids.remove(pid)
                     self.lastErrorMessage = self.formatError(error, context: errorContext)
                     self.showToast(self.lastErrorMessage ?? "Kill failed")
                 }
@@ -248,6 +251,7 @@ extension PortManager {
             portsByPid[port.pid] = port
         }
         let targets = Array(portsByPid.values)
+        terminatingPids.formUnion(targets.map(\.pid))
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
@@ -260,6 +264,7 @@ extension PortManager {
             let successCount = deadPids.count
 
             DispatchQueue.main.async {
+                self.terminatingPids.subtract(targets.map(\.pid))
                 if successCount > 0 {
                     self.activePorts.removeAll { deadPids.contains($0.pid) }
                     self.lastErrorMessage = nil

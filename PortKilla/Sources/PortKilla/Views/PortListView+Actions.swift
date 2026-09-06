@@ -6,9 +6,6 @@ import AppKit
 extension PortListView {
 
     func installKeyMonitorIfNeeded() {
-        // Pinned-window copies skip the monitor — two instances would
-        // double-handle every shortcut.
-        guard installsKeyMonitor else { return }
         // The popover can re-show without a matching onDisappear;
         // guard so shortcuts never stack duplicate monitors.
         guard eventMonitor == nil else { return }
@@ -21,6 +18,10 @@ extension PortListView {
     func handleKeyDown(_ event: NSEvent) -> Bool {
         // Don't hijack keys while a sheet or alert has its own focus.
         guard activeSheet == nil else { return false }
+        // Both the popover and the pinned panel host this view; only the
+        // copy whose window is key may act, or every shortcut fires twice.
+        let pinnedIsKey = appDelegate.pinnedPanel != nil && NSApp.keyWindow === appDelegate.pinnedPanel
+        guard pinnedIsKey == hostedInPinnedWindow else { return false }
 
         let hasCommand = event.modifierFlags.contains(.command)
 
@@ -73,11 +74,7 @@ extension PortListView {
             portManager.refresh(showToast: true)
             return true
         case "k":
-            if filter == .tests {
-                killAllTests()
-            } else {
-                killAllDev()
-            }
+            killAllForCurrentFilter()
             return true
         case "o":
             if let port = selectedPort {
@@ -122,7 +119,23 @@ extension PortListView {
             owner: port.agentOwner
         )
         guard confirmed else { return }
+        moveSelectionOff(port.id)
         portManager.killPort(port, force: force, killTree: killTree)
+    }
+
+    /// The killed row disappears; keep the keyboard position on its neighbour
+    /// instead of snapping back to the top of the list.
+    func moveSelectionOff(_ id: String) {
+        guard selectedId == id else { return }
+        let ids = visibleIdsInOrder
+        guard let index = ids.firstIndex(of: id) else { return }
+        if index + 1 < ids.count {
+            selectedId = ids[index + 1]
+        } else if index > 0 {
+            selectedId = ids[index - 1]
+        } else {
+            selectedId = nil
+        }
     }
 
     func requestKillTest(_ test: TestProcessInfo, force: Bool = false) {
@@ -160,46 +173,36 @@ extension PortListView {
     }
 
     func runKillConfirmation(title: String, message: String) -> Bool {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.addButton(withTitle: "Kill")
-        alert.addButton(withTitle: "Cancel")
-        alert.alertStyle = .warning
-        alert.showsSuppressionButton = true
-        alert.suppressionButton?.title = "Don't ask again"
-
-        let confirmed = alert.runModal() == .alertFirstButtonReturn
-        if confirmed, alert.suppressionButton?.state == .on {
-            portManager.confirmBeforeKill = false
+        KillConfirm.run(title: title, message: message) { dontAskAgain in
+            if dontAskAgain { portManager.confirmBeforeKill = false }
         }
-        return confirmed
     }
 
-    func killAllDev() {
-        let devPorts = portManager.visiblePorts.filter {
-            $0.type.category == .web && !portManager.isProtectedProcessName($0.processName)
-        }
-
-        if devPorts.isEmpty {
-            let alert = NSAlert()
-            alert.messageText = "No Dev Servers Found"
-            alert.informativeText = "There are no unprotected dev server processes to kill."
-            alert.alertStyle = .informational
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
+    /// ⌘K and the footer button kill what the active filter shows, never
+    /// web servers from behind the Databases tab.
+    func killAllForCurrentFilter() {
+        if filter == .tests {
+            killAllTests()
             return
         }
 
-        let processList = devPorts.map { "• \($0.processName) (:\($0.port))" }.joined(separator: "\n")
-        let agentNote = KillDecision.liveAgentNote(for: devPorts.map(\.agentOwner)).map { "\n\n\($0)" } ?? ""
+        let targets = portManager.visiblePorts.filter {
+            filter.includesInBulkKill($0) && !portManager.isProtectedProcessName($0.processName)
+        }
+        if targets.isEmpty {
+            KillConfirm.inform(title: "Nothing to Kill", message: "There are no unprotected processes matching this filter.")
+            return
+        }
+
+        let processList = targets.map { "• \($0.processName) (:\($0.port))" }.joined(separator: "\n")
+        let agentNote = KillDecision.liveAgentNote(for: targets.map(\.agentOwner)).map { "\n\n\($0)" } ?? ""
         let confirmed = KillConfirm.run(
-            title: "Kill \(devPorts.count) Dev Server\(devPorts.count == 1 ? "" : "s")?",
+            title: "\(filter.bulkKillLabel): \(targets.count) process\(targets.count == 1 ? "" : "es")?",
             message: "This will terminate the following processes:\n\n\(processList)\(agentNote)\n\nAre you sure?",
             confirmTitle: "Kill All"
         )
         if confirmed {
-            portManager.killPorts(devPorts)
+            portManager.killPorts(targets)
         }
     }
 
@@ -208,14 +211,10 @@ extension PortListView {
         let killableTests = testProcesses.filter { !portManager.isProtectedProcessName($0.processName) }
 
         if killableTests.isEmpty {
-            let alert = NSAlert()
-            alert.messageText = "No Test Processes Found"
-            alert.informativeText = testProcesses.isEmpty
-                ? "There are no active test processes to kill."
-                : "All active test processes are protected."
-            alert.alertStyle = .informational
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
+            KillConfirm.inform(
+                title: "No Test Processes Found",
+                message: testProcesses.isEmpty ? "There are no active test processes to kill." : "All active test processes are protected."
+            )
             return
         }
 

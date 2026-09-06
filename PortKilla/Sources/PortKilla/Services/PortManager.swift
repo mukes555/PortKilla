@@ -20,6 +20,15 @@ class PortManager: ObservableObject {
     @Published var lastErrorMessage: String?
     @Published var toastMessage: String?
     let clock = RefreshClock()
+
+    /// Published once, so the list can show "scanning" instead of a
+    /// premature "no ports" before any data exists.
+    @Published private(set) var hasCompletedFirstScan = false
+    /// The slow lsof path is in use (libproc unavailable); shown in the footer.
+    @Published private(set) var isCompatibilityScan = false
+    /// Processes a kill has been sent to and that have not exited yet; rows
+    /// dim while they shut down.
+    @Published var terminatingPids: Set<Int> = []
     var lastUpdated: Date { clock.lastUpdated }
 
     /// Not published: no view reads it, and publishing it forced two
@@ -65,6 +74,8 @@ class PortManager: ObservableObject {
         static let notificationsEnabled = "PortKilla.notificationsEnabled"
         static let watchedPorts = "PortKilla.watchedPorts"
         static let guardedPorts = "PortKilla.guardedPorts"
+        static let notificationSound = "PortKilla.notificationSound"
+        static let historyLimit = "PortKilla.historyLimit"
     }
 
     private static let defaultProtectedProcessSubstrings = [
@@ -140,6 +151,22 @@ class PortManager: ObservableObject {
         }
     }
 
+    @Published var notificationSound: Bool = true {
+        didSet {
+            guard !isRestoringPreferences else { return }
+            UserDefaults.standard.set(notificationSound, forKey: DefaultsKeys.notificationSound)
+        }
+    }
+
+    /// How many kills the History window keeps.
+    @Published var historyLimit: Int = 50 {
+        didSet {
+            HistoryManager.shared.maxHistoryItems = historyLimit
+            guard !isRestoringPreferences else { return }
+            UserDefaults.standard.set(historyLimit, forKey: DefaultsKeys.historyLimit)
+        }
+    }
+
     /// Set by the app delegate so a menu-bar preference change redraws it.
     var onMenuBarPreferenceChanged: (() -> Void)?
 
@@ -162,7 +189,6 @@ class PortManager: ObservableObject {
 
     /// Occupancy of watched ports at the previous scan (port -> process name).
     private var watchedOccupancy: [Int: String] = [:]
-    private var hasCompletedFirstScan = false
 
     /// One-shot "tell me when this frees up" armed when a kill didn't finish
     /// in time (slow shutdown, trapped SIGTERM).
@@ -202,6 +228,12 @@ class PortManager: ObservableObject {
         }
         if let stored = UserDefaults.standard.array(forKey: DefaultsKeys.watchedPorts) as? [Int] {
             watchedPorts = Set(stored.filter(Self.isValidPortNumber))
+        }
+        if let stored = UserDefaults.standard.object(forKey: DefaultsKeys.notificationSound) as? Bool {
+            notificationSound = stored
+        }
+        if let stored = UserDefaults.standard.object(forKey: DefaultsKeys.historyLimit) as? Int, (10...1000).contains(stored) {
+            historyLimit = stored
         }
         if let stored = UserDefaults.standard.array(forKey: DefaultsKeys.guardedPorts) as? [Int] {
             // A guard only makes sense on a watched port; the invariant is
@@ -334,7 +366,7 @@ class PortManager: ObservableObject {
     /// still happen regardless — only the alert is suppressed.
     private func notify(title: String, body: String) {
         guard notificationsEnabled else { return }
-        Notifier.send(title: title, body: body)
+        Notifier.send(title: title, body: body, sound: notificationSound)
     }
 
     /// A process that keeps coming back (pm2, nodemon, a launchd KeepAlive
@@ -506,6 +538,8 @@ class PortManager: ObservableObject {
         viewDensity = .clean
         showMenuBarCount = true
         notificationsEnabled = true
+        notificationSound = true
+        historyLimit = 50
         protectedProcessSubstrings = Self.defaultProtectedProcessSubstrings
         watchedPorts = []
         guardedPorts = []
@@ -617,6 +651,8 @@ class PortManager: ObservableObject {
 
     func refresh(showToast: Bool = false) {
         if isRefreshing {
+            // A press during a slow scan must not look like nothing happened.
+            if showToast { self.showToast("Refreshing…") }
             return
         }
         isRefreshing = true
@@ -653,7 +689,9 @@ class PortManager: ObservableObject {
                     }
                     self.processWatchedPorts(with: ports, guardOwners: guardOwners)
                     self.firePendingFreeNotifications(with: ports)
-                    self.hasCompletedFirstScan = true
+                    if !self.hasCompletedFirstScan { self.hasCompletedFirstScan = true }
+                    let usedFallback = self.scanner.lastScanUsedFallback
+                    if usedFallback != self.isCompatibilityScan { self.isCompatibilityScan = usedFallback }
                     self.clock.lastUpdated = Date()
                     self.lastErrorMessage = nil
                     if showToast {

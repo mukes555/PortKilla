@@ -51,7 +51,10 @@ class HistoryManager {
     static let shared = HistoryManager()
     
     private let kHistoryKey = "portHistory"
-    private let maxHistoryItems = 50
+    /// Set from the History preference; trimming applies immediately.
+    var maxHistoryItems = 50 {
+        didSet { trimAndSave() }
+    }
     
     private(set) var history: [PortHistoryItem] = []
     
@@ -63,11 +66,13 @@ class HistoryManager {
                   owner: String? = nil, killedBy: String? = nil) {
         let item = PortHistoryItem(port: port, processName: processName, action: action, owner: owner, killedBy: killedBy)
         history.insert(item, at: 0)
-        
+        trimAndSave()
+    }
+
+    private func trimAndSave() {
         if history.count > maxHistoryItems {
             history = Array(history.prefix(maxHistoryItems))
         }
-        
         saveHistory()
     }
     

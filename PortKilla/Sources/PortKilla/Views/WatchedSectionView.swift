@@ -26,89 +26,99 @@ struct WatchedSectionView: View {
         }
     }
 
+    /// Same columns as the main rows (chevron gutter, 80pt port, flexible
+    /// process, 70pt memory, 80pt actions) so the section reads as part of
+    /// the list rather than a different table stacked on top of it.
     @ViewBuilder
     private func watchedRow(port: Int) -> some View {
         let active = portManager.activePorts.first { $0.port == port }
 
         HStack(spacing: 8) {
-            Image(systemName: "star.fill")
-                .font(.system(size: 10))
-                .foregroundColor(.yellow)
+            Spacer().frame(width: 16)
 
-            Text(":\(String(port))")
-                .font(.system(.body, design: .monospaced))
-                .frame(width: 64, alignment: .leading)
-
-            if let active {
-                Circle()
-                    .fill(Color.red)
-                    .frame(width: 6, height: 6)
-                Text(active.processName)
-                    .font(.system(size: 12, weight: .medium))
-                    .lineLimit(1)
-                Text(active.memoryUsage)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.secondary)
-            } else {
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 6, height: 6)
-                Text("free")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.green)
+            HStack(spacing: 4) {
+                Image(systemName: "star.fill")
+                    .foregroundColor(.yellow)
+                Text(":\(String(port))")
+                    .font(.system(.body, design: .monospaced))
             }
+            .frame(width: 80, alignment: .leading)
 
-            Spacer()
+            HStack(spacing: 6) {
+                if let active {
+                    Text(active.processName)
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: 130, alignment: .leading)
+                        .fixedSize(horizontal: true, vertical: false)
+                    if active.isExposed {
+                        Chip(icon: "wifi.exclamationmark", text: "exposed", tint: .chipOrange)
+                    }
+                    if let agent = active.agentOwner {
+                        Chip(icon: agent.sessionEnded ? "moon.zzz" : "sparkles", text: agent.name,
+                             tint: agent.isLiveAgentSession ? .chipTeal : .secondary)
+                            .help(agent.detail)
+                    }
+                } else {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 6, height: 6)
+                    Text("free")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.green)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let active {
-                Button(action: { onKillRequest(active) }) {
-                    Image(systemName: "xmark.circle.fill")
+            Text(active?.memoryUsage ?? "")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(width: 70, alignment: .trailing)
+
+            HStack(spacing: 6) {
+                if let active {
+                    Button(action: { onKillRequest(active) }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Kill process on port \(port)")
+                    .help("Kill \(active.processName)")
+                }
+
+                Button(action: { GuardConfirm.toggle(port, in: portManager) }) {
+                    Image(systemName: portManager.isGuarded(port) ? "bolt.shield.fill" : "bolt.shield")
+                        .font(.system(size: 11))
+                        .foregroundColor(portManager.isGuarded(port) ? .orange : .secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(portManager.isGuarded(port) ? "Disable guard on port \(port)" : "Guard port \(port)")
+                .help(portManager.isGuarded(port)
+                      ? "Guard active: anything that takes :\(port) gets auto-killed"
+                      : "Guard :\(port) — auto-kill anything that takes it")
+
+                Button(action: { portManager.toggleWatch(port) }) {
+                    Image(systemName: "star.slash")
+                        .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Kill process on port \(port)")
-                .help("Kill \(active.processName)")
+                .accessibilityLabel("Stop watching port \(port)")
+                .help("Stop watching :\(port)")
             }
-
-            Button(action: { toggleGuard(port) }) {
-                Image(systemName: portManager.isGuarded(port) ? "bolt.shield.fill" : "bolt.shield")
-                    .font(.system(size: 11))
-                    .foregroundColor(portManager.isGuarded(port) ? .orange : .secondary)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(portManager.isGuarded(port) ? "Disable guard on port \(port)" : "Guard port \(port)")
-            .help(portManager.isGuarded(port)
-                  ? "Guard active: anything that takes :\(port) gets auto-killed"
-                  : "Guard :\(port) — auto-kill anything that takes it")
-
-            Button(action: { portManager.toggleWatch(port) }) {
-                Image(systemName: "star.slash")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Stop watching port \(port)")
-            .help("Stop watching :\(port)")
+            .frame(width: 80, alignment: .trailing)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 5)
-    }
-
-    /// Enabling a guard is the one automation that kills without asking —
-    /// it always gets an explicit confirmation.
-    private func toggleGuard(_ port: Int) {
-        if portManager.isGuarded(port) {
-            portManager.toggleGuard(port)
-            return
-        }
-
-        let confirmed = KillConfirm.run(
-            title: "Guard port :\(port)?",
-            message: "PortKilla will automatically kill any unprotected process of yours that starts listening on :\(port), and notify you when it does.",
-            confirmTitle: "Guard"
-        )
-        if confirmed {
-            portManager.toggleGuard(port)
+        .padding(.vertical, 6)
+        .contextMenu {
+            Button("Open in Browser") { Browser.openLocalhost(port: port) }
+            Button("Copy Port") { Pasteboard.copy(":\(port)") }
+            Divider()
+            Button(portManager.isGuarded(port) ? "Remove Guard" : "Guard :\(String(port))") {
+                GuardConfirm.toggle(port, in: portManager)
+            }
+            Button("Stop Watching") { portManager.toggleWatch(port) }
         }
     }
 }

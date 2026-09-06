@@ -332,7 +332,14 @@ class PortManager: ObservableObject {
                     notify(title: "Port \(event.port) is free", body: "Nothing is listening on :\(event.port) anymore.")
                 case .occupied(let name):
                     if let intruder = guardKillTarget(for: event.port, in: ports) {
-                        if guardHasStruckOut(on: event.port) {
+                        if case .warn(let reason) = KillDecision.forHuman(target: intruder.agentOwner) {
+                            // The only unattended kill in the app never takes
+                            // another agent's live server; the person decides.
+                            notify(
+                                title: "Guard on :\(event.port)",
+                                body: "'\(name)' took the port but was not auto-killed. \(reason)"
+                            )
+                        } else if guardHasStruckOut(on: event.port) {
                             guardedPorts.remove(event.port)
                             guardStrikes[event.port] = nil
                             notify(
@@ -344,7 +351,7 @@ class PortManager: ObservableObject {
                                 title: "Guard on :\(event.port)",
                                 body: "Auto-killing '\(intruder.processName)' — it grabbed a guarded port."
                             )
-                            killPort(intruder)
+                            killPort(intruder, initiator: .portGuard)
                         }
                     } else {
                         notify(title: "Port \(event.port) in use", body: "'\(name)' started listening on :\(event.port).")
@@ -368,7 +375,10 @@ class PortManager: ObservableObject {
                 port.type.rawValue,
                 port.bindAddress ?? "",
                 port.containerName ?? "",
-                String(port.children?.count ?? 0)
+                String(port.children?.count ?? 0),
+                // Attribution can change on its own (a session ending); the
+                // chip must follow.
+                port.agentOwner.map { "\($0.sessionId)|\($0.confidence.rawValue)|\($0.sessionEnded)" } ?? ""
             ]
             return fields.joined(separator: "|")
         }

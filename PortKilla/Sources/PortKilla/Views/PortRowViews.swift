@@ -174,8 +174,11 @@ struct PortRowView: View {
                                 .foregroundColor(.primary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
-                                .frame(maxWidth: 160, alignment: .leading)
-                                .layoutPriority(1)
+                                // Natural width, capped: fixedSize keeps the
+                                // frame from filling (which starved the chips)
+                                // while the cap still truncates long names.
+                                .frame(maxWidth: 130, alignment: .leading)
+                                .fixedSize(horizontal: true, vertical: false)
 
                             if manager.isProtectedProcessName(port.processName) {
                                 Image(systemName: "shield.fill")
@@ -198,8 +201,8 @@ struct PortRowView: View {
                                     Text("exposed")
                                         .font(.system(size: 10))
                                         .lineLimit(1)
+                                        .truncationMode(.tail)
                                 }
-                                .fixedSize()
                                 .foregroundColor(.orange)
                                 .padding(.horizontal, 4)
                                 .background(Color.orange.opacity(0.12))
@@ -207,21 +210,28 @@ struct PortRowView: View {
                                 .help("Listening on all interfaces (\(port.bindAddress ?? "*")) — reachable from your local network")
                             }
 
-                            // Which AI agent spawned this — the friendly-fire signal.
+                            // Which AI agent spawned this: the friendly-fire
+                            // signal. Live sessions are teal; an ended session
+                            // or a plain editor terminal is grey (safe to kill).
                             if let agent = port.agentOwner {
+                                let tint: Color = agent.isLiveAgentSession ? .teal : .secondary
                                 HStack(spacing: 2) {
-                                    Image(systemName: "sparkles")
+                                    Image(systemName: agent.sessionEnded ? "moon.zzz" : "sparkles")
                                         .font(.system(size: 8))
+                                    // Grey plus the moon says "ended"; the
+                                    // suffix lives in the tooltip and the CLI.
+                                    // The one flexible item on the line: it
+                                    // truncates when the row runs out of room.
                                     Text(agent.name)
                                         .font(.system(size: 10))
                                         .lineLimit(1)
+                                        .truncationMode(.tail)
                                 }
-                                .fixedSize()
-                                .foregroundColor(.teal)
+                                .foregroundColor(tint)
                                 .padding(.horizontal, 4)
-                                .background(Color.teal.opacity(0.12))
+                                .background(tint.opacity(0.12))
                                 .cornerRadius(4)
-                                .help("Started by \(agent.name) — the CLI won't let another agent kill it without --force")
+                                .help(agent.detail)
                             }
 
                             // Clean mode: surface the project/container inline

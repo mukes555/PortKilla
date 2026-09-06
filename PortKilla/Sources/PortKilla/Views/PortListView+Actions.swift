@@ -116,26 +116,36 @@ extension PortListView {
     /// Single entry point for killing a port: applies the confirm-before-kill
     /// setting (with a "don't ask again" checkbox) and then delegates.
     func requestKill(_ port: PortInfo, force: Bool, killTree: Bool) {
-        if portManager.confirmBeforeKill {
-            let owner = port.agentOwner.map { "\n\nStarted by \($0.name)." } ?? ""
-            let confirmed = runKillConfirmation(
-                title: "Kill Process on :\(port.port)?",
-                message: "This will terminate '\(port.processName)' (PID \(port.pid)).\(owner)"
-            )
-            guard confirmed else { return }
-        }
+        let confirmed = confirmIfNeeded(
+            title: "Kill Process on :\(port.port)?",
+            message: "This will terminate '\(port.processName)' (PID \(port.pid)).",
+            owner: port.agentOwner
+        )
+        guard confirmed else { return }
         portManager.killPort(port, force: force, killTree: killTree)
     }
 
     func requestKillTest(_ test: TestProcessInfo, force: Bool = false) {
-        if portManager.confirmBeforeKill {
-            let confirmed = runKillConfirmation(
-                title: "Kill \(test.processName)?",
-                message: "This will terminate '\(test.processName)' (PID \(test.pid))."
-            )
-            guard confirmed else { return }
-        }
+        let confirmed = confirmIfNeeded(
+            title: "Kill \(test.processName)?",
+            message: "This will terminate '\(test.processName)' (PID \(test.pid)).",
+            owner: test.agentOwner
+        )
+        guard confirmed else { return }
         portManager.killTestProcess(test, force: force)
+    }
+
+    /// Honours confirm-before-kill, and always asks when another agent's
+    /// live session owns the target, whatever the setting says.
+    private func confirmIfNeeded(title: String, message: String, owner: AgentOwner?) -> Bool {
+        let decision = KillDecision.forHuman(target: owner)
+        guard portManager.confirmBeforeKill || decision != .allow else { return true }
+
+        var text = message
+        if case .warn(let reason) = decision {
+            text += "\n\n\(reason)"
+        }
+        return runKillConfirmation(title: title, message: text)
     }
 
     func requestKillChild(_ child: PortInfo.ProcessInfo) {
@@ -182,9 +192,10 @@ extension PortListView {
         }
 
         let processList = devPorts.map { "• \($0.processName) (:\($0.port))" }.joined(separator: "\n")
+        let agentNote = KillDecision.liveAgentNote(for: devPorts.map(\.agentOwner)).map { "\n\n\($0)" } ?? ""
         let confirmed = KillConfirm.run(
             title: "Kill \(devPorts.count) Dev Server\(devPorts.count == 1 ? "" : "s")?",
-            message: "This will terminate the following processes:\n\n\(processList)\n\nAre you sure?",
+            message: "This will terminate the following processes:\n\n\(processList)\(agentNote)\n\nAre you sure?",
             confirmTitle: "Kill All"
         )
         if confirmed {
@@ -209,9 +220,10 @@ extension PortListView {
         }
 
         let processList = killableTests.map { "• \($0.processName) (PID: \($0.pid))" }.joined(separator: "\n")
+        let agentNote = KillDecision.liveAgentNote(for: killableTests.map(\.agentOwner)).map { "\n\n\($0)" } ?? ""
         let confirmed = KillConfirm.run(
             title: "Kill \(killableTests.count) Test Processes?",
-            message: "This will terminate the following processes:\n\n\(processList)\n\nAre you sure?",
+            message: "This will terminate the following processes:\n\n\(processList)\(agentNote)\n\nAre you sure?",
             confirmTitle: "Kill All"
         )
         if confirmed {

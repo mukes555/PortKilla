@@ -1,0 +1,128 @@
+import Foundation
+
+public struct PortHistoryItem: Identifiable, Codable {
+    public let id: UUID
+    public let port: Int
+    public let processName: String
+    public let timestamp: Date
+    public let action: HistoryAction
+    /// Agent that had started the process, and who stopped it ("you", "port
+    /// guard", "link"). Optional so entries from older versions still decode.
+    public let owner: String?
+    public let killedBy: String?
+
+    public enum HistoryAction: String, Codable {
+        case detected = "Detected"
+        case killed = "Killed"
+    }
+
+    public init(port: Int, processName: String, action: HistoryAction, owner: String? = nil, killedBy: String? = nil) {
+        self.id = UUID()
+        self.port = port
+        self.processName = processName
+        self.timestamp = Date()
+        self.action = action
+        self.owner = owner
+        self.killedBy = killedBy
+    }
+}
+
+public enum CSV {
+    /// The History export, one row per entry. Every column goes through
+    /// `field` so a future column can't silently bypass the defence.
+    public static func historyDocument(_ items: [PortHistoryItem], formatter: DateFormatter) -> String {
+        var csv = "Timestamp,Port,Process,Action,Owner,Killed By\n"
+        for item in items {
+            let fields = [
+                formatter.string(from: item.timestamp),
+                "\(item.port)",
+                item.processName,
+                item.action.rawValue,
+                item.owner ?? "",
+                item.killedBy ?? ""
+            ].map(field)
+            csv.append(fields.joined(separator: ",") + "\n")
+        }
+        return csv
+    }
+
+    /// Escapes a value for a CSV cell, defusing spreadsheet formula injection
+    /// (process names are attacker-influenced: a name like "=cmd|..." would
+    /// otherwise execute when the export is opened in Excel).
+    public static func field(_ raw: String) -> String {
+        var value = raw
+        // Tab and carriage return are formula lead-ins for Excel as well.
+        if let first = value.first, "=+-@\t\r".contains(first) {
+            value = "'" + value
+        }
+
+        let needsQuoting = value.contains(",") || value.contains("\"")
+            || value.contains("\n") || value.contains("\r")
+        if needsQuoting {
+            value = "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        }
+        return value
+    }
+}
+
+/// Kill history, newest first, capped by the History preference. Observable
+/// so the History window updates while it is open; `defaults` is injectable
+/// so tests never touch the user's real history.
+public final class HistoryManager: ObservableObject {
+    public static let shared = HistoryManager()
+
+    @Published public private(set) var history: [PortHistoryItem] = []
+    private let defaults: UserDefaults
+
+    /// Set from the History preference; trimming applies immediately.
+    public var maxHistoryItems = 50 {
+        didSet { trimAndSave() }
+    }
+
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        loadHistory()
+    }
+
+    public func addEntry(port: Int, processName: String, action: PortHistoryItem.HistoryAction,
+                  owner: String? = nil, killedBy: String? = nil) {
+        // The CLI and the app share this store; re-read before writing so
+        // neither clobbers what the other appended.
+        loadHistory()
+        let item = PortHistoryItem(port: port, processName: processName, action: action, owner: owner, killedBy: killedBy)
+        history.insert(item, at: 0)
+        trimAndSave()
+    }
+
+    public func reload() {
+        loadHistory()
+    }
+
+    /// The store the app itself uses. From the CLI, `UserDefaults.standard`
+    /// would not resolve to the app's domain (the binary is reached through
+    /// a symlink), so the domain is named explicitly.
+    public static func appStore() -> HistoryManager {
+        HistoryManager(defaults: UserDefaults(suiteName: "com.mukes555.PortKilla") ?? .standard)
+    }
+
+    private func trimAndSave() {
+        if history.count > maxHistoryItems {
+            history = Array(history.prefix(maxHistoryItems))
+        }
+        if let data = try? JSONEncoder().encode(history) {
+            defaults.set(data, forKey: DefaultsKey.history)
+        }
+    }
+
+    private func loadHistory() {
+        if let data = defaults.data(forKey: DefaultsKey.history),
+           let items = try? JSONDecoder().decode([PortHistoryItem].self, from: data) {
+            history = items
+        }
+    }
+
+    public func clearHistory() {
+        history.removeAll()
+        defaults.removeObject(forKey: DefaultsKey.history)
+    }
+}

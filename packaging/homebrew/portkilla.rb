@@ -24,8 +24,9 @@ cask "portkilla" do
   depends_on macos: :ventura
 
   app "PortKilla.app"
-  # Puts `portkilla` on PATH so the CLI (list / kill / whoami) works from any shell.
-  binary "#{appdir}/PortKilla.app/Contents/MacOS/PortKilla", target: "portkilla"
+  # Puts `portkilla` on PATH: the standalone CLI bundled beside the app binary
+  # (no AppKit, so `portkilla mcp` stays small when an agent keeps one running).
+  binary "#{appdir}/PortKilla.app/Contents/MacOS/portkilla"
 
   # The app is ad-hoc signed (no Apple Developer account), so Gatekeeper
   # quarantine must be stripped for it to launch without a scary dialog.

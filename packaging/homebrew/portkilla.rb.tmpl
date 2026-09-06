@@ -19,8 +19,9 @@ cask "portkilla" do
   depends_on macos: ">= :ventura"
 
   app "PortKilla.app"
-  # Puts `portkilla` on PATH so the CLI (list / kill / whoami) works from any shell.
-  binary "#{appdir}/PortKilla.app/Contents/MacOS/PortKilla", target: "portkilla"
+  # Puts `portkilla` on PATH: the standalone CLI bundled beside the app binary
+  # (no AppKit, so `portkilla mcp` stays small when an agent keeps one running).
+  binary "#{appdir}/PortKilla.app/Contents/MacOS/portkilla"
 
   # `brew upgrade` replaces the bundle; quit the running copy first so the
   # menu-bar icon isn't left running from a deleted bundle, and drop the

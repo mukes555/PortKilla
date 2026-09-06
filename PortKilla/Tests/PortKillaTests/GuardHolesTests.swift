@@ -1,4 +1,5 @@
 import XCTest
+@testable import PortKillaCore
 @testable import PortKilla
 
 /// Regression tests for the guard holes found by the post-batch audit.
@@ -83,7 +84,8 @@ final class GuardHolesTests: XCTestCase {
         let live = AgentOwner(name: "Claude Code", sessionPid: 5, source: .processTree)
         let cursor = AgentOwner(name: "Cursor", sessionPid: 6, source: .processTree)
         XCTAssertEqual(KillDecision.verdict(caller: nil, target: live, forced: false), "not-evaluated: caller unknown")
-        XCTAssertEqual(KillDecision.verdict(caller: cursor, target: nil, forced: false), "not-evaluated: target unknown")
+        XCTAssertEqual(KillDecision.verdict(caller: cursor, target: nil, forced: false), "refused")
+        XCTAssertEqual(KillDecision.verdict(caller: nil, target: nil, forced: false), "not-evaluated: target unknown")
         XCTAssertEqual(KillDecision.verdict(caller: cursor, target: live, forced: false), "refused")
         XCTAssertEqual(KillDecision.verdict(caller: cursor, target: live, forced: true), "overridden")
         XCTAssertEqual(KillDecision.verdict(caller: live, target: live, forced: false), "allowed")
@@ -129,7 +131,7 @@ final class GuardHolesTests: XCTestCase {
     // MARK: - JSON contract
 
     func testJSONKeySetsAreStable() throws {
-        // Scripts and the Raycast extension parse these; a rename is a break.
+        // Scripts parse these; a rename is a break.
         let owner = AgentOwner(name: "Claude Code", sessionPid: 1, sessionKey: "k", source: .processTree)
         let port = PortInfo(port: 3000, pid: 1, processName: "node", command: "node", user: "me", memoryUsage: "1MB",
                             memorySizeKB: 1024, type: .nodejs, agentOwner: owner)
@@ -137,6 +139,7 @@ final class GuardHolesTests: XCTestCase {
         // Optionals that are nil are omitted, so these are the always-present keys.
         XCTAssertEqual(Set(json.keys.map { $0 }), [
             "port", "pid", "processName", "command", "user", "memoryUsage", "memorySizeKB", "type", "proto", "cpuPercent", "agentOwner",
+            "connections",
         ])
         let ownerJSON = try XCTUnwrap(json["agentOwner"] as? [String: Any])
         XCTAssertEqual(Set(ownerJSON.keys.map { $0 }), ["name", "sessionPid", "sessionKey", "source", "confidence", "sessionEnded"])

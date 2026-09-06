@@ -67,6 +67,16 @@ else
 fi
 cp "$BINARY_SOURCE" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
+# The standalone CLI (no AppKit) ships beside the app binary; the Homebrew
+# cask links it as `portkilla`. The app binary still answers CLI arguments
+# for anyone who symlinked it before.
+CLI_SOURCE="$(dirname "$BINARY_SOURCE")/portkilla"
+if [ -f "$CLI_SOURCE" ]; then
+    cp "$CLI_SOURCE" "$APP_BUNDLE/Contents/MacOS/portkilla"
+else
+    echo "warning: standalone CLI not found at $CLI_SOURCE" >&2
+fi
+
 # 3b. App icon (regenerate with scripts/make_icon.swift)
 if [ -f "$PROJECT_ROOT/assets/AppIcon.icns" ]; then
     cp "$PROJECT_ROOT/assets/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
@@ -125,6 +135,11 @@ EOF
 # Single-binary bundle: sign the bundle itself (--deep is deprecated and
 # unnecessary here since there is no nested code).
 echo "🔏 Signing App (ad-hoc)..."
+# Nested executables are not covered by the bundle signature; an unsigned
+# Mach-O is refused outright on Apple Silicon.
+if [ -f "$APP_BUNDLE/Contents/MacOS/portkilla" ]; then
+    codesign --force --sign - "$APP_BUNDLE/Contents/MacOS/portkilla"
+fi
 codesign --force --sign - "$APP_BUNDLE"
 
 codesign --verify --strict "$APP_BUNDLE"

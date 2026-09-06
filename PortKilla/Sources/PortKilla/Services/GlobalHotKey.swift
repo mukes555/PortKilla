@@ -1,3 +1,4 @@
+import PortKillaCore
 import Foundation
 import AppKit
 import Carbon.HIToolbox

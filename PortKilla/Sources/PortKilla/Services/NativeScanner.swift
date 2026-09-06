@@ -163,6 +163,34 @@ enum NativeScanner {
     /// Full command line via KERN_PROCARGS2 (only readable for own processes;
     /// callers fall back to the executable path).
     static func commandLine(_ pid: Int32) -> String? {
+        guard let parsed = procArgs(pid) else { return nil }
+        let command = parsed.arguments.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        return command.isEmpty ? nil : command
+    }
+
+    /// Selected environment variables of `pid`, restricted to `keys`.
+    ///
+    /// Only an allowlist is ever returned: a process environment routinely
+    /// holds API keys and tokens, so nothing outside `keys` leaves this
+    /// function. Used to attribute a server to the agent that spawned it, since
+    /// the environment is inherited at spawn and survives being reparented
+    /// (nohup, pm2, a shell that has since exited).
+    static func environmentMarkers(_ pid: Int32, keys: Set<String>) -> [String: String] {
+        guard let parsed = procArgs(pid) else { return [:] }
+        var markers: [String: String] = [:]
+        for entry in parsed.environment {
+            guard let split = entry.firstIndex(of: "=") else { continue }
+            let key = String(entry[..<split])
+            if keys.contains(key) {
+                markers[key] = String(entry[entry.index(after: split)...])
+            }
+        }
+        return markers
+    }
+
+    /// Decoded KERN_PROCARGS2 buffer. Layout:
+    /// argc | exec_path\0 | padding \0s | argv[0]\0 … argv[argc-1]\0 | env KEY=VALUE\0 …
+    private static func procArgs(_ pid: Int32) -> (arguments: [String], environment: [String])? {
         var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
         var size = 0
         guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > MemoryLayout<Int32>.size else { return nil }
@@ -173,27 +201,32 @@ enum NativeScanner {
         let argc = buffer.withUnsafeBytes { $0.load(as: Int32.self) }
         guard argc > 0 else { return nil }
 
-        // Layout: argc | exec_path\0 | padding \0s | argv[0]\0 argv[1]\0 …
         var index = MemoryLayout<Int32>.size
-        // Skip exec_path
-        while index < size && buffer[index] != 0 { index += 1 }
-        // Skip padding
-        while index < size && buffer[index] == 0 { index += 1 }
+        while index < size && buffer[index] != 0 { index += 1 } // exec_path
+        while index < size && buffer[index] == 0 { index += 1 } // padding
 
+        // argv is read by count so an empty argument (sh -c '') isn't mistaken
+        // for the end; the env block that follows ends at the first empty string.
         var arguments: [String] = []
-        var current: [UInt8] = []
         while index < size && arguments.count < Int(argc) {
-            if buffer[index] == 0 {
-                arguments.append(String(decoding: current, as: UTF8.self))
-                current = []
-            } else {
-                current.append(buffer[index])
-            }
-            index += 1
+            arguments.append(readCString(buffer, from: &index))
         }
+        var environment: [String] = []
+        while index < size {
+            let entry = readCString(buffer, from: &index)
+            if entry.isEmpty { break }
+            environment.append(entry)
+        }
+        return (arguments, environment)
+    }
 
-        let command = arguments.joined(separator: " ").trimmingCharacters(in: .whitespaces)
-        return command.isEmpty ? nil : command
+    /// Reads one NUL-terminated string starting at `index` and advances past the NUL.
+    private static func readCString(_ buffer: [UInt8], from index: inout Int) -> String {
+        let start = index
+        while index < buffer.count && buffer[index] != 0 { index += 1 }
+        let string = String(decoding: buffer[start..<index], as: UTF8.self)
+        if index < buffer.count { index += 1 }
+        return string
     }
 
     /// Working directory via PROC_PIDVNODEPATHINFO (own processes only).

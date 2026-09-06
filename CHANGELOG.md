@@ -13,6 +13,42 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+## 1.13.1 — 2026-09-06
+
+### Fixed
+- **Running the test suite changed the developer's real preferences** (it
+  once switched off "Hide system processes" and rewrote the watched ports).
+  `PortManager` now takes an injected `UserDefaults` and `HistoryManager`,
+  and every test uses a throwaway suite.
+- Opening the popover while a hidden-state scan was running could show rows
+  without chips, containers, or trees for one cycle. The full scan the
+  popover asked for now runs instead of being dropped.
+- The port guard looked up agent ownership by port number, so a port shared
+  by a TCP listener and a UDP binder could be judged by the wrong process.
+- An editor-terminal ancestor used to hide a stronger `CLAUDECODE` marker in
+  the server's own environment, silently losing protection.
+- The per-process facts cache survived `exec` without `fork` (`sh -c 'exec
+  node …'`), so a row could keep showing `sh`. The kernel's short name is
+  now part of the cache key, and an empty marker read is retried.
+- Subprocess output: the pipe could be closed under a read in flight, and
+  truncated `lsof` output was parsed as complete. Reads and the close now
+  share one lock, and end-of-file is required.
+- The CLI reported an unreaped zombie as "still running" after the full
+  wait; `--force` erased the refusal reasons from the JSON report (now kept
+  as `overriddenRefusals`); ports outside 1 to 65535 and `port` plus `--pid`
+  together are usage errors.
+- Pinned window shortcuts stopped working whenever no window was key.
+- The Guard switch in Settings ran a modal dialog inside SwiftUI's update.
+- Hardening: `PORTKILLA_OWNER` control characters are stripped, chip label
+  colours are computed once per tint, the socket size re-probe keeps what it
+  already read, a Docker restart is picked up immediately, the working
+  directory lock is no longer held across the `lsof` subprocess, and
+  concurrent scans no longer zero each other's CPU deltas.
+
+### Security
+- SECURITY.md now states the threat model: the friendly-fire guard is a
+  cooperation protocol between well-behaved agents, not a security boundary.
+
 ## 1.13.0 — 2026-09-06
 
 ### The engineering batch

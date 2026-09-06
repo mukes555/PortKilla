@@ -138,7 +138,9 @@ private struct GeneralSettings: View {
                             Spacer()
                             Toggle("Guard", isOn: Binding(
                                 get: { portManager.isGuarded(port) },
-                                set: { _ in GuardConfirm.toggle(port, in: portManager) }
+                                // A modal alert must not run inside SwiftUI's
+                                // update transaction; hop off it first.
+                                set: { _ in DispatchQueue.main.async { GuardConfirm.toggle(port, in: portManager) } }
                             ))
                             .toggleStyle(.switch)
                             .controlSize(.small)

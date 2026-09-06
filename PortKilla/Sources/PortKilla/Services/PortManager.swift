@@ -52,6 +52,11 @@ class PortManager: ObservableObject {
     /// trigger side effects (a notification-permission prompt on launch).
     private var isRestoringPreferences = true
 
+    /// Injected so tests run against a throwaway suite: every preference
+    /// didSet below persists, and a test that touched the real defaults once
+    /// switched off "hide system processes" on the developer's own machine.
+    let defaults: UserDefaults
+    let history: HistoryManager
     let scanner = PortScanner()
     let processScanner = ProcessScanner()
     let killer = ProcessKiller()
@@ -74,14 +79,14 @@ class PortManager: ObservableObject {
                 protectedProcessSubstrings = normalized
                 return
             }
-            UserDefaults.standard.set(normalized, forKey: DefaultsKey.protectedProcessSubstrings)
+            defaults.set(normalized, forKey: DefaultsKey.protectedProcessSubstrings)
         }
     }
 
     @Published var refreshInterval: TimeInterval = 2.0 {
         didSet {
             guard !isRestoringPreferences else { return }
-            UserDefaults.standard.set(refreshInterval, forKey: DefaultsKey.refreshIntervalSeconds)
+            defaults.set(refreshInterval, forKey: DefaultsKey.refreshIntervalSeconds)
             if shouldRestartTimerOnIntervalChange {
                 restartTimer()
             }
@@ -94,14 +99,14 @@ class PortManager: ObservableObject {
         didSet {
             recomputeVisiblePorts()
             guard !isRestoringPreferences else { return }
-            UserDefaults.standard.set(hideSystemProcesses, forKey: DefaultsKey.hideSystemProcesses)
+            defaults.set(hideSystemProcesses, forKey: DefaultsKey.hideSystemProcesses)
         }
     }
 
     @Published var confirmBeforeKill: Bool = true {
         didSet {
             guard !isRestoringPreferences else { return }
-            UserDefaults.standard.set(confirmBeforeKill, forKey: DefaultsKey.confirmBeforeKill)
+            defaults.set(confirmBeforeKill, forKey: DefaultsKey.confirmBeforeKill)
         }
     }
 
@@ -115,7 +120,7 @@ class PortManager: ObservableObject {
     @Published var viewDensity: ViewDensity = .simple {
         didSet {
             guard !isRestoringPreferences else { return }
-            UserDefaults.standard.set(viewDensity.rawValue, forKey: DefaultsKey.viewDensity)
+            defaults.set(viewDensity.rawValue, forKey: DefaultsKey.viewDensity)
         }
     }
 
@@ -123,7 +128,7 @@ class PortManager: ObservableObject {
     @Published var showMenuBarCount: Bool = true {
         didSet {
             guard !isRestoringPreferences else { return }
-            UserDefaults.standard.set(showMenuBarCount, forKey: DefaultsKey.showMenuBarCount)
+            defaults.set(showMenuBarCount, forKey: DefaultsKey.showMenuBarCount)
             onMenuBarPreferenceChanged?()
         }
     }
@@ -133,7 +138,7 @@ class PortManager: ObservableObject {
     @Published var notificationsEnabled: Bool = true {
         didSet {
             guard !isRestoringPreferences else { return }
-            UserDefaults.standard.set(notificationsEnabled, forKey: DefaultsKey.notificationsEnabled)
+            defaults.set(notificationsEnabled, forKey: DefaultsKey.notificationsEnabled)
             if notificationsEnabled { Notifier.requestPermission() }
         }
     }
@@ -141,16 +146,16 @@ class PortManager: ObservableObject {
     @Published var notificationSound: Bool = true {
         didSet {
             guard !isRestoringPreferences else { return }
-            UserDefaults.standard.set(notificationSound, forKey: DefaultsKey.notificationSound)
+            defaults.set(notificationSound, forKey: DefaultsKey.notificationSound)
         }
     }
 
     /// How many kills the History window keeps.
     @Published var historyLimit: Int = 50 {
         didSet {
-            HistoryManager.shared.maxHistoryItems = historyLimit
+            history.maxHistoryItems = historyLimit
             guard !isRestoringPreferences else { return }
-            UserDefaults.standard.set(historyLimit, forKey: DefaultsKey.historyLimit)
+            defaults.set(historyLimit, forKey: DefaultsKey.historyLimit)
         }
     }
 
@@ -162,7 +167,7 @@ class PortManager: ObservableObject {
     @Published var watchedPorts: Set<Int> = [] {
         didSet {
             guard !isRestoringPreferences else { return }
-            UserDefaults.standard.set(Array(watchedPorts).sorted(), forKey: DefaultsKey.watchedPorts)
+            defaults.set(Array(watchedPorts).sorted(), forKey: DefaultsKey.watchedPorts)
         }
     }
     /// Guarded ports auto-kill any new (unprotected, user-owned) occupant.
@@ -170,7 +175,7 @@ class PortManager: ObservableObject {
     @Published var guardedPorts: Set<Int> = [] {
         didSet {
             guard !isRestoringPreferences else { return }
-            UserDefaults.standard.set(Array(guardedPorts).sorted(), forKey: DefaultsKey.guardedPorts)
+            defaults.set(Array(guardedPorts).sorted(), forKey: DefaultsKey.guardedPorts)
         }
     }
 
@@ -187,42 +192,44 @@ class PortManager: ObservableObject {
     /// Set when GitHub has a newer release; drives the "Download vX.Y.Z" menu item.
     @Published var updateAvailableVersion: String?
 
-    init() {
-        if let storedProtected = UserDefaults.standard.array(forKey: DefaultsKey.protectedProcessSubstrings) as? [String] {
+    init(defaults: UserDefaults = .standard, history: HistoryManager = .shared, autoStart: Bool = true) {
+        self.defaults = defaults
+        self.history = history
+        if let storedProtected = defaults.array(forKey: DefaultsKey.protectedProcessSubstrings) as? [String] {
             protectedProcessSubstrings = Self.normalizeProtectedProcessSubstrings(storedProtected)
         } else {
             protectedProcessSubstrings = Self.normalizeProtectedProcessSubstrings(Self.defaultProtectedProcessSubstrings)
         }
 
-        if let stored = UserDefaults.standard.object(forKey: DefaultsKey.refreshIntervalSeconds) as? Double {
+        if let stored = defaults.object(forKey: DefaultsKey.refreshIntervalSeconds) as? Double {
             refreshInterval = Self.sanitizedRefreshInterval(stored)
         }
-        if let stored = UserDefaults.standard.object(forKey: DefaultsKey.hideSystemProcesses) as? Bool {
+        if let stored = defaults.object(forKey: DefaultsKey.hideSystemProcesses) as? Bool {
             hideSystemProcesses = stored
         }
-        if let stored = UserDefaults.standard.object(forKey: DefaultsKey.confirmBeforeKill) as? Bool {
+        if let stored = defaults.object(forKey: DefaultsKey.confirmBeforeKill) as? Bool {
             confirmBeforeKill = stored
         }
-        if let stored = UserDefaults.standard.string(forKey: DefaultsKey.viewDensity),
+        if let stored = defaults.string(forKey: DefaultsKey.viewDensity),
            let density = ViewDensity(rawValue: stored) {
             viewDensity = density
         }
-        if let stored = UserDefaults.standard.object(forKey: DefaultsKey.showMenuBarCount) as? Bool {
+        if let stored = defaults.object(forKey: DefaultsKey.showMenuBarCount) as? Bool {
             showMenuBarCount = stored
         }
-        if let stored = UserDefaults.standard.object(forKey: DefaultsKey.notificationsEnabled) as? Bool {
+        if let stored = defaults.object(forKey: DefaultsKey.notificationsEnabled) as? Bool {
             notificationsEnabled = stored
         }
-        if let stored = UserDefaults.standard.array(forKey: DefaultsKey.watchedPorts) as? [Int] {
+        if let stored = defaults.array(forKey: DefaultsKey.watchedPorts) as? [Int] {
             watchedPorts = Set(stored.filter(Self.isValidPortNumber))
         }
-        if let stored = UserDefaults.standard.object(forKey: DefaultsKey.notificationSound) as? Bool {
+        if let stored = defaults.object(forKey: DefaultsKey.notificationSound) as? Bool {
             notificationSound = stored
         }
-        if let stored = UserDefaults.standard.object(forKey: DefaultsKey.historyLimit) as? Int, (10...1000).contains(stored) {
+        if let stored = defaults.object(forKey: DefaultsKey.historyLimit) as? Int, (10...1000).contains(stored) {
             historyLimit = stored
         }
-        if let stored = UserDefaults.standard.array(forKey: DefaultsKey.guardedPorts) as? [Int] {
+        if let stored = defaults.array(forKey: DefaultsKey.guardedPorts) as? [Int] {
             // A guard only makes sense on a watched port; the invariant is
             // enforced on writes, so re-establish it for whatever was stored.
             guardedPorts = Set(stored).intersection(watchedPorts)
@@ -235,7 +242,7 @@ class PortManager: ObservableObject {
         #if DEBUG
         isDemoMode = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_DEMO_GIF"] != nil
         #endif
-        if !isDemoMode {
+        if !isDemoMode && autoStart {
             startAutoRefresh()
 
             // Once a day, quietly see if a newer release exists. Deferred so
@@ -319,7 +326,7 @@ class PortManager: ObservableObject {
         protectedProcessSubstrings = Self.defaultProtectedProcessSubstrings
         watchedPorts = []
         guardedPorts = []
-        UserDefaults.standard.set(false, forKey: DefaultsKey.didDismissHotkeyTip)
+        defaults.set(false, forKey: DefaultsKey.didDismissHotkeyTip)
         showToast("Settings reset to defaults")
     }
 

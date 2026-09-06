@@ -124,7 +124,7 @@ extension PortManager {
                 // Optimistically remove for instant feedback; a refresh follows
                 self.activePorts.removeAll { $0.id == portInfo.id }
                 self.showToast("\(killTree ? "Killed Tree" : "Killed") :\(portInfo.port)")
-                HistoryManager.shared.addEntry(
+                self.history.addEntry(
                     port: portInfo.port, processName: portInfo.processName, action: .killed,
                     owner: portInfo.agentOwner?.name, killedBy: initiator.rawValue
                 )
@@ -273,7 +273,7 @@ extension PortManager {
                     }
 
                     for port in ports where deadPids.contains(port.pid) {
-                        HistoryManager.shared.addEntry(
+                        self.history.addEntry(
                             port: port.port, processName: port.processName, action: .killed,
                             owner: port.agentOwner?.name, killedBy: KillInitiator.user.rawValue
                         )

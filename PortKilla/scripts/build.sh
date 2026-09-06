@@ -3,7 +3,7 @@
 set -euo pipefail
 
 APP_NAME="PortKilla"
-VERSION="1.13.0"
+VERSION="1.13.1"
 BUNDLE_ID="${BUNDLE_ID:-com.mukes555.$APP_NAME}"
 MAKE_DMG=0
 

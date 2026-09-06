@@ -11,7 +11,8 @@ final class GuardTests: XCTestCase {
     }
 
     func testGuardingImpliesWatching() {
-        let manager = PortManager()
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
         manager.stopAutoRefresh()
 
         manager.toggleGuard(4242)
@@ -20,7 +21,8 @@ final class GuardTests: XCTestCase {
     }
 
     func testUnwatchingRemovesGuard() {
-        let manager = PortManager()
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
         manager.stopAutoRefresh()
 
         manager.toggleGuard(4242)
@@ -30,7 +32,8 @@ final class GuardTests: XCTestCase {
     }
 
     func testToggleGuardOffLeavesWatchOn() {
-        let manager = PortManager()
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
         manager.stopAutoRefresh()
 
         manager.toggleGuard(4242)

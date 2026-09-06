@@ -125,6 +125,22 @@ final class AgentAttributionTests: XCTestCase {
         XCTAssertTrue(owner?.sessionEnded == true)
     }
 
+    func testEnvironmentAgentBeatsEditorTerminalAncestor() {
+        // claude exited; the chain still reaches Cursor.app, but the server
+        // itself carries CLAUDECODE=1. The stronger signal must win.
+        let t = table([
+            (50, 1, "/Applications/Cursor.app/Contents/MacOS/Cursor"),
+            (200, 50, "/bin/zsh"),
+            (300, 200, "node server.js"),
+        ])
+        let owner = AgentAttribution.owner(ofPid: 300, in: t) { _ in ["CLAUDECODE": "1"] }
+        XCTAssertEqual(owner?.name, "Claude Code")
+        XCTAssertEqual(owner?.confidence, .agent)
+
+        let noMarkers = AgentAttribution.owner(ofPid: 300, in: t, environmentOf: noEnvironment)
+        XCTAssertEqual(noMarkers?.name, "Cursor", "the editor ancestor is still reported when nothing stronger exists")
+    }
+
     func testAncestryWinsOverEnvironment() {
         let t = table([(100, 1, "claude"), (300, 100, "node server.js")])
         let owner = AgentAttribution.owner(ofPid: 300, in: t) { _ in ["CLAUDECODE": "1", "CLAUDE_PID": "999"] }
@@ -188,6 +204,7 @@ final class AgentAttributionTests: XCTestCase {
         XCTAssertEqual(AgentSignatures.canonicalName(" vscode\n"), "VS Code")
         XCTAssertEqual(AgentSignatures.canonicalName("my-bot"), "my-bot")
         XCTAssertEqual(AgentSignatures.canonicalName("evil\nline"), "evil line")
+        XCTAssertEqual(AgentSignatures.canonicalName("bell\u{7}tab\tesc\u{1b}[31m"), "bell tab esc [31m")
     }
 
     // MARK: - Caller identity

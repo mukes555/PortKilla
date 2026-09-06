@@ -53,6 +53,7 @@ final class DockerService {
         lock.lock()
         guard dockerPresent else {
             portContainerMap = [:]
+            lastUpdate = .distantPast // so Docker coming back refreshes at once
             lock.unlock()
             return
         }

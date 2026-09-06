@@ -67,9 +67,9 @@ struct ProcessTable {
         while let current = queue.popLast(), current > 0, !seen.contains(current), seen.count < 64 {
             seen.insert(current)
             guard let bsd = NativeScanner.bsdInfo(Int32(current)) else { continue }
-            let facts = ProcessFacts.shared.facts(for: Int32(current), startedAt: bsd.pbi_start_tvsec)
-            let name = facts.executablePath.map { ($0 as NSString).lastPathComponent }
-                ?? NativeScanner.stringFromFixedCArray(bsd.pbi_name)
+            let shortName = NativeScanner.stringFromFixedCArray(bsd.pbi_name)
+            let facts = ProcessFacts.shared.facts(for: Int32(current), startedAt: bsd.pbi_start_tvsec, shortName: shortName)
+            let name = facts.executablePath.map { ($0 as NSString).lastPathComponent } ?? shortName
             entries.append(Entry(
                 pid: current, ppid: Int(bsd.pbi_ppid), rssKB: 0, cpuPercent: 0, ageSeconds: nil,
                 command: facts.command ?? facts.executablePath ?? name, processName: name, uid: bsd.pbi_uid

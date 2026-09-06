@@ -11,20 +11,23 @@ final class SystemPortFilterTests: XCTestCase {
     }
 
     func testOtherUsersProcessesAreSystem() {
-        let manager = PortManager()
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
         XCTAssertTrue(manager.isSystemPort(makePort(user: "root", command: "/opt/thing")))
         XCTAssertTrue(manager.isSystemPort(makePort(user: "_mdnsresponder", command: "/usr/sbin/mDNSResponder")))
     }
 
     func testSystemBinariesAreSystemEvenWhenUserOwned() {
-        let manager = PortManager()
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
         let me = NSUserName()
         XCTAssertTrue(manager.isSystemPort(makePort(user: me, command: "/System/Library/CoreServices/thing")))
         XCTAssertTrue(manager.isSystemPort(makePort(user: me, command: "/usr/libexec/rapportd")))
     }
 
     func testUserDevProcessIsNotSystem() {
-        let manager = PortManager()
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
         let me = NSUserName()
         XCTAssertFalse(manager.isSystemPort(makePort(user: me, command: "/usr/local/bin/node server.js")))
     }

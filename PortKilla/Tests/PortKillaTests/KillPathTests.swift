@@ -15,8 +15,8 @@ final class KillPathTests: XCTestCase {
     // MARK: - waitForExit
 
     func testWaitForExitReportsKilledAndSurvivingPids() throws {
-        let manager = PortManager()
-        defer { manager.stopAutoRefresh() }
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
         let dies = try spawnSleep()
         let survives = try spawnSleep()
         defer { survives.terminate() }
@@ -28,8 +28,8 @@ final class KillPathTests: XCTestCase {
     }
 
     func testWaitForExitCountsAlreadyDeadPidsAndRespectsTheTimeout() throws {
-        let manager = PortManager()
-        defer { manager.stopAutoRefresh() }
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
         let gone = try spawnSleep()
         gone.terminate()
         gone.waitUntilExit()
@@ -50,8 +50,8 @@ final class KillPathTests: XCTestCase {
     }
 
     func testGuardOnlyFiresOnUnprotectedUserOwnedOccupantsOfGuardedPorts() {
-        let manager = PortManager()
-        defer { manager.stopAutoRefresh() }
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
         manager.watchedPorts = [3000, 3001, 3002, 3003]
         manager.guardedPorts = [3000, 3001, 3002]
         manager.protectedProcessSubstrings = ["cursor"]

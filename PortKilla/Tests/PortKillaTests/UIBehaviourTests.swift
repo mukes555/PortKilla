@@ -30,12 +30,12 @@ final class UIBehaviourTests: XCTestCase {
     }
 
     func testHistoryLimitTrimsImmediately() {
-        let manager = PortManager()
-        defer { manager.stopAutoRefresh() }
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
         manager.historyLimit = 100
-        XCTAssertEqual(HistoryManager.shared.maxHistoryItems, 100)
+        XCTAssertEqual(manager.history.maxHistoryItems, 100)
         manager.historyLimit = 50
-        XCTAssertEqual(HistoryManager.shared.maxHistoryItems, 50)
-        XCTAssertLessThanOrEqual(HistoryManager.shared.history.count, 50)
+        XCTAssertEqual(manager.history.maxHistoryItems, 50)
+        XCTAssertLessThanOrEqual(manager.history.history.count, 50)
     }
 }

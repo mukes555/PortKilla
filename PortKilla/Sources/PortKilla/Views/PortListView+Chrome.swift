@@ -239,10 +239,7 @@ extension PortListView {
                     Text("\(filteredPorts.count) of \(portManager.visiblePorts.count) ports · \(portManager.totalPortsMemory)")
                 }
                 Spacer()
-                // Re-render periodically so "2s ago" can't freeze at 2s forever
-                TimelineView(.periodic(from: .now, by: 10)) { _ in
-                    Text("Updated \(timeAgo(from: portManager.lastUpdated))")
-                }
+                UpdatedLabel(clock: portManager.clock, isOnScreen: isOnScreen)
             }
             .font(.caption2)
             .foregroundColor(.secondary)
@@ -285,6 +282,25 @@ extension PortListView {
             }
             .padding(12)
             .background(Color(nsColor: .windowBackgroundColor))
+        }
+    }
+}
+
+/// The footer's "Updated 2s ago". Observes the refresh clock on its own so a
+/// scan landing re-renders this label and nothing else, and only ticks while
+/// the list is on screen (the hosting view outlives the popover).
+struct UpdatedLabel: View {
+    @ObservedObject var clock: RefreshClock
+    let isOnScreen: Bool
+
+    var body: some View {
+        if isOnScreen {
+            // Re-render periodically so "2s ago" can't freeze at 2s forever
+            TimelineView(.periodic(from: .now, by: 10)) { _ in
+                Text("Updated \(PortListView.timeAgo(from: clock.lastUpdated))")
+            }
+        } else {
+            Text("Updated \(PortListView.timeAgo(from: clock.lastUpdated))")
         }
     }
 }

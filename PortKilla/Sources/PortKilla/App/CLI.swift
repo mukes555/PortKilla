@@ -41,9 +41,15 @@ enum PortKillaCLI {
     }
 
     /// One scan plus the caller's own identity, which the guard compares
-    /// against each target's owner.
-    static func scan() -> Scan {
+    /// against each target's owner. Container names come from a synchronous
+    /// `docker ps` only when asked: `list` prints them, `kill` doesn't need them.
+    static func scan(refreshDocker: Bool) -> Scan {
         let table = ProcessTable.capture()
+        if refreshDocker {
+            let listeningPids = Set(table.listeners?.map(\.pid) ?? [])
+            let dockerPresent = listeningPids.contains { table.name(for: $0)?.lowercased().contains("docker") == true }
+            DockerService.shared.refreshNow(dockerPresent: dockerPresent)
+        }
         let ports = (try? PortScanner().scanActivePorts(processes: table)) ?? []
         let callerPid = Int(Foundation.ProcessInfo.processInfo.processIdentifier)
         let caller = AgentAttribution.callerOwner(callerPid: callerPid, in: table)
@@ -67,7 +73,7 @@ enum PortKillaCLI {
     // MARK: - list
 
     private static func list(_ options: CLICommand.ListOptions) -> Int32 {
-        let scan = scan()
+        let scan = scan(refreshDocker: true)
         let ports = filtered(scan.ports, by: options, caller: scan.caller)
 
         if options.json {
@@ -132,9 +138,13 @@ enum PortKillaCLI {
     /// Prints how the friendly-fire guard identifies the calling process, so
     /// an agent can check itself before a kill is refused.
     private static func whoami(json: Bool) -> Int32 {
-        let table = ProcessTable.capture()
         let callerPid = Int(Foundation.ProcessInfo.processInfo.processIdentifier)
-        let me = AgentAttribution.callerOwner(callerPid: callerPid, in: table)
+        // Only the ancestor chain matters here (plus the session pid a marker
+        // may name), not the whole process table.
+        let environment = Foundation.ProcessInfo.processInfo.environment
+        let sessionPid = environment[AgentSignatures.claudeSessionKey].flatMap(Int.init)
+        let table = ProcessTable.ancestry(of: callerPid, including: sessionPid.map { [$0] } ?? [])
+        let me = AgentAttribution.callerOwner(callerPid: callerPid, in: table, environment: environment)
 
         if json {
             printJSON(WhoAmI(detected: me != nil, owner: me))

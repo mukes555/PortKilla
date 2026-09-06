@@ -89,7 +89,7 @@ enum AgentAttribution {
     private static let maxDepth = 24
 
     static func liveEnvironment(pid: Int) -> [String: String] {
-        NativeScanner.environmentMarkers(Int32(pid), keys: AgentSignatures.markerKeys)
+        ProcessFacts.shared.markers(for: Int32(pid), keys: AgentSignatures.markerKeys)
     }
 
     /// The agent that owns `pid`: by ancestry first (session-precise), then by

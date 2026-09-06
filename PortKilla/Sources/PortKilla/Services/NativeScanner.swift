@@ -54,15 +54,27 @@ enum NativeScanner {
         return Array(pids.prefix(Int(filled) / MemoryLayout<Int32>.stride)).filter { $0 > 0 }
     }
 
-    /// Full snapshot of all processes, or nil when the kernel interfaces are
-    /// unavailable (callers fall back to ps).
+    /// One pass over every process: table facts and listening sockets
+    /// together. nil when the kernel interfaces are unavailable (callers fall
+    /// back to ps and lsof).
+    struct Snapshot {
+        let samples: [ProcessSample]
+        let listeners: [Listener]
+    }
+
     static func captureSamples() -> [ProcessSample]? {
+        capture()?.samples
+    }
+
+    static func capture() -> Snapshot? {
         let pids = listPids()
         guard pids.count > 5 else { return nil }
 
         let now = Date().timeIntervalSince1970
         var samples: [ProcessSample] = []
         samples.reserveCapacity(pids.count)
+        var listeners: [Listener] = []
+        var fdBuffer = makeFdBuffer()
 
         // Snapshot the previous CPU baseline once; the hundreds of per-PID
         // syscalls below run WITHOUT the lock so a concurrent capture or
@@ -104,12 +116,13 @@ enum NativeScanner {
                 ageSeconds = max(0, Int(now) - Int(bsd.pbi_start_tvsec))
             }
 
-            // pbi_name truncates at 15 chars; the executable path's basename
-            // is the full name ("Google Chrome Helper"), so prefer it.
+            // Path and argv never change after exec, so they come from the
+            // per-process cache. pbi_name truncates at 15 chars; the path's
+            // basename is the full name ("Google Chrome Helper").
             let shortName = Self.stringFromFixedCArray(bsd.pbi_name)
-            let path = executablePath(pid)
-            let command = commandLine(pid) ?? path ?? shortName
-            let fullName = path.map { ($0 as NSString).lastPathComponent } ?? shortName
+            let facts = ProcessFacts.shared.facts(for: pid, startedAt: bsd.pbi_start_tvsec)
+            let command = facts.command ?? facts.executablePath ?? shortName
+            let fullName = facts.executablePath.map { ($0 as NSString).lastPathComponent } ?? shortName
 
             samples.append(ProcessSample(
                 pid: Int(pid),
@@ -121,12 +134,14 @@ enum NativeScanner {
                 cpuPercent: (cpuPercent * 10).rounded() / 10,
                 ageSeconds: ageSeconds
             ))
+            listeners.append(contentsOf: socketListeners(pid, fdBuffer: &fdBuffer))
         }
 
         cpuSampleLock.lock()
         previousCPUSample = newCPUSamples
         cpuSampleLock.unlock()
-        return samples
+        ProcessFacts.shared.prune(keeping: Set(pids))
+        return Snapshot(samples: samples, listeners: listeners)
     }
 
     static func bsdInfo(_ pid: Int32) -> proc_bsdinfo? {
@@ -292,91 +307,5 @@ enum NativeScanner {
         let name = getpwuid(uid).map { String(cString: $0.pointee.pw_name) } ?? "\(uid)"
         usernameCache[uid] = name
         return name
-    }
-
-    // MARK: - Sockets
-
-    /// Every listening TCP socket and bound UDP socket on the system,
-    /// or nil when fd enumeration is unavailable.
-    static func allListeners() -> [Listener]? {
-        let pids = listPids()
-        guard pids.count > 5 else { return nil }
-
-        var listeners: [Listener] = []
-        for pid in pids {
-            listeners.append(contentsOf: socketListeners(pid))
-        }
-        return listeners
-    }
-
-    static func socketListeners(_ pid: Int32) -> [Listener] {
-        let bufferSize = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nil, 0)
-        guard bufferSize > 0 else { return [] }
-
-        let count = Int(bufferSize) / MemoryLayout<proc_fdinfo>.stride
-        var fds = [proc_fdinfo](repeating: proc_fdinfo(), count: count + 16)
-        let filled = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, &fds, Int32(fds.count * MemoryLayout<proc_fdinfo>.stride))
-        guard filled > 0 else { return [] }
-
-        var listeners: [Listener] = []
-        for fd in fds.prefix(Int(filled) / MemoryLayout<proc_fdinfo>.stride)
-        where fd.proc_fdtype == PROX_FDTYPE_SOCKET {
-            var socketInfo = socket_fdinfo()
-            let size = Int32(MemoryLayout<socket_fdinfo>.size)
-            guard proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDSOCKETINFO, &socketInfo, size) == size else { continue }
-
-            switch Int(socketInfo.psi.soi_kind) {
-            case SOCKINFO_TCP:
-                let tcp = socketInfo.psi.soi_proto.pri_tcp
-                guard Int(tcp.tcpsi_state) == TSI_S_LISTEN else { continue }
-                let endpoint = localEndpoint(tcp.tcpsi_ini)
-                guard endpoint.port > 0 else { continue }
-                listeners.append(Listener(pid: Int(pid), port: endpoint.port, host: endpoint.host, proto: "tcp"))
-
-            case SOCKINFO_IN:
-                guard Int32(socketInfo.psi.soi_protocol) == IPPROTO_UDP else { continue }
-                let ini = socketInfo.psi.soi_proto.pri_in
-                let endpoint = localEndpoint(ini)
-                // Bound, unconnected, non-ephemeral sockets only
-                let isConnected = ini.insi_fport != 0
-                guard endpoint.port > 0, endpoint.port < 49152, !isConnected else { continue }
-                listeners.append(Listener(pid: Int(pid), port: endpoint.port, host: endpoint.host, proto: "udp"))
-
-            default:
-                continue
-            }
-        }
-        return listeners
-    }
-
-    private static func localEndpoint(_ info: in_sockinfo) -> (host: String, port: Int) {
-        let port = Int(UInt16(truncatingIfNeeded: info.insi_lport).bigEndian)
-
-        let isIPv6 = (Int32(info.insi_vflag) & Int32(INI_IPV6)) != 0
-        if isIPv6 {
-            var address = info.insi_laddr.ina_6
-            if isZero(address) {
-                return ("*", port)
-            }
-            var buffer = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
-            // An undecodable address is reported as wildcard: the "exposed"
-            // badge must fail closed, not vanish.
-            guard inet_ntop(AF_INET6, &address, &buffer, socklen_t(buffer.count)) != nil else { return ("*", port) }
-            return (String(cString: buffer), port)
-        }
-
-        var address = info.insi_laddr.ina_46.i46a_addr4
-        if address.s_addr == 0 {
-            return ("*", port)
-        }
-        var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
-        guard inet_ntop(AF_INET, &address, &buffer, socklen_t(buffer.count)) != nil else { return ("*", port) }
-        return (String(cString: buffer), port)
-    }
-
-    private static func isZero(_ address: in6_addr) -> Bool {
-        withUnsafeBytes(of: address) { raw in
-            raw.allSatisfy { $0 == 0 }
-        }
     }
 }

@@ -20,15 +20,20 @@ struct AgentOwner: Codable, Equatable {
 
     let name: String
     var sessionPid: Int?
+    /// A per-session UUID where the agent provides one (Claude Code). Wins
+    /// over the pid for identity: pids get recycled, UUIDs don't.
+    var sessionKey: String?
     var source: Source
     var confidence: Confidence
     /// The session that started this process has exited: nothing is watching
     /// the server any more, so anyone may stop it.
     var sessionEnded: Bool
 
-    init(name: String, sessionPid: Int? = nil, source: Source, confidence: Confidence = .agent, sessionEnded: Bool = false) {
+    init(name: String, sessionPid: Int? = nil, sessionKey: String? = nil, source: Source,
+         confidence: Confidence = .agent, sessionEnded: Bool = false) {
         self.name = name
         self.sessionPid = sessionPid
+        self.sessionKey = sessionKey
         self.source = source
         self.confidence = confidence
         self.sessionEnded = sessionEnded
@@ -36,7 +41,16 @@ struct AgentOwner: Codable, Equatable {
 
     /// Stable identity string, e.g. "Claude Code#845" or "Claude Code".
     var sessionId: String {
-        sessionPid.map { "\(name)#\($0)" } ?? name
+        if let sessionKey { return "\(name)@\(sessionKey.prefix(8))" }
+        return sessionPid.map { "\(name)#\($0)" } ?? name
+    }
+
+    /// Same session as `other` when both know their session and it matches;
+    /// nil when either side can't say.
+    func isSameSession(as other: AgentOwner) -> Bool? {
+        if let mine = sessionKey, let theirs = other.sessionKey { return mine == theirs }
+        if let mine = sessionPid, let theirs = other.sessionPid { return mine == theirs }
+        return nil
     }
 
     /// An agent session that is still running: the case the guard protects.
@@ -102,7 +116,17 @@ enum AgentAttribution {
         }
         // An editor ancestor only says "started inside the editor"; a marker
         // in the environment (CLAUDECODE=1) knows which agent did it.
-        return ownerFromEnvironment(environmentOf(pid), in: processes) ?? fromTree
+        guard var fromEnvironment = ownerFromEnvironment(environmentOf(pid), in: processes) else {
+            return fromTree
+        }
+        // Markers seen through tmux/screen/ssh were inherited from whoever
+        // started the multiplexer, not the pane: keep the name, drop the
+        // session so it can't pin the server to the wrong agent.
+        if ancestryCrossesBarrier(ofPid: pid, in: processes) {
+            fromEnvironment.sessionPid = nil
+            fromEnvironment.sessionKey = nil
+        }
+        return fromEnvironment
     }
 
     /// The agent invoking the CLI: `PORTKILLA_OWNER` if set, else detected
@@ -112,11 +136,14 @@ enum AgentAttribution {
         if let declared = declaredOwner(in: environment) {
             return declared
         }
-        let fromTree = ownerFromAncestry(ofPid: callerPid, in: processes)
-        if fromTree?.confidence == .agent {
+        if var fromTree = ownerFromAncestry(ofPid: callerPid, in: processes), fromTree.confidence == .agent {
+            // The caller's own environment is the same session the tree found.
+            if fromTree.name == "Claude Code" {
+                fromTree.sessionKey = environment[AgentSignatures.claudeSessionIdKey]
+            }
             return fromTree
         }
-        return ownerFromEnvironment(environment, in: processes) ?? fromTree
+        return ownerFromEnvironment(environment, in: processes) ?? ownerFromAncestry(ofPid: callerPid, in: processes)
     }
 
     /// Walks up from the parent of `pid`. The process itself is never the
@@ -130,13 +157,31 @@ enum AgentAttribution {
             guard let pid = current, pid > 1, !seen.contains(pid) else { break }
             seen.insert(pid)
 
+            let executable = processes.name(for: pid)
+            if let executable, AgentSignatures.attributionBarriers.contains(executable) {
+                return nil // see attributionBarriers
+            }
             if let command = processes.command(for: pid),
-               let signature = match(command: command, executableName: processes.name(for: pid)) {
+               let signature = match(command: command, executableName: executable) {
                 return AgentOwner(name: signature.name, sessionPid: pid, source: .processTree, confidence: signature.confidence)
             }
             current = processes.ppid(for: pid)
         }
         return nil
+    }
+
+    static func ancestryCrossesBarrier(ofPid pid: Int, in processes: ProcessTable) -> Bool {
+        var current = processes.ppid(for: pid)
+        var seen = Set<Int>()
+        for _ in 0..<maxDepth {
+            guard let pid = current, pid > 1, !seen.contains(pid) else { return false }
+            seen.insert(pid)
+            if let executable = processes.name(for: pid), AgentSignatures.attributionBarriers.contains(executable) {
+                return true
+            }
+            current = processes.ppid(for: pid)
+        }
+        return false
     }
 
     /// Owner from environment markers. A Claude Code session pid is only
@@ -157,14 +202,30 @@ enum AgentAttribution {
         if marker.key == "TERM_PROGRAM", let fork = vscodeFork(in: environment) {
             owner = AgentOwner(name: fork, source: .environment, confidence: .editorTerminal)
         }
-        if marker.name == "Claude Code", let session = environment[AgentSignatures.claudeSessionKey].flatMap(Int.init) {
-            if isAgentProcess(session, in: processes) {
-                owner.sessionPid = session
-            } else {
-                owner.sessionEnded = true
+        if marker.name == "Claude Code" {
+            owner.sessionKey = environment[AgentSignatures.claudeSessionIdKey]
+            if let session = environment[AgentSignatures.claudeSessionKey].flatMap(Int.init) {
+                if isAgentProcess(session, named: marker.name, in: processes) {
+                    owner.sessionPid = session
+                } else {
+                    owner.sessionEnded = true
+                    owner.sessionKey = nil
+                }
             }
         }
+        // A marker without any session (Cursor, Gemini, Codex, older Claude
+        // Code) would otherwise claim a live session forever. If no process
+        // of that agent is running at all, the session has ended.
+        if owner.confidence == .agent, owner.sessionPid == nil, !owner.sessionEnded, !anyProcessRunning(named: marker.name, in: processes) {
+            owner.sessionEnded = true
+        }
         return owner
+    }
+
+    private static func anyProcessRunning(named agent: String, in processes: ProcessTable) -> Bool {
+        processes.entries.contains { entry in
+            match(command: entry.command, executableName: entry.name)?.name == agent
+        }
     }
 
     private static func declaredOwner(in environment: [String: String]) -> AgentOwner? {
@@ -183,11 +244,11 @@ enum AgentAttribution {
         return nil
     }
 
-    /// True when `pid` is running and still an agent (guards against the pid
-    /// having been reused by an unrelated process).
-    private static func isAgentProcess(_ pid: Int, in processes: ProcessTable) -> Bool {
+    /// True when `pid` is running and is still the same agent (guards against
+    /// the pid having been reused, by an unrelated process or another agent).
+    private static func isAgentProcess(_ pid: Int, named agent: String, in processes: ProcessTable) -> Bool {
         guard let command = processes.command(for: pid) else { return false }
-        return match(command: command, executableName: processes.name(for: pid)) != nil
+        return match(command: command, executableName: processes.name(for: pid))?.name == agent
     }
 
     /// Match a process against the known tree signatures. `executableName` is

@@ -20,6 +20,13 @@ enum PortKillaCLI {
             return CLIKill.run(options)
         case .success(.whoami(let json)):
             return whoami(json: json)
+        case .success(.wait(let port, let timeout, let json)):
+            return wait(port: port, timeout: timeout, json: json)
+        case .success(.open(let port)):
+            Browser.openLocalhost(port: port)
+            return CLIExit.ok
+        case .success(.history(let options)):
+            return history(options)
         case .success(.help):
             print(CLIArguments.usage)
             return CLIExit.ok
@@ -74,6 +81,12 @@ enum PortKillaCLI {
 
     private static func list(_ options: CLICommand.ListOptions) -> Int32 {
         let scan = scan(refreshDocker: true)
+        if options.mine && scan.caller == nil {
+            // An empty list would read as "no servers"; the truth is "not identified".
+            printError("portkilla: you are not identified as an AI agent, so nothing can be \"mine\". Run `portkilla whoami`, or export PORTKILLA_OWNER=<name>.")
+            if options.json { print("[]") }
+            return CLIExit.notFound
+        }
         let ports = filtered(scan.ports, by: options, caller: scan.caller)
 
         if options.json {
@@ -117,11 +130,10 @@ enum PortKillaCLI {
         }
         if options.mine {
             guard let caller else { return [] }
+            // "Mine" means exactly what kill would let me stop without --force.
             return ports.filter { port in
                 guard let owner = port.agentOwner, owner.name == caller.name else { return false }
-                // Same tool; a known-but-different session is not mine.
-                if let mine = caller.sessionPid, let theirs = owner.sessionPid { return mine == theirs }
-                return true
+                return KillDecision.forAgent(caller: caller, target: owner) == .allow
             }
         }
         return ports
@@ -160,6 +172,75 @@ enum PortKillaCLI {
         return CLIExit.ok
     }
 
+    // MARK: - wait
+
+    struct WaitReport: Encodable {
+        let schema = 1
+        let port: Int
+        let free: Bool
+        let waitedSeconds: Double
+        let exitCode: Int32
+    }
+
+    /// Blocks until nothing listens on the port, polling the native scanner.
+    /// The CLI half of the app's "notify me when this frees up".
+    private static func wait(port: Int, timeout: TimeInterval, json: Bool) -> Int32 {
+        let start = Date()
+        var isFree = false
+        while true {
+            let listeners = NativeScanner.allListeners() ?? []
+            isFree = !listeners.contains { $0.port == port }
+            if isFree || Date().timeIntervalSince(start) >= timeout { break }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        let waited = Date().timeIntervalSince(start)
+        let exit = isFree ? CLIExit.ok : CLIExit.stillRunning
+        if json {
+            printJSON(WaitReport(port: port, free: isFree, waitedSeconds: (waited * 100).rounded() / 100, exitCode: exit))
+        } else if isFree {
+            print(":\(port) is free.")
+        } else {
+            printError(":\(port) is still in use after \(Int(timeout))s.")
+        }
+        return exit
+    }
+
+    // MARK: - history
+
+    /// Kills recorded by the app and the CLI, newest first. This is how an
+    /// agent finds out what happened to a server that vanished.
+    private static func history(_ options: CLICommand.HistoryOptions) -> Int32 {
+        let store = HistoryManager.appStore()
+        var items = store.history
+        if let port = options.port {
+            items = items.filter { $0.port == port }
+        }
+        items = Array(items.prefix(options.limit))
+
+        if options.json {
+            printJSON(items)
+            return CLIExit.ok
+        }
+        if items.isEmpty {
+            print(options.port.map { "No recorded kills on :\($0)." } ?? "No recorded kills.")
+            return CLIExit.ok
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        print("WHEN                 PORT   PROCESS               STARTED BY            KILLED BY")
+        for item in items {
+            let line = [
+                formatter.string(from: item.timestamp).padding(toLength: 21, withPad: " ", startingAt: 0),
+                ":\(item.port)".padding(toLength: 7, withPad: " ", startingAt: 0),
+                item.processName.padding(toLength: 22, withPad: " ", startingAt: 0),
+                (item.owner ?? "—").padding(toLength: 22, withPad: " ", startingAt: 0),
+                item.killedBy ?? "—"
+            ].joined()
+            print(line)
+        }
+        return CLIExit.ok
+    }
+
     // MARK: - agent-docs
 
     /// A snippet for CLAUDE.md / AGENTS.md. The guard only helps agents that
@@ -170,12 +251,20 @@ enum PortKillaCLI {
     Use PortKilla to stop whatever is on a port. Never run `kill -9 $(lsof -ti:PORT)`:
     other AI agents may be using that port, and PortKilla knows who owns what.
 
-    - `portkilla kill <port>` frees the port (SIGTERM, verified).
-    - Exit code 3 means the port belongs to another agent's running session.
-      Do not retry with `--force`; tell the user which agent owns it instead.
+    - `portkilla free <port>` frees the port (SIGTERM, verified; exit 0 if it was
+      already free). `portkilla kill <port> --dry-run` shows what would happen first.
+    - Exit code 3 means the port belongs to another agent's running session (the
+      refusal is printed on stderr). Do not retry with `--force`; tell the user which
+      agent owns it, or pick another port. "Another Claude Code session" is still
+      another session: it is not you.
+    - `portkilla wait <port> --timeout 30` blocks until the port is free.
     - `portkilla list --json` lists every listener with its owning agent;
-      `portkilla list --mine` shows only yours.
-    - `portkilla whoami` shows how PortKilla identifies you. If it reports no
-      agent, export `PORTKILLA_OWNER=<your name>` before starting servers.
+      `portkilla list --mine` shows only the ones you may stop. Use `--pid` when two
+      processes share a port.
+    - `portkilla history --port <port>` shows who started and who stopped a server
+      that has vanished.
+    - `portkilla whoami` shows how PortKilla identifies you. Codex, Windsurf and Trae
+      leave no reliable marker: export `PORTKILLA_OWNER=<your name>` before starting
+      servers so they are attributed to you.
     """
 }

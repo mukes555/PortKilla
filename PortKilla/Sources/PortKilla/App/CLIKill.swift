@@ -15,6 +15,9 @@ enum CLIKill {
         /// Refusals that --force overrode: the audit trail of whose server
         /// was killed against the guard's advice.
         var overriddenRefusals: [String] = []
+        /// "refused", "allowed", "overridden", or "not-evaluated: …" so an
+        /// agent can tell "checked and cleared" from "could not check".
+        var guardVerdict = ""
         var exitCode: Int32
 
         struct Target: Encodable {
@@ -37,7 +40,15 @@ enum CLIKill {
 
         guard !targets.isEmpty else {
             let what = options.pid.map { "PID \($0) is not listening on any port." } ?? "Nothing is listening on :\(options.port ?? 0)."
-            return finish(&report, action: "not-found", exit: CLIExit.notFound, json: options.json, text: what)
+            // `free` treats an already-free port as done.
+            let exit = options.freeIsSuccess && options.pid == nil ? CLIExit.ok : CLIExit.notFound
+            return finish(&report, action: exit == CLIExit.ok ? "already-free" : "not-found", exit: exit, json: options.json, text: what)
+        }
+        report.guardVerdict = targets.map { KillDecision.verdict(caller: scan.caller, target: $0.agentOwner, forced: options.force) }
+            .first { $0 != "allowed" } ?? "allowed"
+        if scan.caller == nil, let owned = targets.first(where: { $0.agentOwner?.isLiveAgentSession == true }), !options.json {
+            // The guard can't protect what it can't compare against.
+            PortKillaCLI.printError("note: :\(owned.port) belongs to \(owned.agentOwner?.described ?? "an agent") and you are not identified as an agent, so the friendly-fire guard did not apply. Run `portkilla whoami` or export PORTKILLA_OWNER=<name>.")
         }
 
         // The guard: refuse the whole request if any target is another agent's.
@@ -50,7 +61,7 @@ enum CLIKill {
         report.reasons = refusals
         if !refusals.isEmpty && !options.force {
             let text = refusals.joined(separator: "\n")
-                + "\nRefusing to kill another agent's server. Pass --force to override, or run `portkilla whoami` to check how you are identified."
+                + "\nRefusing to kill another agent's server. Ask the user, or start yours on a free port. Pass --force only if the user says so; run `portkilla whoami` to check how you are identified."
             let action = options.dryRun ? "would-refuse" : "refused"
             return finish(&report, action: action, exit: CLIExit.refused, json: options.json, text: text, toStderr: !options.dryRun)
         }
@@ -95,6 +106,13 @@ enum CLIKill {
 
         let stillRunning = waitForExit(signalled.map(\.pid), timeout: PortManager.exitTimeout(force: options.force), killer: killer)
         let killed = signalled.filter { !stillRunning.contains($0.pid) }
+
+        let store = HistoryManager.appStore()
+        let killedBy = report.caller.map { "\($0.described) via CLI" } ?? "CLI"
+        for target in killed {
+            store.addEntry(port: target.port, processName: target.processName, action: .killed,
+                           owner: target.agentOwner?.name, killedBy: killedBy)
+        }
 
         var lines = killed.map { "Killed \($0.processName) (PID \($0.pid)) on :\($0.port)." }
         lines += signalled.filter { stillRunning.contains($0.pid) }.map { "\($0.processName) (PID \($0.pid)) is still running. Try --force." }

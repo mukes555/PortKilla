@@ -113,6 +113,7 @@ struct HistoryView: View {
             .background(Color(nsColor: .windowBackgroundColor))
         }
         .frame(width: 430, height: 400)
+        .onAppear { history.reload() } // picks up kills the CLI recorded
     }
 
 

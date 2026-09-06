@@ -120,6 +120,13 @@ extension PortManager {
 
                 switch portsResult {
                 case .success(let ports):
+                    // The popover opened while this hidden-state scan ran (its
+                    // own refresh request was dropped as re-entrant). Stripped
+                    // rows must not reach the screen: run the full scan now.
+                    if depth == .light && self.isUIVisible {
+                        self.refresh()
+                        return
+                    }
                     // Gate on a stable projection: cpuPercent/age change nearly
                     // every scan, so full-model `!=` would republish (and force a
                     // whole-list SwiftUI re-diff) every 2s even when nothing

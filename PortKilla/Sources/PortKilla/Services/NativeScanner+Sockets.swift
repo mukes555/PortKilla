@@ -37,11 +37,17 @@ extension NativeScanner {
         guard filled > 0 else { return [] }
 
         if Int(filled) / stride >= fdBuffer.count {
+            // Keep what the first fill returned if the re-probe fails (the
+            // process may have exited between the calls).
             let needed = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nil, 0)
-            guard needed > 0 else { return [] }
-            fdBuffer = [proc_fdinfo](repeating: proc_fdinfo(), count: Int(needed) / stride + 16)
-            filled = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, &fdBuffer, Int32(fdBuffer.count * stride))
-            guard filled > 0 else { return [] }
+            if needed > 0 {
+                var larger = [proc_fdinfo](repeating: proc_fdinfo(), count: Int(needed) / stride + 16)
+                let refilled = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, &larger, Int32(larger.count * stride))
+                if refilled > 0 {
+                    fdBuffer = larger
+                    filled = refilled
+                }
+            }
         }
 
         var listeners: [Listener] = []

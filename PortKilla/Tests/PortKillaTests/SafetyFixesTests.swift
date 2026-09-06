@@ -27,8 +27,8 @@ final class SafetyFixesTests: XCTestCase {
     // MARK: - Guard stands down on a process that keeps coming back
 
     func testGuardStandsDownAfterRepeatedStrikes() {
-        let manager = PortManager()
-        defer { manager.stopAutoRefresh() }
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
         XCTAssertFalse(manager.guardHasStruckOut(on: 3000))
         XCTAssertFalse(manager.guardHasStruckOut(on: 3000))
         XCTAssertFalse(manager.guardHasStruckOut(on: 3000))
@@ -84,6 +84,15 @@ final class SafetyFixesTests: XCTestCase {
         let echoed = try CommandRunner.run("/bin/echo", ["still alive"])
         XCTAssertEqual(echoed.trimmingCharacters(in: .whitespacesAndNewlines), "still alive")
         XCTAssertLessThan(openFileDescriptorCount(), openFdsBefore + 10, "pipe descriptors leaked across timeouts")
+    }
+
+    func testOutputHeldOpenByAGrandchildIsStillCollectedInFull() throws {
+        // The shell exits at once; the backgrounded sleep keeps the pipe open
+        // for a second. The runner must wait for EOF, not return "hi" early.
+        let start = Date()
+        let output = try CommandRunner.run("/bin/sh", ["-c", "echo hi; sleep 1 & wait"], timeout: 5.0)
+        XCTAssertEqual(output.trimmingCharacters(in: .whitespacesAndNewlines), "hi")
+        XCTAssertGreaterThan(Date().timeIntervalSince(start), 0.9)
     }
 
     func testCommandOutputIsCapturedInFull() throws {

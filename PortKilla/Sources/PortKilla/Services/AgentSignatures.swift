@@ -82,8 +82,11 @@ enum AgentSignatures {
     /// name PortKilla uses, so "claude-code" and "Claude Code" are one agent.
     /// Unknown names are kept as typed (custom bots are legitimate owners).
     static func canonicalName(_ declared: String) -> String {
+        // The name lands in notifications and terminal output, so control
+        // characters (newlines, tabs, escape sequences) are dropped.
         let cleaned = declared
-            .components(separatedBy: .newlines).joined(separator: " ")
+            .map { $0.isNewline || ($0.asciiValue.map { $0 < 0x20 || $0 == 0x7F } ?? false) ? " " : $0 }
+            .reduce(into: "") { $0.append($1) }
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .prefix(64)
         let key = cleaned.lowercased().filter { $0.isLetter || $0.isNumber }

@@ -96,10 +96,13 @@ enum AgentAttribution {
     /// the markers in its environment. Nil when neither says anything.
     static func owner(ofPid pid: Int, in processes: ProcessTable,
                       environmentOf: EnvironmentLookup = liveEnvironment) -> AgentOwner? {
-        if let fromTree = ownerFromAncestry(ofPid: pid, in: processes) {
+        let fromTree = ownerFromAncestry(ofPid: pid, in: processes)
+        if fromTree?.confidence == .agent {
             return fromTree
         }
-        return ownerFromEnvironment(environmentOf(pid), in: processes)
+        // An editor ancestor only says "started inside the editor"; a marker
+        // in the environment (CLAUDECODE=1) knows which agent did it.
+        return ownerFromEnvironment(environmentOf(pid), in: processes) ?? fromTree
     }
 
     /// The agent invoking the CLI: `PORTKILLA_OWNER` if set, else detected
@@ -109,10 +112,11 @@ enum AgentAttribution {
         if let declared = declaredOwner(in: environment) {
             return declared
         }
-        if let fromTree = ownerFromAncestry(ofPid: callerPid, in: processes) {
+        let fromTree = ownerFromAncestry(ofPid: callerPid, in: processes)
+        if fromTree?.confidence == .agent {
             return fromTree
         }
-        return ownerFromEnvironment(environment, in: processes)
+        return ownerFromEnvironment(environment, in: processes) ?? fromTree
     }
 
     /// Walks up from the parent of `pid`. The process itself is never the

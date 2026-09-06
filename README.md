@@ -8,14 +8,14 @@
 
 ## 🚀 Key Features
 
-*   **See What’s Listening**: Lists active listening TCP ports with process name, command, and memory.
+*   **See What’s Listening**: Lists listening TCP ports and bound UDP sockets with process name, command, and memory.
 *   **Process Tree View**: Expand any process to see its child processes (e.g., Python spawning worker threads).
 *   **Smart Kill**:
     *   **Kill Port**: Terminates the main process.
     *   **Kill Tree**: Automatically terminates child processes (like `sleep` or worker threads) when killing the parent.
     *   **Force Kill**: Hold Option while clicking kill to send SIGKILL.
 *   **Docker Integration**: Automatically detects and displays Docker container names next to mapped ports.
-*   **Kill All Dev (Node.js)**: One-click bulk kill for Node.js ports (with a safe list to avoid common IDEs/tools).
+*   **Kill All Dev**: One-click bulk kill for every dev server in the Web category (Node, Python, Java, Ruby, PHP, Go, nginx), with a protected list that keeps IDEs and tools safe. On the Databases or Docker tab the same button kills that category instead.
 *   **Test Radar (Beta)**: Detect common test runners (Jest/Vitest/Mocha/etc) and kill them from the Tests filter.
 *   **History + CSV Export**: View recent kills and export to CSV.
 
@@ -113,7 +113,7 @@ There's also a URL scheme: `open "portkilla://kill/3000"` or `portkilla://show`.
 
 ## 🔄 Updates
 
-PortKilla checks GitHub Releases once a day (gear menu → **Check for Updates…**) and shows a **Download vX.Y.Z** item when a newer version exists. No auto-installer — the app is unsigned (no Apple Developer program), so updates stay a deliberate download.
+PortKilla checks GitHub Releases once a day (Settings → About → **Check for Updates…**) and shows a **Download vX.Y.Z** item when a newer version exists. No auto-installer — the app is unsigned (no Apple Developer program), so updates stay a deliberate download.
 
 > **First launch note:** since the app is not notarized, macOS may warn on first open. Right-click `PortKilla.app` → **Open** → **Open** (needed once), or `xattr -dr com.apple.quarantine /Applications/PortKilla.app`.
 
@@ -169,7 +169,7 @@ Drag `PortKilla.app` to `/Applications`.
 ./scripts/build.sh --dmg
 ```
 
-This produces `dist/PortKilla-1.12.0.dmg`.
+This produces `dist/PortKilla-1.13.0.dmg`.
 
 To distribute to other Macs without Gatekeeper prompts, you’ll eventually want Developer ID signing + notarization.
 
@@ -177,7 +177,7 @@ To distribute to other Macs without Gatekeeper prompts, you’ll eventually want
 
 1.  **Open PortKilla** from your menu bar (Lightning bolt icon).
 2.  **View Active Ports**: See a categorized list of Web, Database, and other processes.
-3.  **Process Tree**: Click on any row to expand and view child processes.
+3.  **Process Tree**: In Advanced density, click a row with a chevron to expand its child processes; in Simple density a click opens the details sheet.
 4.  **Free a Port**: 
     *   Click **X** to kill.
     *   **Shift+Click X** to kill the entire process tree.

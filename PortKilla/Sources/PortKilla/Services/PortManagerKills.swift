@@ -111,7 +111,6 @@ extension PortManager {
         }
     }
 
-    /// Kills a specific port
     func killPort(_ portInfo: PortInfo, force: Bool = false, killTree: Bool = false, initiator: KillInitiator = .user) {
         performSingleKill(
             pid: portInfo.pid,
@@ -152,9 +151,7 @@ extension PortManager {
             guard let self = self else { return }
 
             let table = ProcessTable.capture()
-            // Fresh scanner: the shared one's cwd cache is not thread-safe
-            // against a concurrently running timer refresh.
-            let ports = (try? PortScanner().scanActivePorts(processes: table)) ?? []
+            let ports = (try? self.scanner.scanActivePorts(processes: table)) ?? []
 
             guard let target = ports.first(where: { $0.port == portNumber }) else {
                 DispatchQueue.main.async {
@@ -194,7 +191,6 @@ extension PortManager {
         )
     }
 
-    /// Kills a specific test process
     func killTestProcess(_ testInfo: TestProcessInfo, force: Bool = false) {
         performSingleKill(
             pid: testInfo.pid,
@@ -292,8 +288,27 @@ extension PortManager {
         }
     }
 
-    /// Kills all ports of a specific type
-    func killAllPorts(ofType type: PortInfo.PortType) {
-        killPorts(killablePorts(ofType: type))
+
+    // MARK: - Docker
+
+    /// Stops a Docker container by name
+    func stopDockerContainer(_ name: String) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            do {
+                try DockerService.shared.stopContainer(name: name)
+
+                DispatchQueue.main.async {
+                    self.showToast("Stopped container \(name)")
+                    self.lastErrorMessage = nil
+                    self.scheduleRefresh()
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.lastErrorMessage = self.formatError(error, context: "Failed to stop container")
+                    self.showToast("Stop failed")
+                }
+            }
+        }
     }
 }

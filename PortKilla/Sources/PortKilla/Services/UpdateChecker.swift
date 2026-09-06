@@ -9,7 +9,6 @@ enum UpdateChecker {
 
     static let releasesPageURL = URL(string: "https://github.com/mukes555/PortKilla/releases/latest")!
     private static let apiURL = URL(string: "https://api.github.com/repos/mukes555/PortKilla/releases/latest")!
-    private static let lastCheckKey = "PortKilla.lastUpdateCheck"
 
     static var currentVersion: String? {
         if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String {
@@ -77,12 +76,12 @@ enum UpdateChecker {
     /// Rate limiter for the automatic check on launch.
     static func shouldAutoCheck(now: Date = Date()) -> Bool {
         guard currentVersion != nil else { return false }
-        let last = UserDefaults.standard.object(forKey: lastCheckKey) as? Date ?? .distantPast
+        let last = UserDefaults.standard.object(forKey: DefaultsKey.lastUpdateCheck) as? Date ?? .distantPast
         return now.timeIntervalSince(last) > 24 * 60 * 60
     }
 
     static func markChecked(now: Date = Date()) {
-        UserDefaults.standard.set(now, forKey: lastCheckKey)
+        UserDefaults.standard.set(now, forKey: DefaultsKey.lastUpdateCheck)
     }
 
     static func parseTagName(_ data: Data) -> String? {

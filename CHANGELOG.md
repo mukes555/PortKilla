@@ -13,6 +13,41 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+## 1.13.0 — 2026-09-06
+
+### The engineering batch
+
+No user-visible feature changes; this release is for the people who read the
+code. The one behaviour change: the CSV export gains Owner and Killed By
+columns, and Reset All Settings also brings the tips banner back.
+
+### Changed
+- `PortManager` (762 lines) is split into its core, `PortManager+WatchGuard`
+  (watchlist and guards) and `PortManager+Refresh` (scheduling and the scan
+  pipeline); the row view's context menu and child row are their own files.
+- One `KnownEditors` list drives both "IDE & Tools" classification and the
+  default protected list, with a test that they agree. They had drifted.
+- Every UserDefaults key lives in `DefaultsKey`; the `portkilla://` scheme is
+  parsed by `URLCommand`; key codes are named (`KeyCode.escape`) instead of
+  numbered.
+- Port classification is a table of rules in priority order instead of a
+  ten-branch if-ladder.
+- The scanner's working-directory cache is lock-guarded, so link-initiated
+  kills reuse the shared scanner instead of allocating a cold one.
+- `HistoryManager` is observable (the History window updates while open) and
+  takes an injectable `UserDefaults`, so tests never touch real history.
+- Removed dead code: two unused view bindings, an unreachable history state,
+  `killAllPorts(ofType:)`, and comments that restated their signatures.
+- Docs: ARCHITECTURE lists the real CLI commands; README no longer says "TCP
+  only", describes Kill All Dev's true scope, and points Check for Updates at
+  Settings → About.
+
+### Tests
+- The exit wait (killed, surviving, already dead, deadline), the guard's
+  four refusal rules, URL scheme parsing, editor/protected agreement,
+  classification order, history cap and persistence, the CSV document, and
+  several pure helpers. 139 tests.
+
 ## 1.12.0 — 2026-09-06
 
 ### The UI batch

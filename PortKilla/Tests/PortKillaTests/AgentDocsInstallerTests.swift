@@ -43,6 +43,13 @@ final class AgentDocsInstallerTests: XCTestCase {
         XCTAssertEqual(CLIArguments.parse(["agent-docs", "--write", "--file", "AGENTS.md"]), .success(.agentDocs(options)))
         XCTAssertEqual(CLIArguments.parse(["agent-docs", "--install"]), .failure(.unknownOption("--install", command: "agent-docs")))
         XCTAssertEqual(CLIArguments.parse(["mcp"]), .success(.mcp))
+        XCTAssertEqual(CLIArguments.parse(["mcp", "--setup"]), .success(.mcpSetup(agent: nil)))
+        XCTAssertEqual(CLIArguments.parse(["mcp", "--setup", "cursor"]), .success(.mcpSetup(agent: "cursor")))
+        XCTAssertEqual(CLIArguments.parse(["mcp", "--setup", "emacs"]), .failure(.unknownOption("emacs", command: "mcp --setup")))
+        XCTAssertTrue(MCPSetup.instructions(for: "claude").contains("claude mcp add portkilla"))
+        for agent in ["claude", "cursor", "codex"] {
+            XCTAssertTrue(MCPSetup.instructions(for: nil).contains(MCPSetup.agents[agent]!.split(separator: "\n").first!))
+        }
         XCTAssertTrue(AgentDocsInstaller.claudeHook.contains("PreToolUse"))
     }
 }

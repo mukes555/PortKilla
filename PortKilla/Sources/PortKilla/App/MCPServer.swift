@@ -11,6 +11,12 @@ final class MCPServer {
 
     func serve() -> Int32 {
         signal(SIGPIPE, SIG_IGN)
+        // A person who runs this by hand sees a silent prompt otherwise. Goes
+        // to stderr, and only on a terminal, so an agent's log stays clean.
+        if isatty(2) != 0 {
+            PortKillaCLI.printError("PortKilla MCP server \(UpdateChecker.currentVersion ?? "dev") ready: reading JSON-RPC on stdin, answering on stdout.")
+            PortKillaCLI.printError("Meant to be launched by an agent, not by hand; `portkilla mcp --setup` shows how to register it. Ctrl-C to stop.")
+        }
         while let line = readLine(strippingNewline: true) {
             guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
             if let reply = handle(line: line) {

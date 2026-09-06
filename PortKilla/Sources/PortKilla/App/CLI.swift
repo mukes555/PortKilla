@@ -36,6 +36,9 @@ enum PortKillaCLI {
             return AgentDocsInstaller.run(options)
         case .success(.mcp):
             return MCPServer().serve()
+        case .success(.mcpSetup(let agent)):
+            print(MCPSetup.instructions(for: agent))
+            return CLIExit.ok
         case .success(.doctor(let json)):
             return doctor(json: json)
         case .success(.completions(let shell)):

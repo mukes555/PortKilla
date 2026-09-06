@@ -25,6 +25,8 @@ enum CLICommand: Equatable {
     case doctor(json: Bool)
     case completions(shell: String)
     case mcp
+    /// Print the registration for one agent (or all when nil).
+    case mcpSetup(agent: String?)
 
     struct AgentDocsOptions: Equatable {
         /// Append the snippet to `file` (default CLAUDE.md) instead of printing it.
@@ -114,7 +116,13 @@ enum CLIArguments {
             return rest == ["--json"] ? .success(.version(json: true)) : .failure(.unknownOption(rest[0], command: "version"))
         case "help", "--help", "-h": return .success(.help(topic: rest.first))
         case "agent-docs": return parseAgentDocs(rest)
-        case "mcp": return rest.isEmpty ? .success(.mcp) : .failure(.unknownOption(rest[0], command: command))
+        case "mcp":
+            if rest.isEmpty { return .success(.mcp) }
+            guard rest.first == "--setup", rest.count <= 2 else { return .failure(.unknownOption(rest[0], command: "mcp")) }
+            if let agent = rest.dropFirst().first, MCPSetup.agents[agent] == nil {
+                return .failure(.unknownOption(agent, command: "mcp --setup"))
+            }
+            return .success(.mcpSetup(agent: rest.dropFirst().first))
         case "doctor":
             if rest.isEmpty { return .success(.doctor(json: false)) }
             return rest == ["--json"] ? .success(.doctor(json: true)) : .failure(.unknownOption(rest[0], command: "doctor"))
@@ -346,13 +354,15 @@ enum CLIArguments {
             """
         case "mcp": return """
             portkilla mcp
+            portkilla mcp --setup [claude|cursor|codex]
 
             Runs a Model Context Protocol server over stdin/stdout with the tools
             list_ports, kill_port (dry-run by default), whoami, and
-            wait_for_port_free. The agent that spawns it is the caller the guard
-            compares against. Register it with your agent:
-              Claude Code / Cursor:  {"mcpServers":{"portkilla":{"command":"portkilla","args":["mcp"]}}}
-              Codex CLI (~/.codex/config.toml):  [mcp_servers.portkilla] command = "portkilla" args = ["mcp"]
+            wait_for_port_free. It is not a background service: each agent starts
+            its own copy when it needs one and stops it afterwards, so register it
+            once and forget it. `--setup` prints the registration (the exact
+            `claude mcp add` command, Cursor's mcp.json, Codex's config.toml).
+            Run by hand it waits silently for requests; Ctrl-C stops it.
             """
         case "doctor": return """
             portkilla doctor [--json]
@@ -380,6 +390,7 @@ enum CLIArguments {
       portkilla doctor [--json]
       portkilla agent-docs [--write [--file CLAUDE.md]] [--claude-hook]
       portkilla mcp                      MCP server over stdio (for agents)
+      portkilla mcp --setup [claude|cursor|codex]   how to register it
       portkilla completions <zsh|bash|fish>
       portkilla version [--json]
       portkilla help [command]

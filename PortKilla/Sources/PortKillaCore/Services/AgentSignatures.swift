@@ -15,6 +15,9 @@ public enum AgentSignatures {
     public struct TreeSignature {
         let name: String
         let confidence: AgentOwner.Confidence
+        /// What it looks for, for the compatibility matrix: an executable
+        /// name, or a bundle path fragment starting with "/".
+        let label: String
         let matches: (_ commandLower: String, _ executableName: String) -> Bool
     }
 
@@ -29,15 +32,15 @@ public enum AgentSignatures {
     ]
 
     public static let treeSignatures: [TreeSignature] = [
-        TreeSignature(name: "Claude Code", confidence: .agent) { _, exe in exe == "claude" },
-        TreeSignature(name: "Codex CLI", confidence: .agent) { _, exe in exe == "codex" },
-        TreeSignature(name: "Gemini CLI", confidence: .agent) { _, exe in exe == "gemini" },
-        TreeSignature(name: "Copilot CLI", confidence: .agent) { _, exe in exe == "copilot" },
-        TreeSignature(name: "OpenCode", confidence: .agent) { _, exe in exe == "opencode" },
-        TreeSignature(name: "Aider", confidence: .agent) { _, exe in exe == "aider" },
-        TreeSignature(name: "Zed", confidence: .editorTerminal) { _, exe in exe == "zed" },
+        TreeSignature(name: "Claude Code", confidence: .agent, label: "claude") { _, exe in exe == "claude" },
+        TreeSignature(name: "Codex CLI", confidence: .agent, label: "codex") { _, exe in exe == "codex" },
+        TreeSignature(name: "Gemini CLI", confidence: .agent, label: "gemini") { _, exe in exe == "gemini" },
+        TreeSignature(name: "Copilot CLI", confidence: .agent, label: "copilot") { _, exe in exe == "copilot" },
+        TreeSignature(name: "OpenCode", confidence: .agent, label: "opencode") { _, exe in exe == "opencode" },
+        TreeSignature(name: "Aider", confidence: .agent, label: "aider") { _, exe in exe == "aider" },
+        TreeSignature(name: "Zed", confidence: .editorTerminal, label: "zed") { _, exe in exe == "zed" },
     ] + appBundles.map { bundle in
-        TreeSignature(name: bundle.name, confidence: .editorTerminal) { cmd, _ in cmd.contains(bundle.pathFragment) }
+        TreeSignature(name: bundle.name, confidence: .editorTerminal, label: bundle.pathFragment) { cmd, _ in cmd.contains(bundle.pathFragment) }
     }
 
     /// An environment variable an agent leaves on its children. `value` nil
@@ -65,6 +68,12 @@ public enum AgentSignatures {
     /// this before launching servers; PortKilla reads it like any marker.
     public static let declaredOwnerKey = "PORTKILLA_OWNER"
 
+    /// Tools that export no session id of their own (Codex, Gemini, custom
+    /// bots) can still keep their sessions apart: export any string that is
+    /// unique per session next to PORTKILLA_OWNER, and servers started
+    /// under it belong to that session.
+    public static let declaredSessionKey = "PORTKILLA_SESSION"
+
     /// Names the Claude Code process itself; equals the pid the tree walk
     /// finds, which is what makes the two signals agree on a session.
     public static let claudeSessionKey = "CLAUDE_PID"
@@ -85,22 +94,28 @@ public enum AgentSignatures {
 
     /// The only environment keys ever read from another process.
     public static let markerKeys: Set<String> = Set(
-        envMarkers.map(\.key) + [declaredOwnerKey, claudeSessionKey, claudeSessionIdKey] + vscodeForkHintKeys
+        envMarkers.map(\.key) + [declaredOwnerKey, declaredSessionKey, claudeSessionKey, claudeSessionIdKey] + vscodeForkHintKeys
     )
 
     /// Turns whatever someone typed into PORTKILLA_OWNER into the display
     /// name PortKilla uses, so "claude-code" and "Claude Code" are one agent.
     /// Unknown names are kept as typed (custom bots are legitimate owners).
     public static func canonicalName(_ declared: String) -> String {
-        // The name lands in notifications and terminal output, so control
-        // characters (newlines, tabs, escape sequences) are dropped.
-        let cleaned = declared
+        let cleaned = cleanedLabel(declared)
+        let key = cleaned.lowercased().filter { $0.isLetter || $0.isNumber }
+        return aliases[key] ?? cleaned
+    }
+
+    /// Declared values land in notifications and terminal output, so control
+    /// characters (newlines, tabs, escape sequences) are dropped and the
+    /// length is capped.
+    public static func cleanedLabel(_ raw: String) -> String {
+        let cleaned = raw
             .map { $0.isNewline || ($0.asciiValue.map { $0 < 0x20 || $0 == 0x7F } ?? false) ? " " : $0 }
             .reduce(into: "") { $0.append($1) }
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .prefix(64)
-        let key = cleaned.lowercased().filter { $0.isLetter || $0.isNumber }
-        return aliases[key] ?? String(cleaned)
+        return String(cleaned)
     }
 
     private static let aliases: [String: String] = [

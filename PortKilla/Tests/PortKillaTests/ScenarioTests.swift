@@ -137,14 +137,25 @@ final class ScenarioTests: XCTestCase {
         return Run(exitCode: -1, stdout: "", stderr: "")
     }
 
-    /// Runs the CLI with a caller identity of `owner`, or none.
-    private func portkilla(_ arguments: [String], owner: String?) throws -> Run {
+    /// Polls until the process is gone; detached servers are not children,
+    /// so there is no Process to wait on.
+    private func waitUntilGone(_ pid: Int32, timeout: TimeInterval) {
+        let deadline = Date().addingTimeInterval(timeout)
+        while kill(pid, 0) == 0 && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        XCTAssertNotEqual(kill(pid, 0), 0, "pid \(pid) is still running")
+    }
+
+    /// Runs the CLI with a caller identity of `owner` (and `session`), or none.
+    private func portkilla(_ arguments: [String], owner: String?, session: String? = nil) throws -> Run {
         let process = Process()
         process.executableURL = Self.cli
         process.arguments = arguments
         var env = ProcessInfo.processInfo.environment
         for key in AgentSignatures.markerKeys { env[key] = nil }
         if let owner { env["PORTKILLA_OWNER"] = owner }
+        if let session { env["PORTKILLA_SESSION"] = session }
         process.environment = env
         let out = Pipe(), err = Pipe()
         process.standardOutput = out
@@ -213,6 +224,55 @@ final class ScenarioTests: XCTestCase {
         let person = try portkillaAsPerson(["kill", "\(port)", "--dry-run", "--json"])
         XCTAssertEqual(person.exitCode, 0, person.stderr)
         XCTAssertEqual((try json(person.stdout) as? [String: Any])?["guardVerdict"] as? String, "not-evaluated: target unknown")
+    }
+
+    func testWhoisExplainsADeclaredOwnerAndItsSession() throws {
+        let port = 47039
+        _ = try startServer(port: port, environment: ["PORTKILLA_OWNER": "scenario-bot", "PORTKILLA_SESSION": "session-one"])
+
+        let same = try portkilla(["whois", "\(port)", "--json"], owner: "scenario-bot")
+        XCTAssertEqual(same.exitCode, 0, same.stderr)
+        let report = try XCTUnwrap(try json(same.stdout) as? [String: Any])
+        let target = try XCTUnwrap((report["targets"] as? [[String: Any]])?.first)
+        let owner = try XCTUnwrap(target["agentOwner"] as? [String: Any])
+        XCTAssertEqual(owner["name"] as? String, "scenario-bot")
+        XCTAssertEqual(owner["sessionKey"] as? String, "session-one")
+        let evidence = try XCTUnwrap(target["evidence"] as? [String: Any])
+        XCTAssertEqual(evidence["decidedBy"] as? String, "declared")
+        XCTAssertEqual(evidence["declaredOwner"] as? String, "scenario-bot")
+        XCTAssertEqual(target["verdict"] as? String, "allowed", "a caller without a session key is not known to be another session")
+
+        let other = try portkilla(["whois", "\(port)"], owner: "scenario-bot", session: "session-two")
+        XCTAssertEqual(other.exitCode, 0, other.stderr)
+        XCTAssertTrue(other.stdout.contains("kill       refused: owned by another scenario-bot session (scenario-bot@session-one)"), other.stdout)
+        XCTAssertTrue(other.stdout.contains("owner      scenario-bot, declared via PORTKILLA_OWNER"), other.stdout)
+    }
+
+    func testOrphanedServersAreListedAndCleanedUp() throws {
+        let port = 47040
+        // Started by a Claude Code session whose pid no longer exists.
+        let pid = try startDetachedServer(port: port, environment: ["CLAUDECODE": "1", "CLAUDE_PID": "999999"])
+
+        let listed = try portkilla(["list", "--orphaned", "--json"], owner: nil)
+        let ports = try XCTUnwrap(try json(listed.stdout) as? [[String: Any]])
+        XCTAssertTrue(ports.contains { $0["port"] as? Int == port }, listed.stdout)
+
+        let planned = try portkilla(["kill", "--orphaned", "--dry-run", "--json"], owner: "scenario-bot")
+        XCTAssertEqual(planned.exitCode, 0, planned.stderr)
+        let plan = try XCTUnwrap(try json(planned.stdout) as? [String: Any])
+        XCTAssertEqual(plan["action"] as? String, "would-kill")
+        let targets = try XCTUnwrap(plan["targets"] as? [[String: Any]])
+        XCTAssertTrue(targets.contains { $0["pid"] as? Int == Int(pid) }, planned.stdout)
+
+        // The real sweep takes every orphan on the machine; only run it when
+        // ours is the only one, so a developer's leftovers are not swept.
+        guard targets.count == 1 else {
+            throw XCTSkip("other orphaned servers exist on this machine; sweep not exercised")
+        }
+        let cleaned = try portkilla(["kill", "--orphaned", "--json"], owner: "scenario-bot")
+        XCTAssertEqual(cleaned.exitCode, 0, cleaned.stderr)
+        XCTAssertEqual((try json(cleaned.stdout) as? [String: Any])?["action"] as? String, "killed")
+        waitUntilGone(pid, timeout: 5)
     }
 
     func testRealKillFreesThePortAndRecordsHistory() throws {

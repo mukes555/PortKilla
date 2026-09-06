@@ -17,10 +17,10 @@ final class MCPServerTests: XCTestCase {
         XCTAssertNil(server.handle(line: #"{"jsonrpc":"2.0","method":"notifications/initialized"}"#), "notifications get no reply")
     }
 
-    func testToolsListNamesTheFourTools() throws {
+    func testToolsListNamesTheFiveTools() throws {
         let reply = try json(server.handle(line: #"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#))
         let tools = try XCTUnwrap((reply["result"] as? [String: Any])?["tools"] as? [[String: Any]])
-        XCTAssertEqual(Set(tools.compactMap { $0["name"] as? String }), ["list_ports", "kill_port", "whoami", "wait_for_port_free"])
+        XCTAssertEqual(Set(tools.compactMap { $0["name"] as? String }), ["list_ports", "kill_port", "whois_port", "whoami", "wait_for_port_free"])
         for tool in tools {
             XCTAssertNotNil(tool["inputSchema"], "\(tool["name"] ?? "") needs a schema")
         }
@@ -32,6 +32,18 @@ final class MCPServerTests: XCTestCase {
         XCTAssertEqual(result["isError"] as? Bool, false)
         let structured = try XCTUnwrap(result["structuredContent"] as? [String: Any])
         XCTAssertNotNil(structured["detected"])
+    }
+
+    func testWhoisPortOnAFreePortIsEmptyNotAnError() throws {
+        let reply = try json(server.handle(line: #"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"whois_port","arguments":{"port":65001}}}"#))
+        let result = try XCTUnwrap(reply["result"] as? [String: Any])
+        XCTAssertEqual(result["isError"] as? Bool, false)
+        let structured = try XCTUnwrap(result["structuredContent"] as? [String: Any])
+        XCTAssertEqual(structured["exitCode"] as? Int, 1)
+        XCTAssertEqual((structured["targets"] as? [Any])?.count, 0)
+
+        let missing = try json(server.handle(line: #"{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"whois_port","arguments":{}}}"#))
+        XCTAssertEqual((missing["result"] as? [String: Any])?["isError"] as? Bool, true)
     }
 
     func testKillPortDryRunOnAFreePortIsNotFoundNotAnError() throws {

@@ -26,35 +26,82 @@ final class DockerService {
         "/Applications/Docker.app/Contents/Resources/bin/docker"
     ]
 
+    private let refreshQueue = DispatchQueue(label: "com.portkilla.docker", qos: .utility)
+    private var refreshInFlight = false
+    /// Grows on every failed `docker ps` (daemon down, CLI hung) so a stopped
+    /// Docker Desktop costs one probe a minute, not one per refresh.
+    private var backoff: TimeInterval = 0
+    private var nextAttempt: Date = .distantPast
+
+    static let minimumBackoff: TimeInterval = 5
+    static let maximumBackoff: TimeInterval = 60
+
+    static func nextBackoff(after current: TimeInterval) -> TimeInterval {
+        min(max(current * 2, minimumBackoff), maximumBackoff)
+    }
+
+    /// Cache read only; never blocks the scan on a subprocess.
     func getContainerName(forPort port: Int) -> String? {
-        refreshIfNeeded()
         lock.lock(); defer { lock.unlock() }
         return portContainerMap[port]
     }
 
-    private func refreshIfNeeded() {
+    /// Refreshes the port map on a background queue when it is stale and a
+    /// Docker process is actually listening; the names appear one refresh
+    /// later. With no Docker listener the map is simply cleared.
+    func refreshInBackground(dockerPresent: Bool) {
         lock.lock()
-        let isFresh = Date().timeIntervalSince(lastUpdate) < cacheValidity
-        if isFresh {
+        guard dockerPresent else {
+            portContainerMap = [:]
             lock.unlock()
             return
         }
-        lastUpdate = Date()
+        let isFresh = Date().timeIntervalSince(lastUpdate) < cacheValidity
+        let inBackoff = Date() < nextAttempt
+        guard !isFresh, !inBackoff, !refreshInFlight else {
+            lock.unlock()
+            return
+        }
+        refreshInFlight = true
         lock.unlock()
 
+        refreshQueue.async { [self] in
+            fetchPortMap()
+            lock.lock(); refreshInFlight = false; lock.unlock()
+        }
+    }
+
+    /// Synchronous refresh for one-shot callers (the CLI) that have no later
+    /// refresh to pick the names up on.
+    func refreshNow(dockerPresent: Bool) {
+        guard dockerPresent else { return }
+        fetchPortMap()
+    }
+
+    private func fetchPortMap() {
+        lock.lock(); lastUpdate = Date(); lock.unlock()
         guard let docker = dockerPath() else { return }
 
         // Output per container: "0.0.0.0:5432->5432/tcp::my-postgres"
         guard let output = try? CommandRunner.run(
             docker, ["ps", "--format", "{{.Ports}}::{{.Names}}"], timeout: 3.0
         ) else {
-            // Daemon down or hung — clear stale names so the UI doesn't lie.
-            lock.lock(); portContainerMap = [:]; lock.unlock()
+            // Daemon down or hung: clear stale names so the UI doesn't lie,
+            // and wait longer before the next attempt.
+            lock.lock()
+            portContainerMap = [:]
+            backoff = Self.nextBackoff(after: backoff)
+            nextAttempt = Date().addingTimeInterval(backoff)
+            lock.unlock()
             return
         }
 
         let map = Self.parsePortMap(output)
-        lock.lock(); portContainerMap = map; lock.unlock()
+        lock.lock()
+        portContainerMap = map
+        backoff = 0
+        nextAttempt = .distantPast
+        lock.unlock()
     }
 
     private func dockerPath() -> String? {

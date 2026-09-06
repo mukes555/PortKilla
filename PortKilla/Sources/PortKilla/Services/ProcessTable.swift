@@ -17,6 +17,8 @@ struct ProcessTable {
         /// Authoritative name from the kernel (native scans). The computed
         /// fallback mis-splits paths with spaces ("Google Chrome Helper" -> "Google").
         var processName: String?
+        /// Owner uid (native scans only).
+        var uid: uid_t?
 
         var name: String {
             if let processName, !processName.isEmpty {
@@ -31,17 +33,21 @@ struct ProcessTable {
 
     private let entriesByPid: [Int: Entry]
     private let childrenByPpid: [Int: [Entry]]
+    /// Listening sockets gathered in the same native pass as the table, so
+    /// the scanner never walks the process list twice. nil for ps-built tables.
+    let listeners: [NativeScanner.Listener]?
 
     static func capture() -> ProcessTable {
         // Raw-syscall snapshot; ps subprocess only as a fallback
-        if let samples = NativeScanner.captureSamples() {
-            return ProcessTable(entries: samples.map { sample in
+        if let snapshot = NativeScanner.capture() {
+            let entries = snapshot.samples.map { sample in
                 Entry(
                     pid: sample.pid, ppid: sample.ppid, rssKB: sample.rssKB,
                     cpuPercent: sample.cpuPercent, ageSeconds: sample.ageSeconds,
-                    command: sample.command, processName: sample.name
+                    command: sample.command, processName: sample.name, uid: sample.uid
                 )
-            })
+            }
+            return ProcessTable(entries: entries, listeners: snapshot.listeners)
         }
 
         let output = (try? CommandRunner.run(
@@ -50,7 +56,30 @@ struct ProcessTable {
         return ProcessTable(psOutput: output)
     }
 
-    init(entries: [Entry]) {
+    /// Just the ancestor chain of `pid` (plus `extra` pids), for callers that
+    /// only need to walk upwards: `portkilla whoami` used to snapshot all
+    /// ~600 processes to inspect five.
+    static func ancestry(of pid: Int, including extra: [Int] = []) -> ProcessTable {
+        var entries: [Entry] = []
+        var seen = Set<Int>()
+        var queue = [pid] + extra
+
+        while let current = queue.popLast(), current > 0, !seen.contains(current), seen.count < 64 {
+            seen.insert(current)
+            guard let bsd = NativeScanner.bsdInfo(Int32(current)) else { continue }
+            let facts = ProcessFacts.shared.facts(for: Int32(current), startedAt: bsd.pbi_start_tvsec)
+            let name = facts.executablePath.map { ($0 as NSString).lastPathComponent }
+                ?? NativeScanner.stringFromFixedCArray(bsd.pbi_name)
+            entries.append(Entry(
+                pid: current, ppid: Int(bsd.pbi_ppid), rssKB: 0, cpuPercent: 0, ageSeconds: nil,
+                command: facts.command ?? facts.executablePath ?? name, processName: name, uid: bsd.pbi_uid
+            ))
+            queue.append(Int(bsd.pbi_ppid))
+        }
+        return ProcessTable(entries: entries)
+    }
+
+    init(entries: [Entry], listeners: [NativeScanner.Listener]? = nil) {
         var byPid: [Int: Entry] = [:]
         var byPpid: [Int: [Entry]] = [:]
         for entry in entries {
@@ -59,6 +88,7 @@ struct ProcessTable {
         }
         entriesByPid = byPid
         childrenByPpid = byPpid
+        self.listeners = listeners
     }
 
     init(psOutput: String) {
@@ -90,12 +120,17 @@ struct ProcessTable {
 
         entriesByPid = byPid
         childrenByPpid = byPpid
+        listeners = nil
     }
 
     var allEntries: [Entry] { Array(entriesByPid.values) }
+    /// The entries without copying them into an array.
+    var entries: Dictionary<Int, Entry>.Values { entriesByPid.values }
 
     func command(for pid: Int) -> String? { entriesByPid[pid]?.command }
     func name(for pid: Int) -> String? { entriesByPid[pid]?.name }
+    func uid(for pid: Int) -> uid_t? { entriesByPid[pid]?.uid }
+    func user(for pid: Int) -> String? { entriesByPid[pid]?.uid.map(NativeScanner.username) }
     func ppid(for pid: Int) -> Int? { entriesByPid[pid]?.ppid }
     func rssKB(for pid: Int) -> Int? { entriesByPid[pid]?.rssKB }
     func cpuPercent(for pid: Int) -> Double? { entriesByPid[pid]?.cpuPercent }

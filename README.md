@@ -169,7 +169,7 @@ Drag `PortKilla.app` to `/Applications`.
 ./scripts/build.sh --dmg
 ```
 
-This produces `dist/PortKilla-1.10.0.dmg`.
+This produces `dist/PortKilla-1.11.0.dmg`.
 
 To distribute to other Macs without Gatekeeper prompts, you’ll eventually want Developer ID signing + notarization.
 

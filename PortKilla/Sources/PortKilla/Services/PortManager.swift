@@ -1,14 +1,47 @@
 import Foundation
 import Combine
 
+/// "Updated 2s ago" ticks on its own object so the footer alone re-renders
+/// when a scan lands; publishing it from PortManager re-evaluated every row.
+final class RefreshClock: ObservableObject {
+    @Published var lastUpdated = Date()
+}
+
 // MARK: - PortManager
 class PortManager: ObservableObject {
-    @Published var activePorts: [PortInfo] = []
+    @Published var activePorts: [PortInfo] = [] {
+        didSet {
+            activeSignature = Self.stableSignature(activePorts)
+            recomputeVisiblePorts()
+            onPortsChanged?()
+        }
+    }
     @Published var activeTests: [TestProcessInfo] = []
-    @Published var isRefreshing = false
-    @Published var lastUpdated: Date = Date()
     @Published var lastErrorMessage: String?
     @Published var toastMessage: String?
+    let clock = RefreshClock()
+    var lastUpdated: Date { clock.lastUpdated }
+
+    /// Not published: no view reads it, and publishing it forced two
+    /// whole-tree re-renders per refresh even when nothing changed.
+    var isRefreshing = false
+    /// Full-depth signature of `activePorts`, kept so a refresh compares one
+    /// side instead of rebuilding both.
+    private var activeSignature: [String] = []
+    private var lastTestsPublish = Date.distantPast
+
+    /// The ports the list shows, honoring the hide-system setting. Cached:
+    /// it was recomputed on every access, thousands of times a minute.
+    private(set) var visiblePorts: [PortInfo] = []
+    /// Menu-bar badge: only dev-relevant ports. Counting every system daemon
+    /// made the badge permanently ~30 and therefore meaningless.
+    private(set) var menuBarBadgeCount = 0
+    /// Set by the app delegate; fires after `activePorts` has changed.
+    var onPortsChanged: (() -> Void)?
+
+    /// Preferences restored in init must not write themselves back or
+    /// trigger side effects (a notification-permission prompt on launch).
+    private var isRestoringPreferences = true
 
     let scanner = PortScanner()
     private let processScanner = ProcessScanner()
@@ -53,6 +86,7 @@ class PortManager: ObservableObject {
 
     @Published var refreshInterval: TimeInterval = 2.0 {
         didSet {
+            guard !isRestoringPreferences else { return }
             UserDefaults.standard.set(refreshInterval, forKey: DefaultsKeys.refreshIntervalSeconds)
             if shouldRestartTimerOnIntervalChange {
                 restartTimer()
@@ -64,12 +98,15 @@ class PortManager: ObservableObject {
     /// of dev servers the user actually cares about.
     @Published var hideSystemProcesses: Bool = true {
         didSet {
+            recomputeVisiblePorts()
+            guard !isRestoringPreferences else { return }
             UserDefaults.standard.set(hideSystemProcesses, forKey: DefaultsKeys.hideSystemProcesses)
         }
     }
 
     @Published var confirmBeforeKill: Bool = true {
         didSet {
+            guard !isRestoringPreferences else { return }
             UserDefaults.standard.set(confirmBeforeKill, forKey: DefaultsKeys.confirmBeforeKill)
         }
     }
@@ -79,6 +116,7 @@ class PortManager: ObservableObject {
     enum ViewDensity: String { case clean, advanced }
     @Published var viewDensity: ViewDensity = .clean {
         didSet {
+            guard !isRestoringPreferences else { return }
             UserDefaults.standard.set(viewDensity.rawValue, forKey: DefaultsKeys.viewDensity)
         }
     }
@@ -86,14 +124,17 @@ class PortManager: ObservableObject {
     /// Show the dev-port count next to the menu bar icon.
     @Published var showMenuBarCount: Bool = true {
         didSet {
+            guard !isRestoringPreferences else { return }
             UserDefaults.standard.set(showMenuBarCount, forKey: DefaultsKeys.showMenuBarCount)
             onMenuBarPreferenceChanged?()
         }
     }
 
-    /// Master switch for watch/guard notifications.
+    /// Master switch for watch/guard notifications. Permission is requested
+    /// when the user turns it on or arms a watch, never just for launching.
     @Published var notificationsEnabled: Bool = true {
         didSet {
+            guard !isRestoringPreferences else { return }
             UserDefaults.standard.set(notificationsEnabled, forKey: DefaultsKeys.notificationsEnabled)
             if notificationsEnabled { Notifier.requestPermission() }
         }
@@ -106,6 +147,7 @@ class PortManager: ObservableObject {
     /// or when something new binds it.
     @Published var watchedPorts: Set<Int> = [] {
         didSet {
+            guard !isRestoringPreferences else { return }
             UserDefaults.standard.set(Array(watchedPorts).sorted(), forKey: DefaultsKeys.watchedPorts)
         }
     }
@@ -113,6 +155,7 @@ class PortManager: ObservableObject {
     /// Strictly opt-in per port; a guarded port is always also watched.
     @Published var guardedPorts: Set<Int> = [] {
         didSet {
+            guard !isRestoringPreferences else { return }
             UserDefaults.standard.set(Array(guardedPorts).sorted(), forKey: DefaultsKeys.guardedPorts)
         }
     }
@@ -166,6 +209,7 @@ class PortManager: ObservableObject {
             guardedPorts = Set(stored).intersection(watchedPorts)
         }
         shouldRestartTimerOnIntervalChange = true
+        isRestoringPreferences = false
 
         // In debug, the demo-GIF hook drives state manually — no live scanning.
         var isDemoMode = false
@@ -175,9 +219,12 @@ class PortManager: ObservableObject {
         if !isDemoMode {
             startAutoRefresh()
 
-            // Once a day, quietly see if a newer release exists
+            // Once a day, quietly see if a newer release exists. Deferred so
+            // launch never waits on the network.
             if UpdateChecker.shouldAutoCheck() {
-                checkForUpdates(manual: false)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+                    self?.checkForUpdates(manual: false)
+                }
             }
         }
     }
@@ -313,7 +360,17 @@ class PortManager: ObservableObject {
         return occupant
     }
 
-    private func processWatchedPorts(with ports: [PortInfo]) {
+    static func ownersOfGuardedOccupants(_ guarded: Set<Int>, in ports: [PortInfo], processes: ProcessTable) -> [Int: AgentOwner] {
+        var owners: [Int: AgentOwner] = [:]
+        for port in ports where guarded.contains(port.port) {
+            if let owner = port.agentOwner ?? AgentAttribution.owner(ofPid: port.pid, in: processes) {
+                owners[port.port] = owner
+            }
+        }
+        return owners
+    }
+
+    private func processWatchedPorts(with ports: [PortInfo], guardOwners: [Int: AgentOwner] = [:]) {
         guard !watchedPorts.isEmpty else {
             watchedOccupancy = [:]
             return
@@ -332,7 +389,8 @@ class PortManager: ObservableObject {
                     notify(title: "Port \(event.port) is free", body: "Nothing is listening on :\(event.port) anymore.")
                 case .occupied(let name):
                     if let intruder = guardKillTarget(for: event.port, in: ports) {
-                        if case .warn(let reason) = KillDecision.forHuman(target: intruder.agentOwner) {
+                        let owner = intruder.agentOwner ?? guardOwners[event.port]
+                        if case .warn(let reason) = KillDecision.forHuman(target: owner) {
                             // The only unattended kill in the app never takes
                             // another agent's live server; the person decides.
                             notify(
@@ -363,10 +421,12 @@ class PortManager: ObservableObject {
     }
 
     /// Identity of the list ignoring volatile per-scan metrics (CPU%, age).
-    /// Two scans with the same signature render identically.
-    static func stableSignature(_ ports: [PortInfo]) -> [String] {
+    /// Two scans with the same signature render identically. A light scan
+    /// carries no enrichment, so its signature leaves those fields out; the
+    /// next full scan differs and republishes them.
+    static func stableSignature(_ ports: [PortInfo], depth: PortScanner.ScanDepth = .full) -> [String] {
         ports.map { port in
-            let fields: [String] = [
+            var fields: [String] = [
                 String(port.port),
                 String(port.pid),
                 port.proto,
@@ -374,14 +434,24 @@ class PortManager: ObservableObject {
                 String(port.memorySizeKB),
                 port.type.rawValue,
                 port.bindAddress ?? "",
-                port.containerName ?? "",
-                String(port.children?.count ?? 0),
-                // Attribution can change on its own (a session ending); the
-                // chip must follow.
-                port.agentOwner.map { "\($0.sessionId)|\($0.confidence.rawValue)|\($0.sessionEnded)" } ?? ""
             ]
+            if depth == .full {
+                fields += [
+                    port.containerName ?? "",
+                    String(port.children?.count ?? 0),
+                    // Attribution can change on its own (a session ending);
+                    // the chip must follow.
+                    port.agentOwner.map { "\($0.sessionId)|\($0.confidence.rawValue)|\($0.sessionEnded)" } ?? ""
+                ]
+            }
             return fields.joined(separator: "|")
         }
+    }
+
+    /// Test rows republish on structural change, or at most every 10s so
+    /// the Tests tab's CPU column keeps moving without a re-render per scan.
+    static func testsSignature(_ tests: [TestProcessInfo]) -> [String] {
+        tests.map { "\($0.pid)|\($0.processName)|\($0.type.rawValue)|\($0.agentOwner?.sessionId ?? "")" }
     }
 
     // MARK: - System process detection
@@ -390,24 +460,21 @@ class PortManager: ObservableObject {
         "/System/", "/usr/libexec/", "/usr/sbin/", "/sbin/", "/Library/Apple/"
     ]
 
+    private static let currentUser = NSUserName()
+
     /// True for ports owned by other users (root, _daemons) or by binaries
     /// living in system locations.
     func isSystemPort(_ port: PortInfo) -> Bool {
-        if port.user != NSUserName() {
+        if port.user != Self.currentUser {
             return true
         }
         return Self.systemPathPrefixes.contains { port.command.hasPrefix($0) }
     }
 
-    /// The ports the list actually shows, honoring the hide-system setting.
-    var visiblePorts: [PortInfo] {
-        hideSystemProcesses ? activePorts.filter { !isSystemPort($0) } : activePorts
-    }
-
-    /// Menu-bar badge: only dev-relevant ports. Counting every system daemon
-    /// made the badge permanently ~30 and therefore meaningless.
-    var menuBarBadgeCount: Int {
-        activePorts.filter { !isSystemPort($0) && $0.type != .ide }.count
+    private func recomputeVisiblePorts() {
+        let userPorts = activePorts.filter { !isSystemPort($0) }
+        visiblePorts = hideSystemProcesses ? userPorts : activePorts
+        menuBarBadgeCount = userPorts.filter { $0.type != .ide }.count
     }
 
     /// How many ports the hide-system filter is currently swallowing.
@@ -462,7 +529,9 @@ class PortManager: ObservableObject {
     /// can switch between the foreground and background cadence.
     func setPopoverVisible(_ visible: Bool) {
         isPopoverVisible = visible
-        restartTimer()
+        // Opening wants fresh, full data now; closing only changes cadence,
+        // so it must not spend a scan nobody will see.
+        restartTimer(refreshNow: visible)
 
         let isManualMode = refreshInterval <= 0
         if visible && isManualMode {
@@ -494,8 +563,7 @@ class PortManager: ObservableObject {
         stopAutoRefresh()
     }
 
-    /// Starts automatic port refreshing
-    func startAutoRefresh() {
+    func startAutoRefresh(refreshNow: Bool = true) {
         stopAutoRefresh()
 
         let interval = effectiveRefreshInterval
@@ -513,18 +581,19 @@ class PortManager: ObservableObject {
         timer.tolerance = interval * 0.1
         refreshTimer = timer
 
-        refresh() // Initial refresh
+        if refreshNow {
+            refresh()
+        }
     }
 
-    /// Stops automatic refreshing
     func stopAutoRefresh() {
         refreshTimer?.invalidate()
         refreshTimer = nil
     }
 
-    private func restartTimer() {
+    private func restartTimer(refreshNow: Bool = true) {
         stopAutoRefresh()
-        startAutoRefresh()
+        startAutoRefresh(refreshNow: refreshNow)
     }
 
     // MARK: - Computed Properties
@@ -536,27 +605,40 @@ class PortManager: ObservableObject {
         MemoryFormat.string(kilobytes: activeTests.reduce(0) { $0 + $1.memorySizeKB })
     }
 
+    private func publishTests(_ tests: [TestProcessInfo]) {
+        let changed = Self.testsSignature(tests) != Self.testsSignature(activeTests)
+        let stale = Date().timeIntervalSince(lastTestsPublish) > 10
+        guard changed || (stale && tests != activeTests) else { return }
+        activeTests = tests
+        lastTestsPublish = Date()
+    }
+
     // MARK: - Refresh
 
-    /// Manually refreshes port list
     func refresh(showToast: Bool = false) {
         if isRefreshing {
             return
         }
         isRefreshing = true
+        // Nothing on screen: the badge and the watchlist need six fields, not
+        // working directories, Docker names, or agent attribution.
+        let depth: PortScanner.ScanDepth = isPopoverVisible ? .full : .light
+        let guarded = guardedPorts
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            // One ps snapshot shared by both scanners (was one ps/pgrep per port).
+            // One native snapshot shared by both scanners.
             let processTable = ProcessTable.capture()
             let tests = self.processScanner.scanTestProcesses(processes: processTable)
-            let portsResult = Result { try self.scanner.scanActivePorts(processes: processTable) }
+            let portsResult = Result { try self.scanner.scanActivePorts(processes: processTable, depth: depth) }
+            // A light scan skips attribution, but the guard decides on it and
+            // runs precisely while nothing is on screen: attribute just the
+            // occupants of guarded ports.
+            let guardOwners = Self.ownersOfGuardedOccupants(guarded, in: (try? portsResult.get()) ?? [], processes: processTable)
 
             DispatchQueue.main.async {
-                if tests != self.activeTests {
-                    self.activeTests = tests
-                }
+                self.publishTests(tests)
                 self.isRefreshing = false
 
                 switch portsResult {
@@ -565,13 +647,14 @@ class PortManager: ObservableObject {
                     // every scan, so full-model `!=` would republish (and force a
                     // whole-list SwiftUI re-diff) every 2s even when nothing
                     // structural changed.
-                    if Self.stableSignature(ports) != Self.stableSignature(self.activePorts) {
+                    let current = depth == .full ? self.activeSignature : Self.stableSignature(self.activePorts, depth: .light)
+                    if Self.stableSignature(ports, depth: depth) != current {
                         self.activePorts = ports
                     }
-                    self.processWatchedPorts(with: ports)
+                    self.processWatchedPorts(with: ports, guardOwners: guardOwners)
                     self.firePendingFreeNotifications(with: ports)
                     self.hasCompletedFirstScan = true
-                    self.lastUpdated = Date()
+                    self.clock.lastUpdated = Date()
                     self.lastErrorMessage = nil
                     if showToast {
                         self.showToast("Refreshed")

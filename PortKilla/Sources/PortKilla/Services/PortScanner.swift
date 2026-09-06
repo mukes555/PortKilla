@@ -11,6 +11,10 @@ class PortScanner {
     /// pid -> working directory, cached because PIDs are stable across refreshes.
     private var cwdCache: [Int: String] = [:]
 
+    /// True when the last scan had to shell out to lsof (libproc unavailable),
+    /// so the UI can say why it is slower.
+    private(set) var lastScanUsedFallback = false
+
     /// How much enrichment a scan does. While nothing is on screen only the
     /// badge count and the watchlist consume the result, and they need six
     /// fields, not working directories, Docker names, or agent attribution.
@@ -26,6 +30,7 @@ class PortScanner {
         // nil means libproc is unavailable; an empty list is a real answer and
         // must not fall through to lsof on every refresh of a quiet machine.
         if let native = processes.listeners ?? NativeScanner.allListeners() {
+            lastScanUsedFallback = false
             var raws: [RawListener] = []
             for listener in native {
                 let raw = RawListener(
@@ -42,6 +47,7 @@ class PortScanner {
         }
 
         // Fallback: the lsof pipeline
+        lastScanUsedFallback = true
         return try scanWithLsof(processes: processes)
     }
 

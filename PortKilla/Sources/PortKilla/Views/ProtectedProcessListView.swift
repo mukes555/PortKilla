@@ -1,21 +1,13 @@
 import SwiftUI
 
+/// The Protected pane of Settings: substrings of process names that bulk
+/// actions and port guards never touch.
 struct ProtectedProcessListView: View {
     @ObservedObject var portManager: PortManager
-    /// True when hosted inside the Settings window (no faux title bar / Close).
-    var embedded: Bool = false
-    @Environment(\.dismiss) private var dismiss
     @State private var newSubstring = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if !embedded {
-                DetailTitleBar(onClose: { dismiss() })
-
-                Text("Protected Processes")
-                    .font(.headline)
-            }
-
             Text("Bulk actions skip any process whose name contains one of these substrings.")
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -63,32 +55,9 @@ struct ProtectedProcessListView: View {
                 .buttonStyle(.bordered)
 
                 Spacer()
-
-                if !embedded {
-                    Button("Close") {
-                        dismiss()
-                    }
-                    .buttonStyle(.bordered)
-                    .keyboardShortcut(.defaultAction)
-                }
             }
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .modifier(FixedSizeIf(active: !embedded, width: 460, height: 420))
-    }
-}
-
-/// Applies a fixed frame only when not embedded (embedded fills the tab).
-private struct FixedSizeIf: ViewModifier {
-    let active: Bool
-    let width: CGFloat
-    let height: CGFloat
-    func body(content: Content) -> some View {
-        if active {
-            content.frame(width: width, height: height)
-        } else {
-            content
-        }
     }
 }

@@ -11,13 +11,31 @@ struct PortListView: View {
         case tests = "Tests"
 
         var id: String { rawValue }
+
+        /// What ⌘K and the footer button kill on this filter. "All" keeps
+        /// the classic "Kill All Dev" behaviour.
+        var bulkKillLabel: String {
+            switch self {
+            case .all, .dev: return "Kill All Dev"
+            case .database: return "Kill All Databases"
+            case .docker: return "Kill All Docker"
+            case .tests: return "Kill All Tests"
+            }
+        }
+
+        func includesInBulkKill(_ port: PortInfo) -> Bool {
+            switch self {
+            case .all, .dev: return port.type.category == .web
+            case .database: return port.type.category == .database
+            case .docker: return port.type == .docker || port.containerName != nil
+            case .tests: return false
+            }
+        }
     }
 
     enum ActiveSheet: Identifiable {
         case portDetail(PortInfo)
         case bulkKill
-        case protectedProcesses
-        case hotkeyRecorder
 
         var id: String {
             switch self {
@@ -25,10 +43,6 @@ struct PortListView: View {
                 return "portDetail-\(port.id)"
             case .bulkKill:
                 return "bulkKill"
-            case .protectedProcesses:
-                return "protectedProcesses"
-            case .hotkeyRecorder:
-                return "hotkeyRecorder"
             }
         }
     }
@@ -47,13 +61,15 @@ struct PortListView: View {
     @AppStorage("PortKilla.didDismissHotkeyTip") var didDismissHotkeyTip = false
     @FocusState var isSearchFocused: Bool
 
-    let installsKeyMonitor: Bool
+    /// The pinned panel hosts a second copy of this view; each copy handles
+    /// keys only while its own window is key.
+    let hostedInPinnedWindow: Bool
 
-    init(portManager: PortManager, initialSearchText: String = "", initialSelectedId: String? = nil, installsKeyMonitor: Bool = true) {
+    init(portManager: PortManager, initialSearchText: String = "", initialSelectedId: String? = nil, hostedInPinnedWindow: Bool = false) {
         _portManager = ObservedObject(wrappedValue: portManager)
         _searchText = State(initialValue: initialSearchText)
         _selectedId = State(initialValue: initialSelectedId)
-        self.installsKeyMonitor = installsKeyMonitor
+        self.hostedInPinnedWindow = hostedInPinnedWindow
     }
 
     var filteredPorts: [PortInfo] {
@@ -125,6 +141,12 @@ struct PortListView: View {
         return filteredTests.first { $0.id == selectedId }
     }
 
+    /// The popover must stay 500x600 (NSPopover follows the hosting
+    /// controller's ideal size, and an unbounded list would grow with its
+    /// content); only the pinned panel may be resized.
+    private var maxWidth: CGFloat { hostedInPinnedWindow ? .infinity : 500 }
+    private var maxHeight: CGFloat { hostedInPinnedWindow ? .infinity : 600 }
+
     var body: some View {
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
@@ -153,7 +175,7 @@ struct PortListView: View {
 
                 footerView
             }
-            .frame(width: 500, height: 600)
+            .frame(minWidth: 500, maxWidth: maxWidth, minHeight: 600, maxHeight: maxHeight)
 
             if let toastMessage = portManager.toastMessage {
                 VStack {
@@ -161,7 +183,7 @@ struct PortListView: View {
                     ToastView(message: toastMessage)
                         .padding(.bottom, 12)
                 }
-                .frame(width: 500, height: 600)
+                .frame(minWidth: 500, maxWidth: maxWidth, minHeight: 600, maxHeight: maxHeight)
                 .allowsHitTesting(false)
             }
         }
@@ -188,10 +210,6 @@ struct PortListView: View {
                 PortDetailView(port: port)
             case .bulkKill:
                 BulkKillView(portManager: portManager)
-            case .protectedProcesses:
-                ProtectedProcessListView(portManager: portManager)
-            case .hotkeyRecorder:
-                HotKeyRecorderView()
             }
         }
     }
@@ -233,7 +251,9 @@ struct PortListView: View {
                 )
             }
 
-            if filteredPorts.isEmpty {
+            if !portManager.hasCompletedFirstScan {
+                loadingStateView
+            } else if filteredPorts.isEmpty {
                 emptyStateView
             } else {
                 PortListContent(

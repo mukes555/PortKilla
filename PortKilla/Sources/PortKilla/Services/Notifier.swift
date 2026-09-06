@@ -19,13 +19,24 @@ enum Notifier {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
-    static func send(title: String, body: String) {
+    /// nil when notifications are unavailable in this build (no .app bundle).
+    static func authorizationStatus(completion: @escaping (UNAuthorizationStatus?) -> Void) {
+        guard isAvailable else {
+            completion(nil)
+            return
+        }
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async { completion(settings.authorizationStatus) }
+        }
+    }
+
+    static func send(title: String, body: String, sound: Bool = true) {
         guard isAvailable else { return }
 
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
-        content.sound = .default
+        content.sound = sound ? .default : nil
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,

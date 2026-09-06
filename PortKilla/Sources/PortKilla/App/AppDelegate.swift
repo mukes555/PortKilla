@@ -11,7 +11,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     var popover: NSPopover!
     var historyWindow: NSWindow?
     private var settingsWindow: NSWindow?
-    private var pinnedPanel: NSPanel?
+    private(set) var pinnedPanel: NSPanel?
     @Published var isPinned = false
     private var hotKey: GlobalHotKey?
 
@@ -217,7 +217,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
 
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 500, height: 600),
-            styleMask: [.titled, .closable, .utilityWindow],
+            styleMask: [.titled, .closable, .resizable, .utilityWindow],
             backing: .buffered,
             defer: false
         )
@@ -225,14 +225,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         panel.level = .floating
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
-        // The panel is mouse-driven; a second key monitor would double-handle
-        // shortcuts alongside the popover's.
+        panel.minSize = NSSize(width: 500, height: 600)
         panel.contentViewController = NSHostingController(
-            rootView: PortListView(portManager: portManager, installsKeyMonitor: false)
+            rootView: PortListView(portManager: portManager, hostedInPinnedWindow: true)
                 .environmentObject(self)
         )
         panel.delegate = self
-        panel.center()
+        // Remember where the user put it (and on which display); centre only
+        // the very first time.
+        panel.setFrameAutosaveName("PortKillaPinnedWindow")
+        if !panel.setFrameUsingName("PortKillaPinnedWindow") {
+            panel.center()
+        }
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 

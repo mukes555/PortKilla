@@ -81,7 +81,8 @@ screen-recording permission needed. CI uses the first one as a smoke test.
 | Env var | Effect |
 |---|---|
 | `PORTKILLA_SNAPSHOT=/path.png` | Render a view offscreen to PNG, then quit |
-| `PORTKILLA_SNAPSHOT_VIEW=main\|bulkkill\|protected\|detail\|settings` | Which view to render (default `main`) |
+| `PORTKILLA_SNAPSHOT_VIEW=main\|bulkkill\|protected\|detail\|settings\|workbench\|workbench-live` | Which view to render (default `main`); `workbench-live` opens the real window for a moment so the sidebar material draws |
+| `PORTKILLA_SNAPSHOT_SEARCH="kill 3000"` | Seed the popover's search field, so the palette bar renders |
 | `PORTKILLA_SNAPSHOT_DENSITY=clean\|advanced` | Seed the row density |
 | `PORTKILLA_SNAPSHOT_WATCH=3000,9999` | Seed watched ports |
 | `PORTKILLA_SNAPSHOT_APPEARANCE=light\|dark` | Force appearance |

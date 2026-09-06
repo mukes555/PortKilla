@@ -24,6 +24,11 @@ extension PortListView {
 
             searchField
 
+            if let action = paletteAction {
+                PaletteBar(action: action, commands: paletteQuery.commandMatches, onRun: { _ = runPaletteAction() },
+                           onCommand: { perform($0) })
+            }
+
             filterChips
 
             if !didDismissHotkeyTip {
@@ -51,6 +56,7 @@ extension PortListView {
                 appDelegate.togglePinnedWindow()
             }
             Button("History…") { appDelegate.showHistory() }
+            Button("Open Workbench") { appDelegate.openWorkbench() }
 
             Divider()
 
@@ -120,7 +126,7 @@ extension PortListView {
         HStack {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.secondary)
-            TextField("Search ports, processes…", text: $searchText)
+            TextField("Search, or type kill 3000, open 5173, > commands", text: $searchText)
                 .textFieldStyle(PlainTextFieldStyle())
                 .focused($isSearchFocused)
             if !searchText.isEmpty {

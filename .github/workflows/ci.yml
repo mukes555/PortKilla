@@ -61,12 +61,16 @@ jobs:
           swift build
           PORTKILLA_SNAPSHOT=/tmp/ui-smoke.png .build/debug/PortKilla
           test -s /tmp/ui-smoke.png
+          PORTKILLA_SNAPSHOT=/tmp/ui-workbench.png PORTKILLA_SNAPSHOT_VIEW=workbench .build/debug/PortKilla
+          test -s /tmp/ui-workbench.png
+          PORTKILLA_SNAPSHOT=/tmp/ui-palette.png PORTKILLA_SNAPSHOT_SEARCH="kill 3000" .build/debug/PortKilla
+          test -s /tmp/ui-palette.png
 
       - name: Upload UI snapshot
         uses: actions/upload-artifact@v7
         with:
           name: ui-smoke
-          path: /tmp/ui-smoke.png
+          path: /tmp/ui-*.png
 
   # The release ships an x86_64 slice; run the suite through Rosetta so it
   # has executed at least once. Advisory until an Intel runner is available.

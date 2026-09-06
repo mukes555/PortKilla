@@ -90,23 +90,12 @@ struct PortListView: View {
             ports = ports.filter { $0.type == .docker || $0.containerName != nil }
         }
 
-        if searchText.isEmpty {
+        // "kill 3000" filters to :3000; the verb is the palette's business.
+        let needle = paletteQuery.rowFilter
+        if needle.isEmpty {
             return ports
         }
-        let needle = searchText
-        // Plain case-insensitive matching: the locale-aware variant is an
-        // ICU call per field per port per keystroke.
-        func matches(_ text: String?) -> Bool {
-            text?.range(of: needle, options: .caseInsensitive) != nil
-        }
-        return ports.filter { port in
-            String(port.port).contains(needle) ||
-            matches(port.processName) ||
-            matches(port.command) ||
-            matches(port.projectName) ||
-            matches(port.containerName) ||
-            matches(port.agentOwner?.name)
-        }
+        return ports.filter { PortSearch.matches($0, needle) }
     }
 
     // Web first, then IDE, then DB, then Other
@@ -118,12 +107,13 @@ struct PortListView: View {
     }
 
     var filteredTests: [TestProcessInfo] {
-        if searchText.isEmpty {
+        let needle = paletteQuery.rowFilter
+        if needle.isEmpty {
             return portManager.activeTests
         }
         return portManager.activeTests.filter { test in
-            test.processName.localizedCaseInsensitiveContains(searchText) ||
-            test.command.localizedCaseInsensitiveContains(searchText)
+            test.processName.localizedCaseInsensitiveContains(needle) ||
+            test.command.localizedCaseInsensitiveContains(needle)
         }
     }
 

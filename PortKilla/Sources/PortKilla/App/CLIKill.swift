@@ -24,7 +24,7 @@ enum CLIKill {
     }
 
     static func run(_ options: CLICommand.KillOptions) -> Int32 {
-        let scan = PortKillaCLI.scan()
+        let scan = PortKillaCLI.scan(refreshDocker: false)
         let targets = select(from: scan.ports, options: options)
         var report = Report(
             action: "", port: options.port, force: options.force, caller: scan.caller,

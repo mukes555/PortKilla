@@ -39,6 +39,10 @@ per port:
 1. **`ProcessTable.capture()`** — one process snapshot for the whole refresh.
    It calls **`NativeScanner`** first.
 2. **`NativeScanner`** ([Services/NativeScanner.swift](PortKilla/Sources/PortKilla/Services/NativeScanner.swift))
+   walks the pid list once for both the process table and the listening
+   sockets (`NativeScanner+Sockets.swift`). Facts that cannot change after
+   exec (path, argv, env markers) come from `ProcessFacts`, a per-(pid, start
+   time) cache, so steady-state refreshes skip most syscalls.
    — raw `libproc`/`proc_info` syscalls via the **`CLibProc`** C target. Lists
    PIDs, sockets, memory, CPU, working directories, and command lines with **no
    subprocesses** (~19 ms for ~480 processes). This is the fast path.

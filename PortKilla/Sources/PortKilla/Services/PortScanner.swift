@@ -11,26 +11,34 @@ class PortScanner {
     /// pid -> working directory, cached because PIDs are stable across refreshes.
     private var cwdCache: [Int: String] = [:]
 
+    /// How much enrichment a scan does. While nothing is on screen only the
+    /// badge count and the watchlist consume the result, and they need six
+    /// fields, not working directories, Docker names, or agent attribution.
+    enum ScanDepth {
+        case light
+        case full
+    }
+
     /// Scans listening TCP ports and bound UDP sockets. `processes` supplies
     /// per-PID command, memory, and children so we don't shell out per port.
-    func scanActivePorts(processes: ProcessTable) throws -> [PortInfo] {
-        // Fast path: raw libproc syscalls, no subprocesses at all. nil means
-        // libproc is unavailable; an empty list is a real answer and must not
-        // fall through to lsof on every refresh of a quiet machine.
-        if let native = NativeScanner.allListeners() {
+    func scanActivePorts(processes: ProcessTable, depth: ScanDepth = .full) throws -> [PortInfo] {
+        // Fast path: listeners gathered in the same native pass as the table.
+        // nil means libproc is unavailable; an empty list is a real answer and
+        // must not fall through to lsof on every refresh of a quiet machine.
+        if let native = processes.listeners ?? NativeScanner.allListeners() {
             var raws: [RawListener] = []
             for listener in native {
                 let raw = RawListener(
                     processName: processes.name(for: listener.pid) ?? "unknown",
                     pid: listener.pid,
-                    user: NativeScanner.bsdInfo(Int32(listener.pid)).map { NativeScanner.username($0.pbi_uid) } ?? "?",
+                    user: processes.user(for: listener.pid) ?? "?",
                     host: listener.host,
                     port: listener.port,
                     proto: listener.proto
                 )
                 mergeListener(raw, into: &raws)
             }
-            return buildPortInfos(raws, processes: processes)
+            return buildPortInfos(raws, processes: processes, depth: depth)
         }
 
         // Fallback: the lsof pipeline
@@ -131,21 +139,26 @@ class PortScanner {
     }
 
     /// Enriches raw listeners with process details from the shared snapshot.
-    private func buildPortInfos(_ listeners: [RawListener], processes: ProcessTable) -> [PortInfo] {
-        refreshWorkingDirectories(for: listeners.map { $0.pid })
+    private func buildPortInfos(_ listeners: [RawListener], processes: ProcessTable, depth: ScanDepth = .full) -> [PortInfo] {
+        let isFull = depth == .full
+        if isFull {
+            refreshWorkingDirectories(for: listeners.map { $0.pid }, processes: processes)
+            let dockerPresent = listeners.contains { $0.processName.lowercased().contains("docker") }
+            DockerService.shared.refreshInBackground(dockerPresent: dockerPresent)
+        }
 
         let ports = listeners.map { raw -> PortInfo in
             let command = processes.command(for: raw.pid) ?? ""
             let processName = Self.bestProcessName(lsofName: raw.processName, entryName: processes.name(for: raw.pid))
             let memoryKb = processes.rssKB(for: raw.pid) ?? 0
             let memory = memoryKb > 0 ? MemoryFormat.string(kilobytes: memoryKb) : "N/A"
-            let children = processes.children(of: raw.pid).map {
+            let children = isFull ? processes.children(of: raw.pid).map {
                 PortInfo.ProcessInfo(pid: $0.pid, name: $0.name, command: $0.command)
-            }
-            let projectPath = projectWorthyPath(cwdCache[raw.pid])
+            } : []
+            let projectPath = isFull ? projectWorthyPath(cwdCache[raw.pid]) : nil
 
             let type = determinePortType(processName: processName, command: command)
-            let containerName = DockerService.shared.getContainerName(forPort: raw.port)
+            let containerName = isFull ? DockerService.shared.getContainerName(forPort: raw.port) : nil
             return PortInfo(
                 port: raw.port,
                 pid: raw.pid,
@@ -163,7 +176,7 @@ class PortScanner {
                 proto: raw.proto,
                 cpuPercent: processes.cpuPercent(for: raw.pid) ?? 0,
                 age: processes.ageSeconds(for: raw.pid).flatMap { ElapsedFormat.humanize(seconds: $0) },
-                agentOwner: agentOwner(for: raw, type: type, containerName: containerName, processes: processes)
+                agentOwner: isFull ? agentOwner(for: raw, type: type, containerName: containerName, processes: processes) : nil
             )
         }
 
@@ -182,7 +195,7 @@ class PortScanner {
 
     /// Resolves working directories for PIDs not yet cached — native syscall
     /// first, one lsof batch as fallback — and drops entries for dead PIDs.
-    private func refreshWorkingDirectories(for pids: [Int]) {
+    private func refreshWorkingDirectories(for pids: [Int], processes: ProcessTable) {
         let live = Set(pids)
         cwdCache = cwdCache.filter { live.contains($0.key) }
 
@@ -194,7 +207,10 @@ class PortScanner {
                 cwdCache[pid] = path
             }
         }
-        missing = missing.filter { cwdCache[$0] == nil }
+        // Other users' processes (root daemons) can't be read by lsof either,
+        // so asking would only fork a subprocess that returns nothing.
+        let me = getuid()
+        missing = missing.filter { cwdCache[$0] == nil && (processes.uid(for: $0) ?? me) == me }
 
         if !missing.isEmpty {
             let pidList = missing.map(String.init).joined(separator: ",")

@@ -19,7 +19,7 @@ extension AppDelegate {
         manager.activeTests = [Self.demoTest]
         manager.watchedPorts = [3000]
         manager.activePorts = Self.demoPorts(includePort3000: true)
-        manager.lastUpdated = Date()
+        manager.clock.lastUpdated = Date()
 
         let selectedNodeId = manager.activePorts.first { $0.port == 3000 }!.id
 

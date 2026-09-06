@@ -117,9 +117,10 @@ extension PortListView {
     /// setting (with a "don't ask again" checkbox) and then delegates.
     func requestKill(_ port: PortInfo, force: Bool, killTree: Bool) {
         if portManager.confirmBeforeKill {
+            let owner = port.agentOwner.map { "\n\nStarted by \($0.name)." } ?? ""
             let confirmed = runKillConfirmation(
                 title: "Kill Process on :\(port.port)?",
-                message: "This will terminate '\(port.processName)' (PID \(port.pid))."
+                message: "This will terminate '\(port.processName)' (PID \(port.pid)).\(owner)"
             )
             guard confirmed else { return }
         }

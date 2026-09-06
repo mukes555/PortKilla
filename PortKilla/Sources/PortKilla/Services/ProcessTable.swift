@@ -96,6 +96,7 @@ struct ProcessTable {
 
     func command(for pid: Int) -> String? { entriesByPid[pid]?.command }
     func name(for pid: Int) -> String? { entriesByPid[pid]?.name }
+    func ppid(for pid: Int) -> Int? { entriesByPid[pid]?.ppid }
     func rssKB(for pid: Int) -> Int? { entriesByPid[pid]?.rssKB }
     func cpuPercent(for pid: Int) -> Double? { entriesByPid[pid]?.cpuPercent }
     func ageSeconds(for pid: Int) -> Int? { entriesByPid[pid]?.ageSeconds }

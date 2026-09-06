@@ -158,7 +158,8 @@ class PortScanner {
                 bindAddress: raw.host,
                 proto: raw.proto,
                 cpuPercent: processes.cpuPercent(for: raw.pid) ?? 0,
-                age: processes.ageSeconds(for: raw.pid).flatMap { ElapsedFormat.humanize(seconds: $0) }
+                age: processes.ageSeconds(for: raw.pid).flatMap { ElapsedFormat.humanize(seconds: $0) },
+                agentOwner: AgentAttribution.owner(ofPid: raw.pid, in: processes)
             )
         }
 

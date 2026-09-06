@@ -207,6 +207,23 @@ struct PortRowView: View {
                                 .help("Listening on all interfaces (\(port.bindAddress ?? "*")) — reachable from your local network")
                             }
 
+                            // Which AI agent spawned this — the friendly-fire signal.
+                            if let agent = port.agentOwner {
+                                HStack(spacing: 2) {
+                                    Image(systemName: "sparkles")
+                                        .font(.system(size: 8))
+                                    Text(agent.name)
+                                        .font(.system(size: 10))
+                                        .lineLimit(1)
+                                }
+                                .fixedSize()
+                                .foregroundColor(.teal)
+                                .padding(.horizontal, 4)
+                                .background(Color.teal.opacity(0.12))
+                                .cornerRadius(4)
+                                .help("Started by \(agent.name) — the CLI won't let another agent kill it without --force")
+                            }
+
                             // Clean mode: surface the project/container inline
                             // since the second detail line is hidden.
                             if manager.viewDensity == .clean, let label = cleanSubtitle {

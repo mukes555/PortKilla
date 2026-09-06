@@ -11,12 +11,23 @@ release, rename it to the version and date.
 
 ## [Unreleased]
 
-<!-- Add entries here as PRs land, e.g.:
+<!-- next -->
+
+## 1.7.0 — 2026-09-06
+
 ### Added
-- …
-### Fixed
-- …
--->
+- **Agent attribution & friendly-fire protection** — so AI coding agents don't
+  kill each other's dev servers. PortKilla attributes each listening process to
+  the agent that spawned it (Claude Code, Cursor, VS Code, Windsurf, Zed, Trae,
+  Aider) by walking the process ancestry — no launcher or opt-in required.
+  - A ✨ agent chip on rows and an **Agent** field in the detail sheet.
+  - `portkilla list` shows an **AGENT** column.
+  - **`portkilla kill` refuses** to stop a port owned by a different agent
+    session unless `--force` (exit code 3). Set `PORTKILLA_OWNER` to declare the
+    caller's identity, or it's detected from the process tree.
+  - GUI kill confirmations note the owning agent.
+  - Best-effort: a detached server (double-fork / nohup / pm2) loses the
+    ancestry link and reports no owner rather than guessing.
 
 ## 1.6.0 — 2026-08-08
 

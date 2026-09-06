@@ -13,11 +13,12 @@ top of it:
   but before the GUI launches it hands `argv` to
   [`PortKillaCLI`](PortKilla/Sources/PortKillaCore/CLI/CLI.swift): a known
   subcommand runs and exits, anything else starts the app.
-- **`portkilla`** ([Sources/portkilla-cli](PortKilla/Sources/portkilla-cli/main.swift),
+- **`portkilla-cli`** ([Sources/portkilla-cli](PortKilla/Sources/portkilla-cli/main.swift),
   one file): the same commands without AppKit, so `portkilla list` from a
   script or an agent starts in a few milliseconds. `scripts/build.sh` copies
-  it into the bundle as `Contents/MacOS/portkilla`, which is what Homebrew
-  links onto PATH.
+  it into the bundle as `Contents/Helpers/portkilla`, which is what Homebrew
+  links onto PATH. (The product is not called `portkilla` because on a
+  case-insensitive volume that is the same file as the app's `PortKilla`.)
 - **`PortKillaTests`** links both, so the suite can drive the core directly
   and spawn the debug `portkilla` as a real process.
 

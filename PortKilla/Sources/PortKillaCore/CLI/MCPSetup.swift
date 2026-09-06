@@ -26,7 +26,7 @@ public enum MCPSetup {
         let chosen = agent.flatMap { agents[$0].map { [$0] } } ?? ["claude", "cursor", "codex"].compactMap { agents[$0] }
         let footer = """
         `portkilla` must be on the agent's PATH (Homebrew links it; otherwise use the full path
-        /Applications/PortKilla.app/Contents/MacOS/portkilla). The agent starts the server when it
+        /Applications/PortKilla.app/Contents/Helpers/portkilla). The agent starts the server when it
         needs it and stops it afterwards; there is nothing to keep running.
         """
         return (chosen + [footer]).joined(separator: "\n")

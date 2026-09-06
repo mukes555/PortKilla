@@ -16,7 +16,9 @@ let package = Package(
     ],
     products: [
         .executable(name: "PortKilla", targets: ["PortKilla"]),
-        .executable(name: "portkilla", targets: ["portkilla-cli"]),
+        // Not "portkilla": on a case-insensitive volume that is the same file
+        // as the app's "PortKilla" and the two links clobber each other.
+        .executable(name: "portkilla-cli", targets: ["portkilla-cli"]),
         .library(name: "PortKillaCore", targets: ["PortKillaCore"]),
     ],
     targets: [

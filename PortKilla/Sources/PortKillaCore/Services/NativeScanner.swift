@@ -213,7 +213,7 @@ public enum NativeScanner {
     public static func environmentMarkers(_ pid: Int32, keys: Set<String>) -> [String: String] {
         guard var buffer = procArgsBuffer(pid), let layout = ProcArgsLayout(buffer) else { return [:] }
         defer {
-            buffer.withUnsafeMutableBytes { $0.initializeMemory(as: UInt8.self, repeating: 0) }
+            _ = buffer.withUnsafeMutableBytes { $0.initializeMemory(as: UInt8.self, repeating: 0) }
         }
 
         var index = layout.argvStart

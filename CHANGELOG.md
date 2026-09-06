@@ -13,6 +13,13 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+## 1.8.2 — 2026-09-06
+
+### Fixed
+- `portkilla version` still printed `dev` when invoked by bare name through
+  PATH (argv[0] carries no path). The CLI now asks the kernel for its real
+  executable path before locating the app bundle.
+
 ## 1.8.1 — 2026-09-06
 
 ### Fixed

@@ -20,6 +20,8 @@ enum PortKillaCLI {
             return list(json: arguments.contains("--json"))
         case "kill":
             return kill(arguments: Array(arguments.dropFirst()))
+        case "whoami":
+            return whoami()
         case "help", "--help", "-h":
             printUsage()
             return 0
@@ -98,10 +100,13 @@ enum PortKillaCLI {
         let callerPid = Int(Foundation.ProcessInfo.processInfo.processIdentifier)
         let caller = AgentAttribution.callerOwner(callerPid: callerPid, in: table)
         if !force, AgentAttribution.isFriendlyFire(caller: caller, target: target.agentOwner) {
-            let owner = target.agentOwner?.name ?? "another agent"
-            FileHandle.standardError.write(Data(
-                ":\(portNumber) is owned by \(owner) (a different session than \(caller?.name ?? "you")). Pass --force to override.\n".utf8
-            ))
+            let owner = target.agentOwner.map(describe) ?? "another agent"
+            let you = caller.map(describe) ?? "you"
+            FileHandle.standardError.write(Data("""
+                :\(portNumber) is owned by \(owner), not \(you). Refusing to kill another agent's server.
+                Pass --force to override, or run `portkilla whoami` to check how you are identified.
+
+                """.utf8))
             return 3
         }
 
@@ -128,6 +133,25 @@ enum PortKillaCLI {
         return 1
     }
 
+    /// Prints how the friendly-fire guard identifies the calling process, so
+    /// an agent can check itself before a kill is refused.
+    private static func whoami() -> Int32 {
+        let table = ProcessTable.capture()
+        let callerPid = Int(Foundation.ProcessInfo.processInfo.processIdentifier)
+        guard let me = AgentAttribution.callerOwner(callerPid: callerPid, in: table) else {
+            print("Not running under a known AI agent. Set PORTKILLA_OWNER=<name> to declare one.")
+            return 0
+        }
+        let how = me.source == .declared ? "declared via PORTKILLA_OWNER" : "detected from \(me.source.rawValue)"
+        print("\(describe(me)), \(how)")
+        return 0
+    }
+
+    /// "Claude Code (session 845)" or just the name when the session is unknown.
+    private static func describe(_ owner: AgentOwner) -> String {
+        owner.sessionPid.map { "\(owner.name) (session \($0))" } ?? owner.name
+    }
+
     private static func printUsage() {
         print("""
         PortKilla — macOS port manager
@@ -135,12 +159,14 @@ enum PortKillaCLI {
         Usage:
           portkilla list [--json]          List listening ports (with owning agent)
           portkilla kill <port> [--force]  Kill the process on a port
+          portkilla whoami                 Show which AI agent you are seen as
           portkilla version                Print version
           portkilla help                   Show this help
 
         Friendly-fire guard: `kill` refuses to stop a port owned by a different
-        AI-agent session unless --force. Set PORTKILLA_OWNER to declare who you
-        are; otherwise the owner is detected from the process tree.
+        AI-agent session unless --force (exit code 3). Owners are detected from
+        the process tree and from the environment agents leave on their
+        children; set PORTKILLA_OWNER to declare who you are instead.
 
         The GUI launches when run with no arguments.
         """)

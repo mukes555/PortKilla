@@ -49,18 +49,26 @@ Right-click any port → **Watch**. Watched ports are **pinned to the top of the
 ## 🤖 Agent-Aware (friendly-fire protection)
 
 Running multiple AI coding agents? PortKilla attributes each dev server to the
-**agent that started it** (Claude Code, Cursor, VS Code, Windsurf, Zed, Trae,
-Aider) by walking the process tree — no launcher or setup needed. Ports show a
-✨ agent chip, and the CLI **won't let one agent kill another's server**:
+**agent that started it** (Claude Code, Codex CLI, Gemini CLI, Copilot CLI,
+OpenCode, Aider, Cursor, VS Code, Windsurf, Zed, Trae). No launcher, no
+registry, no setup: it reads two passive signals, the process tree and the
+environment markers agents leave on their children (like `CLAUDECODE=1`). The
+second one survives `nohup`, pm2, and backgrounded shells, so a server keeps
+its owner even after it has been reparented to launchd.
+
+Ports show a ✨ agent chip, and the CLI **won't let one agent kill another's
+server**:
 
 ```bash
 portkilla kill 3000
-# :3000 is owned by Cursor (a different session than Claude Code).
-# Pass --force to override.
+# :3000 is owned by Cursor (session 812), not Claude Code (session 46200).
+# Refusing to kill another agent's server.
+# Pass --force to override, or run `portkilla whoami` to check how you are identified.
 ```
 
-Set `PORTKILLA_OWNER=<name>` to declare who you are, or it's detected
-automatically. Detached servers (nohup/pm2) show no owner rather than a guess.
+`portkilla whoami` prints how the guard sees the caller. Set
+`PORTKILLA_OWNER=<name>` to declare an identity instead of detecting one.
+When nothing is known about a port, PortKilla says so rather than guessing.
 
 ## 📡 More Signal
 
@@ -86,6 +94,7 @@ portkilla list            # table of listening ports
 portkilla list --json     # JSON output for scripts
 portkilla kill 3000       # graceful kill (SIGTERM)
 portkilla kill 3000 --force
+portkilla whoami          # which agent the friendly-fire guard thinks you are
 ```
 
 There's also a URL scheme: `open "portkilla://kill/3000"` or `portkilla://show`.
@@ -142,7 +151,7 @@ Drag `PortKilla.app` to `/Applications`.
 ./scripts/build.sh --dmg
 ```
 
-This produces `dist/PortKilla-1.7.0.dmg`.
+This produces `dist/PortKilla-1.8.0.dmg`.
 
 To distribute to other Macs without Gatekeeper prompts, you’ll eventually want Developer ID signing + notarization.
 

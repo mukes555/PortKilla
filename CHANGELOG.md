@@ -13,6 +13,25 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+## 1.8.0 — 2026-09-06
+
+### Changed
+- **Agent attribution now survives detached servers.** Besides the process
+  tree, PortKilla reads the environment markers agents leave on their
+  children (`CLAUDECODE`, `CURSOR_TRACE_ID`, `TERM_PROGRAM=vscode`,
+  `GEMINI_CLI`). A server backgrounded by an agent's shell, or started via
+  nohup/pm2, is reparented to launchd and lost the tree link in 1.7.0; it is
+  now attributed correctly. Only that allowlist of keys is ever read.
+- Session identity is recovered from `CLAUDE_PID`, which matches the pid the
+  tree walk finds, so the two signals agree.
+
+### Added
+- `portkilla whoami` prints how the friendly-fire guard identifies the caller
+  (name, session, and whether it was detected or declared).
+- Codex CLI, Gemini CLI, Copilot CLI, and OpenCode are recognised.
+- The `kill` refusal now names both sides and points at `whoami`.
+
+
 ## 1.7.0 — 2026-09-06
 
 ### Added

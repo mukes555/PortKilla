@@ -74,3 +74,43 @@ jobs:
           # Appends the auto-generated "Full Changelog" / contributors list
           # below our authored notes.
           generate_release_notes: true
+
+  # Pins the tap's cask to this release with its checksum, so `brew upgrade`
+  # sees new versions and Homebrew verifies the download. Runs only when a
+  # HOMEBREW_TAP_TOKEN secret (a fine-grained PAT with contents: write on
+  # mukes555/homebrew-tap) exists; otherwise the tap keeps `version :latest`.
+  update-tap:
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    env:
+      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+    steps:
+      - name: Checkout PortKilla (for the cask template)
+        if: env.HAS_TAP_TOKEN == 'true'
+        uses: actions/checkout@v7
+
+      - name: Checkout the tap
+        if: env.HAS_TAP_TOKEN == 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: mukes555/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Render and push the pinned cask
+        if: env.HAS_TAP_TOKEN == 'true'
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          case "$GITHUB_REF_NAME" in *-rc*|*-beta*|*-alpha*) echo "pre-release: tap not updated"; exit 0;; esac
+          SHA="$(curl -sSL "https://github.com/mukes555/PortKilla/releases/download/v$VERSION/PortKilla.app.zip" | shasum -a 256 | cut -d' ' -f1)"
+          sed -e "s/__VERSION__/$VERSION/" -e "s/__SHA256__/$SHA/" packaging/homebrew/portkilla.rb.tmpl > tap/Casks/portkilla.rb
+          cd tap
+          git config user.name "portkilla-release"
+          git config user.email "release@portkilla.invalid"
+          git add Casks/portkilla.rb
+          git commit -m "portkilla $VERSION" || { echo "no change"; exit 0; }
+          git push
+
+      - name: Skipped
+        if: env.HAS_TAP_TOKEN != 'true'
+        run: echo "HOMEBREW_TAP_TOKEN is not set; the tap keeps its version :latest cask."

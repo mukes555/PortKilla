@@ -35,6 +35,17 @@ Changed / Fixed / Security / Distribution**. Accumulate them under
    marks `-rc` / `-beta` / `-alpha` tags as pre-releases so `latest` (and the
    Homebrew cask) skip them.
 
+## Homebrew tap updates
+
+With a `HOMEBREW_TAP_TOKEN` repository secret (a fine-grained personal access
+token with *Contents: read and write* on `mukes555/homebrew-tap`), the release
+workflow renders `packaging/homebrew/portkilla.rb.tmpl` with the version and
+the zip's SHA-256 and pushes it to the tap, so `brew upgrade --cask portkilla`
+sees new releases and Homebrew verifies the download. Without the secret the
+job skips and the tap keeps its `version :latest` cask, which needs
+`brew reinstall` to update. Add the secret under Settings → Secrets and
+variables → Actions in the PortKilla repository.
+
 ## Preview release notes locally
 
 ```bash

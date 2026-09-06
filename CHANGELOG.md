@@ -13,6 +13,25 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+### Changed
+- Row text uses relative text styles (`body`, `subheadline`, `caption`)
+  instead of fixed point sizes, and the column widths are `ScaledMetric`,
+  so the list follows whatever text scaling the system applies rather than
+  clipping. macOS applies little of it to SwiftUI text today; the snapshot
+  hook's `PORTKILLA_SNAPSHOT_TEXTSIZE=large` exists for when it does.
+- Rows no longer observe the whole `PortManager`: the section hands each
+  row plain values (density, protected, watched, terminating), so a
+  publish re-evaluates only the rows whose inputs changed.
+- The demo-GIF hook renders against a throwaway preference suite instead
+  of the real one.
+
+### Distribution
+- The release workflow can pin the Homebrew cask to each release with its
+  SHA-256 (`packaging/homebrew/portkilla.rb.tmpl`, `livecheck`,
+  `brew upgrade` support). It runs only when a `HOMEBREW_TAP_TOKEN` secret
+  exists; see RELEASING.md.
+- README leads with a current screenshot; the demo GIF is regenerated.
+
 ## 1.16.0 — 2026-09-06
 
 ### The agent tools batch

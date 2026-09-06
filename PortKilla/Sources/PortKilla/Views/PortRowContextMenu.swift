@@ -5,7 +5,7 @@ import AppKit
 /// request closure so the shared confirmation flow applies.
 struct PortRowContextMenu: View {
     let port: PortInfo
-    @ObservedObject var manager: PortManager
+    let manager: PortManager // unobserved: read when the menu opens
     let onSelect: () -> Void
     let onKillRequest: (_ force: Bool, _ killTree: Bool) -> Void
 

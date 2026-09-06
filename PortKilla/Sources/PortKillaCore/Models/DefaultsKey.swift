@@ -19,6 +19,8 @@ public enum DefaultsKey {
     public static let hotkeyDisplay = "PortKilla.hotkeyDisplay"
     public static let hasLaunchedBefore = "PortKilla.hasLaunchedBefore"
     public static let didDismissHotkeyTip = "PortKilla.didDismissHotkeyTip"
+    public static let didFinishTour = "PortKilla.didFinishTour"
+    public static let probeLocalServers = "PortKilla.probeLocalServers"
     public static let lastUpdateCheck = "PortKilla.lastUpdateCheck"
     /// Unprefixed for compatibility with history saved by 1.0.
     public static let history = "portHistory"

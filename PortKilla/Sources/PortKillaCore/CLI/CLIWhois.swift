@@ -28,6 +28,8 @@ public enum CLIWhois {
         let projectPath: String?
         let containerName: String?
         let connections: Int
+        /// Remote ends of the established connections, for TCP listeners.
+        let peers: [NativeScanner.Peer]
         let children: [PortInfo.ProcessInfo]?
         let agentOwner: AgentOwner?
         let managedBy: ManagedRuntime?
@@ -72,7 +74,9 @@ public enum CLIWhois {
             port: port.port, proto: port.proto, bindAddress: port.bindAddress, pid: port.pid,
             processName: port.processName, command: port.command, user: port.user, type: port.type,
             age: port.age, projectName: port.projectName, projectPath: port.projectPath,
-            containerName: port.containerName, connections: port.connections, children: port.children,
+            containerName: port.containerName, connections: port.connections,
+            peers: port.proto == "tcp" && port.connections > 0 ? NativeScanner.peers(of: Int32(port.pid), localPort: port.port) : [],
+            children: port.children,
             agentOwner: port.agentOwner,
             managedBy: port.managedBy,
             evidence: evidence(for: port, table: table),
@@ -115,6 +119,11 @@ public enum CLIWhois {
         }
         if let container = dossier.containerName {
             lines.append(row("container", container))
+        }
+        if !dossier.peers.isEmpty {
+            let shown = dossier.peers.prefix(6).map { "\($0.label) (\($0.kind))" }.joined(separator: ", ")
+            let more = dossier.peers.count > 6 ? ", and \(dossier.peers.count - 6) more" : ""
+            lines.append(row("clients", "\(NativeScanner.summary(of: dossier.peers)): \(shown)\(more)"))
         }
         if let children = dossier.children, !children.isEmpty {
             lines.append(row("children", children.map { "\($0.name) (\($0.pid))" }.joined(separator: ", ")))

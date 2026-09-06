@@ -3,21 +3,25 @@ import PortKillaCore
 import SwiftUI
 
 /// The right-hand pane: everything about one port, with the evidence behind
-/// its owner and its history, and the verbs that act on it.
+/// its owner, who is connected, and its history, and the verbs that act on it.
 struct WorkbenchInspector: View {
     enum Tab: String, CaseIterable {
         case overview = "Overview"
+        case connections = "Connections"
         case agent = "Agent"
         case history = "History"
     }
 
     let port: PortInfo
     @ObservedObject var portManager: PortManager
-    @ObservedObject private var history = HistoryManager.shared
-    @State private var tab: Tab = .overview
-    @State private var evidence: AttributionEvidence?
+    @ObservedObject var history = HistoryManager.shared
+    @State var tab: Tab = .overview
+    @State var evidence: AttributionEvidence?
+    @State var peers: [NativeScanner.Peer] = []
+    @State var peek: HTTPPeek.Result?
+    @State var peekNote: String?
 
-    private var flow: KillFlow { KillFlow(portManager: portManager) }
+    var flow: KillFlow { KillFlow(portManager: portManager) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -32,6 +36,7 @@ struct WorkbenchInspector: View {
                 VStack(alignment: .leading, spacing: 6) {
                     switch tab {
                     case .overview: overview
+                    case .connections: connectionsPane
                     case .agent: agentPane
                     case .history: historyPane
                     }
@@ -41,8 +46,9 @@ struct WorkbenchInspector: View {
         }
         .padding(14)
         .frame(minWidth: 320, idealWidth: 380)
-        .onAppear(perform: loadEvidence)
-        .onChange(of: port.id) { _ in loadEvidence() }
+        .onAppear(perform: reload)
+        .onChange(of: port.id) { _ in reload() }
+        .onChange(of: port.connections) { _ in loadPeers() }
     }
 
     private var header: some View {
@@ -72,110 +78,44 @@ struct WorkbenchInspector: View {
         }
     }
 
+    /// Kill keeps its word; the rest are icons with tooltips, so six verbs
+    /// fit the pane at its narrowest.
     private var actions: some View {
         HStack(spacing: 6) {
             Button { flow.requestKill(port, force: false, killTree: false) } label: { Label("Kill", systemImage: "xmark.circle") }
-            Button { flow.requestKill(port, force: true, killTree: false) } label: { Label("Force", systemImage: "bolt") }
-                .help("SIGKILL")
-            Button { flow.requestKill(port, force: false, killTree: true) } label: { Label("Tree", systemImage: "arrow.triangle.branch") }
+                .help("Kill (SIGTERM, verified)")
+            Button { flow.requestKill(port, force: true, killTree: false) } label: { Image(systemName: "bolt") }
+                .help("Force kill (SIGKILL)")
+                .accessibilityLabel("Force kill")
+            Button { flow.requestKill(port, force: false, killTree: true) } label: { Image(systemName: "arrow.triangle.branch") }
                 .help("Kill the process and its children")
-            Button { Browser.openLocalhost(port: port.port) } label: { Label("Open", systemImage: "safari") }
-            Button { portManager.toggleWatch(port.port) } label: {
-                Label(portManager.isWatched(port.port) ? "Unwatch" : "Watch", systemImage: portManager.isWatched(port.port) ? "star.fill" : "star")
-            }
-            Button { GuardConfirm.toggle(port.port, in: portManager) } label: {
-                Label(portManager.isGuarded(port.port) ? "Unguard" : "Guard", systemImage: "shield")
-            }
+                .accessibilityLabel("Kill process tree")
+            Button { Browser.openLocalhost(port: port.port) } label: { Image(systemName: "safari") }
+                .help("Open localhost:\(port.port) in the browser")
+                .accessibilityLabel("Open in browser")
+            Button { portManager.toggleWatch(port.port) } label: { Image(systemName: portManager.isWatched(port.port) ? "star.fill" : "star") }
+                .help(portManager.isWatched(port.port) ? "Stop watching" : "Watch: be told when it frees up or gets taken")
+                .accessibilityLabel(portManager.isWatched(port.port) ? "Unwatch" : "Watch")
+            Button { GuardConfirm.toggle(port.port, in: portManager) } label: { Image(systemName: portManager.isGuarded(port.port) ? "shield.fill" : "shield") }
+                .help(portManager.isGuarded(port.port) ? "Remove guard" : "Guard: auto-kill whatever takes it")
+                .accessibilityLabel(portManager.isGuarded(port.port) ? "Unguard" : "Guard")
+            Spacer()
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
     }
 
-    private var overview: some View {
-        Group {
-            DetailRow(label: "PID", value: "\(port.pid)")
-            DetailRow(label: "User", value: port.user)
-            DetailRow(label: "Type", value: port.type.rawValue)
-            DetailRow(label: "Bind", value: (port.bindAddress ?? "?") + (port.isExposed ? " (all interfaces)" : ""))
-            DetailRow(label: "Proto", value: port.proto.uppercased())
-            DetailRow(label: "Clients", value: port.connections == 0 ? "none connected" : "\(port.connections) connected")
-            DetailRow(label: "Memory", value: port.memoryUsage)
-            DetailRow(label: "CPU", value: String(format: "%.1f%%", port.cpuPercent))
-            if let age = port.age { DetailRow(label: "Age", value: age) }
-            if let project = port.projectPath ?? port.projectName { DetailRow(label: "Project", value: project) }
-            if let container = port.containerName { DetailRow(label: "Container", value: container) }
-            if let managed = port.managedBy {
-                DetailRow(label: "Managed", value: "\(managed.label); \(managed.consequence)")
-                if let command = managed.stopCommand { DetailRow(label: "Stop with", value: command) }
-            }
-            DetailRow(label: "Command", value: port.command)
-            Button("Copy command") { Pasteboard.copy(port.command) }
-                .controlSize(.small)
+    // MARK: - Loading
+
+    private func reload() {
+        loadEvidence()
+        loadPeers()
+        peek = nil
+        peekNote = nil
+        if portManager.probeLocalServers && port.type.category == .web {
+            runPeek()
         }
     }
-
-    private var agentPane: some View {
-        Group {
-            if let owner = port.agentOwner {
-                DetailRow(label: "Owner", value: owner.detail)
-                DetailRow(label: "Session", value: owner.sessionId)
-                DetailRow(label: "Source", value: owner.source == .declared ? "declared via PORTKILLA_OWNER" : owner.source.rawValue)
-                if case .warn(let reason) = KillDecision.forHuman(target: owner) {
-                    Label(reason, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                }
-            } else if port.containerName != nil || port.type == .docker {
-                Text("Docker publishes this port; the container owns it, not whoever launched Docker Desktop.")
-                    .font(.caption)
-            } else {
-                Text("No agent above it, no markers in its environment, nothing declared.")
-                    .font(.caption)
-            }
-            if let evidence {
-                Text("Evidence").font(.caption.weight(.semibold)).padding(.top, 6)
-                if let declared = evidence.declaredOwner {
-                    DetailRow(label: "Declared", value: declared + (evidence.declaredSession.map { " (session \($0))" } ?? ""))
-                }
-                DetailRow(label: "Ancestry", value: evidence.ancestry.isEmpty ? "reparented to launchd" : evidence.ancestryLine)
-                DetailRow(label: "Markers", value: evidence.markers.isEmpty ? "none" : evidence.markersLine)
-            }
-        }
-    }
-
-    private var historyPane: some View {
-        let events = history.events.filter { $0.port == port.port }
-        return Group {
-            if events.isEmpty {
-                Text("No recorded kills or refusals on :\(String(port.port)).")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            ForEach(events) { item in
-                HStack(spacing: 8) {
-                    Text(Self.timeFormatter.string(from: item.timestamp))
-                        .font(.caption.monospaced())
-                        .foregroundColor(.secondary)
-                    Text(item.action.rawValue)
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(item.action == .refused ? .orange : .red)
-                    Text(item.processName).font(.caption)
-                    if let who = item.killedBy {
-                        Text(item.action == .refused ? "refused \(who)" : "by \(who)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-            }
-        }
-    }
-
-    private static let timeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
-        return formatter
-    }()
 
     /// The ancestry walk is cheap (a handful of processes); the owner itself
     /// stays the scanner's, which judged it against the whole table.
@@ -186,6 +126,39 @@ struct WorkbenchInspector: View {
             let found = AgentAttribution.explain(pid: pid, in: table)
             DispatchQueue.main.async {
                 if pid == port.pid { evidence = found }
+            }
+        }
+    }
+
+    func loadPeers() {
+        let pid = port.pid
+        let number = port.port
+        guard port.proto == "tcp" else { return peers = [] }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let found = NativeScanner.peers(of: Int32(pid), localPort: number)
+            DispatchQueue.main.async {
+                if pid == port.pid { peers = found }
+            }
+        }
+    }
+
+    func runPeek() {
+        let number = port.port
+        peekNote = "asking…"
+        HTTPPeek.probe(port: number) { result in
+            DispatchQueue.main.async {
+                guard number == port.port else { return }
+                switch result {
+                case .success(let found):
+                    peek = found
+                    peekNote = nil
+                case .failure(.notHTTP):
+                    peek = nil
+                    peekNote = "not an HTTP server"
+                case .failure(.unreachable(let why)):
+                    peek = nil
+                    peekNote = why
+                }
             }
         }
     }

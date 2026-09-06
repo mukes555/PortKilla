@@ -57,6 +57,8 @@ public class PortManager: ObservableObject {
     /// switched off "hide system processes" on the developer's own machine.
     public let defaults: UserDefaults
     public let history: HistoryManager
+    /// Per-process CPU and memory over the last scans, for sparklines.
+    public let metrics = MetricsHistory()
     public let scanner = PortScanner()
     public let processScanner = ProcessScanner()
     public let killer = ProcessKiller()
@@ -107,6 +109,15 @@ public class PortManager: ObservableObject {
         didSet {
             guard !isRestoringPreferences else { return }
             defaults.set(confirmBeforeKill, forKey: DefaultsKey.confirmBeforeKill)
+        }
+    }
+
+    /// Off by default: the inspector only sends a GET to a local web server
+    /// when asked, or always once the person opts in.
+    @Published public var probeLocalServers: Bool = false {
+        didSet {
+            guard !isRestoringPreferences else { return }
+            defaults.set(probeLocalServers, forKey: DefaultsKey.probeLocalServers)
         }
     }
 
@@ -209,6 +220,9 @@ public class PortManager: ObservableObject {
         }
         if let stored = defaults.object(forKey: DefaultsKey.confirmBeforeKill) as? Bool {
             confirmBeforeKill = stored
+        }
+        if let stored = defaults.object(forKey: DefaultsKey.probeLocalServers) as? Bool {
+            probeLocalServers = stored
         }
         if let stored = defaults.string(forKey: DefaultsKey.viewDensity),
            let density = ViewDensity(rawValue: stored) {

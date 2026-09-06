@@ -21,9 +21,18 @@ enum CLICommand: Equatable {
     case history(HistoryOptions)
     case version(json: Bool)
     case help(topic: String?)
-    case agentDocs
+    case agentDocs(AgentDocsOptions)
     case doctor(json: Bool)
     case completions(shell: String)
+    case mcp
+
+    struct AgentDocsOptions: Equatable {
+        /// Append the snippet to `file` (default CLAUDE.md) instead of printing it.
+        var write = false
+        var file = "CLAUDE.md"
+        /// Print a Claude Code PreToolUse hook that redirects lsof-based kills.
+        var claudeHook = false
+    }
 
     struct HistoryOptions: Equatable {
         var json = false
@@ -104,7 +113,8 @@ enum CLIArguments {
             if rest.isEmpty { return .success(.version(json: false)) }
             return rest == ["--json"] ? .success(.version(json: true)) : .failure(.unknownOption(rest[0], command: "version"))
         case "help", "--help", "-h": return .success(.help(topic: rest.first))
-        case "agent-docs": return rest.isEmpty ? .success(.agentDocs) : .failure(.unknownOption(rest[0], command: command))
+        case "agent-docs": return parseAgentDocs(rest)
+        case "mcp": return rest.isEmpty ? .success(.mcp) : .failure(.unknownOption(rest[0], command: command))
         case "doctor":
             if rest.isEmpty { return .success(.doctor(json: false)) }
             return rest == ["--json"] ? .success(.doctor(json: true)) : .failure(.unknownOption(rest[0], command: "doctor"))
@@ -241,6 +251,29 @@ enum CLIArguments {
         return .success(.history(options))
     }
 
+    private static func parseAgentDocs(_ args: [String]) -> Result<CLICommand, ParseError> {
+        var options = CLICommand.AgentDocsOptions()
+        var index = 0
+        while index < args.count {
+            let arg = args[index]
+            if arg == "--write" {
+                options.write = true
+            } else if arg == "--claude-hook" {
+                options.claudeHook = true
+            } else if arg == "--file" {
+                guard index + 1 < args.count else { return .failure(.missingValue(arg)) }
+                index += 1
+                options.file = args[index]
+            } else if let value = valueOf(option: "--file", in: arg) {
+                options.file = value
+            } else {
+                return .failure(.unknownOption(arg, command: "agent-docs"))
+            }
+            index += 1
+        }
+        return .success(.agentDocs(options))
+    }
+
     private static func parseWhoami(_ args: [String]) -> Result<CLICommand, ParseError> {
         var json = false
         for arg in args {
@@ -303,6 +336,24 @@ enum CLIArguments {
             session, and whether it was detected from the process tree, the
             environment, or declared via PORTKILLA_OWNER.
             """
+        case "agent-docs": return """
+            portkilla agent-docs [--write [--file <path>]] [--claude-hook]
+
+            Prints the snippet that tells AI agents to free ports through PortKilla.
+            --write appends it to CLAUDE.md (or --file) between markers, once; run
+            again to update it. --claude-hook prints a Claude Code PreToolUse hook
+            for settings.json that turns `kill -9 $(lsof -ti:PORT)` into a nudge.
+            """
+        case "mcp": return """
+            portkilla mcp
+
+            Runs a Model Context Protocol server over stdin/stdout with the tools
+            list_ports, kill_port (dry-run by default), whoami, and
+            wait_for_port_free. The agent that spawns it is the caller the guard
+            compares against. Register it with your agent:
+              Claude Code / Cursor:  {"mcpServers":{"portkilla":{"command":"portkilla","args":["mcp"]}}}
+              Codex CLI (~/.codex/config.toml):  [mcp_servers.portkilla] command = "portkilla" args = ["mcp"]
+            """
         case "doctor": return """
             portkilla doctor [--json]
 
@@ -327,7 +378,8 @@ enum CLIArguments {
       portkilla history [--json] [--port <port>] [--limit 20]
       portkilla whoami [--json]
       portkilla doctor [--json]
-      portkilla agent-docs
+      portkilla agent-docs [--write [--file CLAUDE.md]] [--claude-hook]
+      portkilla mcp                      MCP server over stdio (for agents)
       portkilla completions <zsh|bash|fish>
       portkilla version [--json]
       portkilla help [command]

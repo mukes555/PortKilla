@@ -14,6 +14,25 @@ release, rename it to the version and date.
 <!-- next -->
 
 ### Added
+- **`portkilla whois <port>`** (or `--pid`): everything PortKilla knows about
+  a listener, including the evidence behind its owner (the ancestry walked,
+  the markers found, what was declared) and what `kill` would do for the
+  caller and why. Also an MCP tool, `whois_port`.
+- **`portkilla kill --orphaned`** stops every server left behind by an
+  agent session that has ended, for any agent; exit 0 when there is
+  nothing to clean up.
+- **`portkilla doctor --agents`** prints the agent compatibility matrix
+  checked against this machine: which tools run or are installed, how each
+  is recognised, how precisely its sessions are told apart, and where each
+  fact came from. The same matrix is in docs/AGENTS.md, kept in step by a
+  test.
+- **`PORTKILLA_SESSION`**: tools that export no session id (Codex, Gemini,
+  custom bots) can export any unique string next to `PORTKILLA_OWNER`, and
+  their servers stay tied to that session after reparenting.
+- A refusal now says when the server runs in the caller's working
+  directory: a hint that it may be the caller's own unclaimed server, or
+  the user's.
+- `portkilla schema whois` and `schema agents` document the new outputs.
 - **Connected clients.** Each listener shows how many established
   connections it has (a chip in the row, a Clients line in the detail
   view, `connections` in `list --json`), and killing a server with live

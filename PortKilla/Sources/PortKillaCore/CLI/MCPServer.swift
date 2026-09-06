@@ -86,6 +86,14 @@ public final class MCPServer {
             ]],
         ],
         [
+            "name": "whois_port",
+            "description": "Everything PortKilla knows about what listens on a port (or a pid): process, project, connected clients, the AI agent that started it with the evidence for that, and what kill_port would do for you and why.",
+            "inputSchema": ["type": "object", "properties": [
+                "port": ["type": "integer"],
+                "pid": ["type": "integer"],
+            ]],
+        ],
+        [
             "name": "whoami",
             "description": "How PortKilla identifies the calling agent for the friendly-fire guard.",
             "inputSchema": ["type": "object", "properties": [:]],
@@ -128,6 +136,16 @@ public final class MCPServer {
             let outcome = CLIKill.perform(options)
             let refused = outcome.report.exitCode == CLIExit.refused
             return toolResult(text: outcome.text, structured: outcome.report, isError: refused || outcome.report.exitCode == CLIExit.killFailed)
+
+        case "whois_port":
+            var options = CLICommand.WhoisOptions()
+            options.port = arguments["port"] as? Int
+            options.pid = arguments["pid"] as? Int
+            guard options.port != nil || options.pid != nil else {
+                return toolResult(text: "whois_port needs a port or a pid", structured: nil as String?, isError: true)
+            }
+            let report = CLIWhois.perform(options)
+            return toolResult(text: CLIWhois.text(for: report), structured: report, isError: false)
 
         case "whoami":
             let me = PortKillaCLI.callerIdentity()

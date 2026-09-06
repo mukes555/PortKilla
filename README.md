@@ -54,6 +54,8 @@ The whole flow works without touching the mouse: **⌥⌘P → type "3000" or "v
 *   **Exposed badge**: ports bound to `0.0.0.0`/`*` are flagged — they're reachable from your local network, not just localhost.
 *   **Project detection**: each dev server shows its actual project folder (from the process working directory) — right-click to reveal it in Finder or open it in Terminal.
 *   **Connected clients**: every listener shows how many connections are open to it, and killing a server that still has clients always asks first.
+*   **The Workbench**: a full window with a sortable table, ports by project, ports by agent session (with one-click clean-up of ended sessions), the watchlist, History, and an inspector that shows the evidence behind each owner.
+*   **Type what you mean**: `kill 3000`, `open 5173`, `watch 8080`, `free port`, or `>` for commands, right in the search field; Return does it.
 *   **Supervisors understood**: a pm2 app, a launchd job, a Docker container, or a reloader (nodemon, `next dev`, `uvicorn --reload`) would undo a plain kill, so PortKilla stops it the way its supervisor expects and shows why.
 *   **Secrets stay private**: command lines are redacted (`--token=...`, `KEY=...`, URL passwords, bearer tokens) before they are shown, exported, or handed to an agent.
 *   **Smart menu-bar count**: the badge counts your dev ports, not every macOS daemon.

@@ -14,6 +14,21 @@ release, rename it to the version and date.
 <!-- next -->
 
 ### Added
+- **The Workbench.** A full-size window (overflow menu, or type `> workbench`)
+  with a sidebar of views: a sortable table of every port; ports grouped by
+  project with Reveal, Open in editor, and Kill all; ports grouped by agent
+  session (live, ended, editor terminals, unclaimed) with Stop all and a
+  one-click clean-up of ended sessions; the watchlist with guard and watch
+  toggles and a field to add a port; and History. An inspector on the right
+  shows the selected port's overview, the evidence behind its owner (the
+  ancestry walked, the markers found), and its history, with Kill, Force,
+  Tree, Open, Watch, and Guard at hand.
+- **A command palette in the search field.** Type `kill 3000`, `open 5173`,
+  `watch 8080`, `guard 8080`, or `free port` and Return does it; the strip
+  under the field says what will happen, including who owns the target and
+  whether a supervisor is involved. `>` lists app commands (Refresh, Bulk
+  Kill, Pin, Workbench, History, Find a Free Port, Settings, Quit).
+- Rows slide in and fade out as ports come and go.
 - **Supervisors understood.** PortKilla recognises what would undo a plain
   kill: pm2 apps, launchd jobs (Homebrew services and your own
   LaunchAgents), Docker containers, and reloaders (nodemon, `next dev`,

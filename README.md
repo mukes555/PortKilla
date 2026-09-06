@@ -48,7 +48,7 @@ Right-click any port → **Watch**. Watched ports are **pinned to the top of the
 
 ## 🤖 Agent-Aware (friendly-fire protection)
 
-Running multiple AI coding agents? PortKilla attributes each dev server to the
+Running several AI coding agents? PortKilla attributes each dev server to the
 **agent that started it** (Claude Code, Codex CLI, Gemini CLI, Copilot CLI,
 OpenCode, Aider, Cursor, VS Code, Windsurf, Zed, Trae). No launcher, no
 registry, no setup: it reads two passive signals, the process tree and the
@@ -56,19 +56,27 @@ environment markers agents leave on their children (like `CLAUDECODE=1`). The
 second one survives `nohup`, pm2, and backgrounded shells, so a server keeps
 its owner even after it has been reparented to launchd.
 
-Ports show a ✨ agent chip, and the CLI **won't let one agent kill another's
-server**:
+**One decision for every kill.** The CLI refuses to stop a port owned by
+another agent's *running* session; the GUI warns you before you do it, bulk
+dialogs say how many targets belong to running agents, and port guards never
+auto-kill one. Sessions that have ended show a grey "(ended)" chip and can be
+stopped by anyone. An editor terminal (VS Code, Cursor, ...) counts as "started
+inside the editor", not as an agent, so it never locks a port.
 
 ```bash
 portkilla kill 3000
-# :3000 is owned by Cursor (session 812), not Claude Code (session 46200).
-# Refusing to kill another agent's server.
-# Pass --force to override, or run `portkilla whoami` to check how you are identified.
+# :3000 (PID 812) is owned by Cursor (session 812), not Claude Code (session 46200)
+# Refusing to kill another agent's server. Pass --force to override, or run `portkilla whoami` ...
 ```
 
-`portkilla whoami` prints how the guard sees the caller. Set
-`PORTKILLA_OWNER=<name>` to declare an identity instead of detecting one.
-When nothing is known about a port, PortKilla says so rather than guessing.
+- `portkilla whoami` shows how the guard sees the caller.
+- `portkilla list --mine`, `--agent <name>`, `--unowned`, `--orphaned` filter by owner.
+- `portkilla kill <port> --dry-run [--json]` reports the decision without signalling.
+- `portkilla agent-docs` prints a snippet for your CLAUDE.md / AGENTS.md so
+  agents call `portkilla kill` instead of `kill -9 $(lsof -ti:PORT)`.
+- Export `PORTKILLA_OWNER=<name>` to declare who you are and to label every
+  server you start. When nothing is known about a port, PortKilla says so
+  rather than guessing.
 
 ## 📡 More Signal
 
@@ -90,12 +98,16 @@ ln -s /Applications/PortKilla.app/Contents/MacOS/PortKilla /usr/local/bin/portki
 ```
 
 ```bash
-portkilla list            # table of listening ports
+portkilla list            # table of listening ports (with owning agent)
 portkilla list --json     # JSON output for scripts
-portkilla kill 3000       # graceful kill (SIGTERM)
+portkilla kill 3000       # graceful kill of everything on :3000 (SIGTERM, verified)
 portkilla kill 3000 --force
+portkilla kill --pid 812 --dry-run --json
 portkilla whoami          # which agent the friendly-fire guard thinks you are
 ```
+
+Exit codes: 0 done, 1 nothing listening, 2 usage, 3 refused (another agent's
+live session owns it), 4 kill failed, 5 still running after the wait.
 
 There's also a URL scheme: `open "portkilla://kill/3000"` or `portkilla://show`.
 
@@ -157,7 +169,7 @@ Drag `PortKilla.app` to `/Applications`.
 ./scripts/build.sh --dmg
 ```
 
-This produces `dist/PortKilla-1.9.0.dmg`.
+This produces `dist/PortKilla-1.10.0.dmg`.
 
 To distribute to other Macs without Gatekeeper prompts, you’ll eventually want Developer ID signing + notarization.
 

@@ -77,7 +77,8 @@ struct PortListView: View {
             port.processName.localizedCaseInsensitiveContains(searchText) ||
             port.command.localizedCaseInsensitiveContains(searchText) ||
             (port.projectName?.localizedCaseInsensitiveContains(searchText) ?? false) ||
-            (port.containerName?.localizedCaseInsensitiveContains(searchText) ?? false)
+            (port.containerName?.localizedCaseInsensitiveContains(searchText) ?? false) ||
+            (port.agentOwner?.name.localizedCaseInsensitiveContains(searchText) ?? false)
         }
     }
 

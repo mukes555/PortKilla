@@ -36,22 +36,30 @@ swift build
 swift run PortKilla            # launches the menu-bar app (look for the ⚡ icon)
 ```
 
-The same binary is also a CLI — handy during development:
+The package also builds the standalone CLI, and the app binary answers the
+same subcommands:
 
 ```bash
-swift run PortKilla list          # table of listening ports
-swift run PortKilla list --json   # JSON, for scripting
-swift run PortKilla kill 3000     # graceful kill; add --force for SIGKILL
+swift run portkilla list          # table of listening ports
+swift run portkilla list --json   # JSON, for scripting
+swift run portkilla kill 3000     # graceful kill; add --force for SIGKILL
+swift run PortKilla list          # the app binary in CLI mode
 ```
 
 ## Test
 
 ```bash
-swift test --disable-sandbox
+swift build && swift test --disable-sandbox
 ```
 
-`--disable-sandbox` is required: several tests exercise the native scanner,
-which makes raw `libproc` syscalls the SwiftPM sandbox blocks.
+`swift build` first: the scenario tests spawn the debug `portkilla`
+executable next to the test bundle, and `swift test` alone does not build
+it. `--disable-sandbox` is required: several tests exercise the native
+scanner, which makes raw `libproc` syscalls the SwiftPM sandbox blocks.
+
+If the link step ever complains that `_portkilla_cli_main` is undefined,
+the incremental state is stale: `rm -rf .build/arm64-apple-macosx/debug`
+and build again.
 
 ## Build a distributable app
 
@@ -80,6 +88,10 @@ screen-recording permission needed. CI uses the first one as a smoke test.
 | `PORTKILLA_SHOW_ON_LAUNCH=1` | Auto-open the popover on launch |
 | `PORTKILLA_DEMO_GIF=/path.gif` | Render the scripted demo reel (fabricated data) to an animated GIF, then quit |
 
+`portkilla __serve <port>` (debug builds only) listens on 127.0.0.1 and
+sleeps forever; the scenario tests use it as a stand-in for an agent's dev
+server, with whatever environment the scenario needs.
+
 Regenerate the README assets:
 
 ```bash
@@ -101,7 +113,7 @@ Match the surrounding style.
 
 1. Branch from `main` — **never push directly to `main`/`master`** (CI gates it).
 2. Keep the change focused; one concern per PR.
-3. `swift test --disable-sandbox` must pass, and the build must stay green.
+3. `swift build && swift test --disable-sandbox` must pass, and the build must stay green.
 4. Add an entry to [CHANGELOG.md](CHANGELOG.md) under an "Unreleased" heading.
 5. Open the PR; CI runs `scripts/build.sh`, the test suite, and a UI-render
    smoke test on `macos-14`.

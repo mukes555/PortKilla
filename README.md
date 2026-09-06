@@ -53,6 +53,8 @@ The whole flow works without touching the mouse: **⌥⌘P → type "3000" or "v
 *   **Hide System Processes** (default on): system daemons stay out of your way — a footer hint shows how many are hidden.
 *   **Exposed badge**: ports bound to `0.0.0.0`/`*` are flagged — they're reachable from your local network, not just localhost.
 *   **Project detection**: each dev server shows its actual project folder (from the process working directory) — right-click to reveal it in Finder or open it in Terminal.
+*   **Connected clients**: every listener shows how many connections are open to it, and killing a server that still has clients always asks first.
+*   **Secrets stay private**: command lines are redacted (`--token=...`, `KEY=...`, URL passwords, bearer tokens) before they are shown, exported, or handed to an agent.
 *   **Smart menu-bar count**: the badge counts your dev ports, not every macOS daemon.
 *   **Protected processes** (shield icon): IDEs and tools are skipped by bulk kills.
 *   **Launch at Login**: toggle it in Settings (⚙︎ / ⌘,).
@@ -76,7 +78,11 @@ another agent's *running* session; the GUI warns you before you do it, bulk
 dialogs say how many targets belong to running agents, and port guards never
 auto-kill one. Sessions that have ended show a grey "(ended)" chip and can be
 stopped by anyone. An editor terminal (VS Code, Cursor, ...) counts as "started
-inside the editor", not as an agent, so it never locks a port.
+inside the editor", not as an agent, so it never locks a port. Commands typed in
+an editor terminal are treated as a person's, except against another agent's
+running server, where they need `--force`: an editor's built-in agent leaves no
+marker PortKilla can see. Identified agents are also refused servers nobody
+claims (most likely a person's), so they ask instead of guessing.
 
 ```bash
 portkilla kill 3000
@@ -120,11 +126,12 @@ portkilla kill 3000
 
 ## ⌨️ CLI Companion
 
-The same binary doubles as a CLI:
+The app bundle ships a standalone `portkilla` CLI (no AppKit, starts in a few
+milliseconds), and the app binary answers the same commands:
 
 ```bash
 # Homebrew installs already have `portkilla` on PATH; otherwise:
-ln -s /Applications/PortKilla.app/Contents/MacOS/PortKilla /usr/local/bin/portkilla
+ln -s /Applications/PortKilla.app/Contents/MacOS/portkilla /usr/local/bin/portkilla
 ```
 
 ```bash
@@ -137,10 +144,13 @@ portkilla free 3000 && npm run dev   # exit 0 when already free
 portkilla wait 3000 --timeout 30     # block until the port is free
 portkilla history --port 3000        # who started it, who stopped it
 portkilla whoami          # which agent the friendly-fire guard thinks you are
+portkilla free-port --prefer 3000    # first free port in 3000-3999, nothing else printed
+portkilla schema kill     # every field of `kill --json`, documented
 ```
 
 Exit codes: 0 done, 1 nothing listening, 2 usage, 3 refused (another agent's
-live session owns it), 4 kill failed, 5 still running after the wait.
+live session owns it, or nobody PortKilla can name), 4 kill failed, 5 still
+running after the wait.
 
 There's also a URL scheme: `open "portkilla://kill/3000"` or `portkilla://show`.
 

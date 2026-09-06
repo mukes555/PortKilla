@@ -1,4 +1,5 @@
 import XCTest
+@testable import PortKillaCore
 @testable import PortKilla
 
 /// Pure functions that previously had no coverage, and the invariants the

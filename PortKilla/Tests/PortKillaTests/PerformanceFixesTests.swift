@@ -1,4 +1,5 @@
 import XCTest
+@testable import PortKillaCore
 @testable import PortKilla
 
 /// Regression tests for the v1.11.0 performance batch.

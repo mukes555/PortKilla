@@ -364,11 +364,13 @@ struct PortRowView: View {
                     }
                 }
                 Divider()
+                // Through the same request path as the button, so the
+                // confirm-before-kill setting applies to the menu too.
                 Button("Kill Process Tree") {
-                    manager.killPort(port, killTree: true)
+                    onKillRequest(false, true)
                 }
                 Button("Force Kill (SIGKILL)") {
-                    manager.killPort(port, force: true)
+                    onKillRequest(true, false)
                 }
                 Divider()
                 if let container = port.containerName {

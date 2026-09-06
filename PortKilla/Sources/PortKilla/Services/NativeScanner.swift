@@ -161,72 +161,105 @@ enum NativeScanner {
     }
 
     /// Full command line via KERN_PROCARGS2 (only readable for own processes;
-    /// callers fall back to the executable path).
+    /// callers fall back to the executable path). Parsing stops after argv;
+    /// the environment that follows in the same buffer is never decoded here.
     static func commandLine(_ pid: Int32) -> String? {
-        guard let parsed = procArgs(pid) else { return nil }
-        let command = parsed.arguments.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        guard let buffer = procArgsBuffer(pid), let layout = ProcArgsLayout(buffer) else { return nil }
+
+        var index = layout.argvStart
+        var arguments: [String] = []
+        // Read by count so an empty argument (sh -c '') isn't taken as the end.
+        while index < buffer.count && arguments.count < layout.argc {
+            arguments.append(readCString(buffer, from: &index))
+        }
+        let command = arguments.joined(separator: " ").trimmingCharacters(in: .whitespaces)
         return command.isEmpty ? nil : command
     }
 
     /// Selected environment variables of `pid`, restricted to `keys`.
     ///
-    /// Only an allowlist is ever returned: a process environment routinely
-    /// holds API keys and tokens, so nothing outside `keys` leaves this
-    /// function. Used to attribute a server to the agent that spawned it, since
-    /// the environment is inherited at spawn and survives being reparented
-    /// (nohup, pm2, a shell that has since exited).
+    /// A process environment routinely holds API keys and tokens, so the
+    /// allowlist is enforced at the byte level: the buffer is scanned without
+    /// decoding, only values of allowlisted keys become Strings, and the
+    /// buffer is zeroed before it is released. Used to attribute a server to
+    /// the agent that spawned it (the environment is inherited at spawn and
+    /// survives reparenting, unlike the process tree).
+    ///
+    /// macOS withholds the environment of platform (OS-signed) binaries from
+    /// unprivileged readers; only argv comes back for those. Dev servers are
+    /// third-party binaries, so attribution is unaffected.
     static func environmentMarkers(_ pid: Int32, keys: Set<String>) -> [String: String] {
-        guard let parsed = procArgs(pid) else { return [:] }
+        guard var buffer = procArgsBuffer(pid), let layout = ProcArgsLayout(buffer) else { return [:] }
+        defer {
+            buffer.withUnsafeMutableBytes { $0.initializeMemory(as: UInt8.self, repeating: 0) }
+        }
+
+        var index = layout.argvStart
+        var skipped = 0
+        while index < buffer.count && skipped < layout.argc {
+            skipCString(buffer, from: &index)
+            skipped += 1
+        }
+
+        let wanted = keys.map { (name: $0, bytes: Array($0.utf8)) }
         var markers: [String: String] = [:]
-        for entry in parsed.environment {
-            guard let split = entry.firstIndex(of: "=") else { continue }
-            let key = String(entry[..<split])
-            if keys.contains(key) {
-                markers[key] = String(entry[entry.index(after: split)...])
-            }
+        while index < buffer.count {
+            let start = index
+            while index < buffer.count && buffer[index] != 0 { index += 1 }
+            let entry = buffer[start..<index]
+            index += 1
+            if entry.isEmpty { break } // the env block ends at the first empty string
+
+            guard let equals = entry.firstIndex(of: UInt8(ascii: "=")) else { continue }
+            let key = entry[entry.startIndex..<equals]
+            guard let match = wanted.first(where: { key.elementsEqual($0.bytes) }) else { continue }
+            markers[match.name] = String(decoding: entry[(equals + 1)...], as: UTF8.self)
         }
         return markers
     }
 
-    /// Decoded KERN_PROCARGS2 buffer. Layout:
-    /// argc | exec_path\0 | padding \0s | argv[0]\0 … argv[argc-1]\0 | env KEY=VALUE\0 …
-    private static func procArgs(_ pid: Int32) -> (arguments: [String], environment: [String])? {
+    /// KERN_PROCARGS2 layout:
+    /// argc | exec_path\0 | padding \0s | argv[0]\0 … argv[argc-1]\0 | env KEY=VALUE\0 … | \0
+    private struct ProcArgsLayout {
+        let argc: Int
+        let argvStart: Int
+
+        init?(_ buffer: [UInt8]) {
+            guard buffer.count > MemoryLayout<Int32>.size else { return nil }
+            let argc = buffer.withUnsafeBytes { $0.load(as: Int32.self) }
+            guard argc > 0 else { return nil }
+
+            var index = MemoryLayout<Int32>.size
+            while index < buffer.count && buffer[index] != 0 { index += 1 } // exec_path
+            while index < buffer.count && buffer[index] == 0 { index += 1 } // padding
+            self.argc = Int(argc)
+            self.argvStart = index
+        }
+    }
+
+    private static func procArgsBuffer(_ pid: Int32) -> [UInt8]? {
         var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
         var size = 0
         guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > MemoryLayout<Int32>.size else { return nil }
 
         var buffer = [UInt8](repeating: 0, count: size)
         guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0 else { return nil }
-
-        let argc = buffer.withUnsafeBytes { $0.load(as: Int32.self) }
-        guard argc > 0 else { return nil }
-
-        var index = MemoryLayout<Int32>.size
-        while index < size && buffer[index] != 0 { index += 1 } // exec_path
-        while index < size && buffer[index] == 0 { index += 1 } // padding
-
-        // argv is read by count so an empty argument (sh -c '') isn't mistaken
-        // for the end; the env block that follows ends at the first empty string.
-        var arguments: [String] = []
-        while index < size && arguments.count < Int(argc) {
-            arguments.append(readCString(buffer, from: &index))
-        }
-        var environment: [String] = []
-        while index < size {
-            let entry = readCString(buffer, from: &index)
-            if entry.isEmpty { break }
-            environment.append(entry)
-        }
-        return (arguments, environment)
+        // The fill call reports how much it actually wrote.
+        if size < buffer.count { buffer.removeSubrange(size...) }
+        return buffer
     }
 
     /// Reads one NUL-terminated string starting at `index` and advances past the NUL.
     private static func readCString(_ buffer: [UInt8], from index: inout Int) -> String {
         let start = index
+        skipCString(buffer, from: &index)
+        let end = min(index - 1, buffer.count)
+        return String(decoding: buffer[start..<max(start, end)], as: UTF8.self)
+    }
+
+    private static func skipCString(_ buffer: [UInt8], from index: inout Int) {
         while index < buffer.count && buffer[index] != 0 { index += 1 }
-        let string = String(decoding: buffer[start..<index], as: UTF8.self)
-        if index < buffer.count { index += 1 }
-        return string
+        index += 1
     }
 
     /// Working directory via PROC_PIDVNODEPATHINFO (own processes only).
@@ -238,8 +271,16 @@ enum NativeScanner {
         return path.isEmpty ? nil : path
     }
 
-    static func childPids(of pid: Int32) -> [Int32] {
-        listPids().filter { bsdInfo($0)?.pbi_ppid == UInt32(pid) }
+    /// pid -> ppid for every process in one pass, so a tree walk never
+    /// re-enumerates the table per node.
+    static func parentMap() -> [Int32: Int32] {
+        var parents: [Int32: Int32] = [:]
+        for pid in listPids() {
+            if let bsd = bsdInfo(pid) {
+                parents[pid] = Int32(bsd.pbi_ppid)
+            }
+        }
+        return parents
     }
 
     private static var usernameCache: [uid_t: String] = [:]
@@ -318,7 +359,9 @@ enum NativeScanner {
                 return ("*", port)
             }
             var buffer = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
-            inet_ntop(AF_INET6, &address, &buffer, socklen_t(buffer.count))
+            // An undecodable address is reported as wildcard: the "exposed"
+            // badge must fail closed, not vanish.
+            guard inet_ntop(AF_INET6, &address, &buffer, socklen_t(buffer.count)) != nil else { return ("*", port) }
             return (String(cString: buffer), port)
         }
 
@@ -327,7 +370,7 @@ enum NativeScanner {
             return ("*", port)
         }
         var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
-        inet_ntop(AF_INET, &address, &buffer, socklen_t(buffer.count))
+        guard inet_ntop(AF_INET, &address, &buffer, socklen_t(buffer.count)) != nil else { return ("*", port) }
         return (String(cString: buffer), port)
     }
 

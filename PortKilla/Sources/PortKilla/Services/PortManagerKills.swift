@@ -8,9 +8,19 @@ extension PortManager {
     /// Event-driven wait for process exits (DispatchSourceProcess) instead of
     /// polling sleeps, with a final liveness sweep to catch processes that
     /// died before the kernel source was armed. Call from a background queue.
-    func waitForExit(pids: [Int], timeout: TimeInterval = 1.0) -> Set<Int> {
+    /// SIGTERM gives a process time to unwind (Node, Java, Postgres routinely
+    /// take a few seconds); SIGKILL is immediate, so a short wait suffices.
+    static func exitTimeout(force: Bool) -> TimeInterval {
+        force ? 1.0 : 3.0
+    }
+
+    func waitForExit(pids: [Int], timeout: TimeInterval) -> Set<Int> {
         let condition = NSCondition()
         var dead = Set<Int>()
+        // Set under the lock once waiting is over; a handler the kernel had
+        // already queued then sees it and leaves `dead` alone, so the result
+        // is fixed the moment this function decides it.
+        var finished = false
         var sources: [DispatchSourceProcess] = []
         let queue = DispatchQueue(label: "com.portkilla.exit-wait")
 
@@ -23,8 +33,10 @@ extension PortManager {
             let source = DispatchSource.makeProcessSource(identifier: pid_t(pid), eventMask: .exit, queue: queue)
             source.setEventHandler {
                 condition.lock()
-                dead.insert(pid)
-                condition.signal()
+                if !finished {
+                    dead.insert(pid)
+                    condition.signal()
+                }
                 condition.unlock()
             }
             source.activate()
@@ -35,22 +47,17 @@ extension PortManager {
         while dead.count < pids.count {
             if !condition.wait(until: deadline) { break }
         }
-        condition.unlock()
 
-        sources.forEach { $0.cancel() }
-        // Drain the source queue so no exit handler is still mutating `dead`
-        // while the sweep below reads/writes it (they share the condition lock,
-        // but the sweep must not run concurrently with a queued handler).
-        queue.sync { }
-
-        // Sweep for exits that raced the source activation — under the lock,
-        // serialized against any handler that fired at the deadline boundary.
-        condition.lock()
+        // Sweep for exits that raced the source activation, still under the
+        // lock so no handler interleaves, then freeze the result.
         for pid in pids where !dead.contains(pid) && !killer.isProcessRunning(pid) {
             dead.insert(pid)
         }
+        finished = true
         let result = dead
         condition.unlock()
+
+        sources.forEach { $0.cancel() }
         return result
     }
 
@@ -69,15 +76,18 @@ extension PortManager {
             guard let self = self else { return }
             do {
                 try self.killer.killProcess(pid: pid, force: force, killTree: killTree, expectedName: expectedName)
-                let died = self.waitForExit(pids: [pid]).contains(pid)
+                let timeout = Self.exitTimeout(force: force)
+                let died = self.waitForExit(pids: [pid], timeout: timeout).contains(pid)
 
                 DispatchQueue.main.async {
                     if died {
                         self.lastErrorMessage = nil
                         onKilled()
                     } else {
+                        // Not a failure yet: the signal was delivered and the
+                        // process may still be shutting down.
                         let hint = force ? "" : " Option+click to force kill (SIGKILL)."
-                        self.lastErrorMessage = "\(subject) did not terminate.\(hint)"
+                        self.lastErrorMessage = "\(subject) is still shutting down.\(hint)"
                         onNotTerminated?()
                     }
                 }
@@ -110,8 +120,7 @@ extension PortManager {
                 self.scheduleRefresh()
             },
             onNotTerminated: { [weak self] in
-                self?.showToast("Kill failed for :\(portInfo.port)")
-                // Slow shutdowns are common — notify when it finally frees
+                self?.showToast(":\(portInfo.port) still shutting down, will notify when free")
                 self?.pendingFreeNotifications.insert(portInfo.port)
             }
         )
@@ -197,13 +206,13 @@ extension PortManager {
                 try? self.killer.killProcess(pid: test.pid, force: force, expectedName: test.processName)
             }
 
-            let dead = self.waitForExit(pids: tests.map { $0.pid })
+            let dead = self.waitForExit(pids: tests.map { $0.pid }, timeout: Self.exitTimeout(force: force))
 
             DispatchQueue.main.async {
                 self.activeTests.removeAll { dead.contains($0.pid) }
-                let failed = tests.count - dead.count
-                if failed > 0 {
-                    self.showToast("Killed \(dead.count), \(failed) failed")
+                let stillRunning = tests.count - dead.count
+                if stillRunning > 0 {
+                    self.showToast("Killed \(dead.count), \(stillRunning) still shutting down")
                 } else {
                     self.showToast("Killed \(dead.count) test process\(dead.count == 1 ? "" : "es")")
                 }
@@ -230,7 +239,7 @@ extension PortManager {
                 try? self.killer.killProcess(pid: target.pid, force: force, expectedName: target.processName)
             }
 
-            let deadPids = self.waitForExit(pids: targets.map { $0.pid })
+            let deadPids = self.waitForExit(pids: targets.map { $0.pid }, timeout: Self.exitTimeout(force: force))
             let successCount = deadPids.count
 
             DispatchQueue.main.async {
@@ -238,9 +247,9 @@ extension PortManager {
                     self.activePorts.removeAll { deadPids.contains($0.pid) }
                     self.lastErrorMessage = nil
 
-                    let failureCount = targets.count - successCount
-                    if failureCount > 0 {
-                        self.showToast("Killed \(successCount), \(failureCount) failed")
+                    let stillRunning = targets.count - successCount
+                    if stillRunning > 0 {
+                        self.showToast("Killed \(successCount), \(stillRunning) still shutting down")
                     } else {
                         self.showToast("Killed \(successCount) process\(successCount == 1 ? "" : "es")")
                     }

@@ -134,7 +134,12 @@ struct PortListView: View {
                 Divider()
 
                 if filter == .tests {
-                    TestRadarView(portManager: portManager, tests: filteredTests, selectedId: $selectedId)
+                    TestRadarView(
+                        portManager: portManager,
+                        tests: filteredTests,
+                        selectedId: $selectedId,
+                        onKillRequest: { test, force in requestKillTest(test, force: force) }
+                    )
                 } else {
                     portsContentView
                 }

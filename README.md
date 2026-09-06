@@ -85,7 +85,7 @@ When nothing is known about a port, PortKilla says so rather than guessing.
 The same binary doubles as a CLI:
 
 ```bash
-# optional: put it on your PATH
+# Homebrew installs already have `portkilla` on PATH; otherwise:
 ln -s /Applications/PortKilla.app/Contents/MacOS/PortKilla /usr/local/bin/portkilla
 ```
 
@@ -123,8 +123,14 @@ brew install --cask portkilla
 ```
 
 If Homebrew asks you to trust the tap (standard for third-party casks), run
-`brew trust mukes555/tap` once. The cask always installs the latest universal
-release.
+`brew trust mukes555/tap` once. The cask installs the latest universal release
+and puts the `portkilla` CLI on your PATH. To update later:
+
+```bash
+brew reinstall --cask portkilla
+```
+
+(The cask tracks `latest`, so a plain `brew upgrade` does not see new releases.)
 
 ### Build from Source
 PortKilla is written in native Swift for maximum performance and minimal battery impact.

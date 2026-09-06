@@ -32,9 +32,10 @@ enum PortKillaCLI {
             return CLIExit.ok
         case .success(.version(let json)):
             return version(json: json)
-        case .success(.agentDocs):
-            print(agentDocs)
-            return CLIExit.ok
+        case .success(.agentDocs(let options)):
+            return AgentDocsInstaller.run(options)
+        case .success(.mcp):
+            return MCPServer().serve()
         case .success(.doctor(let json)):
             return doctor(json: json)
         case .success(.completions(let shell)):
@@ -192,16 +193,21 @@ enum PortKillaCLI {
         let owner: AgentOwner?
     }
 
-    /// Prints how the friendly-fire guard identifies the calling process, so
-    /// an agent can check itself before a kill is refused.
-    private static func whoami(json: Bool) -> Int32 {
+    /// How the friendly-fire guard identifies this process. Only the ancestor
+    /// chain matters (plus the session pid a marker may name), not the whole
+    /// process table.
+    static func callerIdentity() -> AgentOwner? {
         let callerPid = Int(Foundation.ProcessInfo.processInfo.processIdentifier)
-        // Only the ancestor chain matters here (plus the session pid a marker
-        // may name), not the whole process table.
         let environment = Foundation.ProcessInfo.processInfo.environment
         let sessionPid = environment[AgentSignatures.claudeSessionKey].flatMap(Int.init)
         let table = ProcessTable.ancestry(of: callerPid, including: sessionPid.map { [$0] } ?? [])
-        let me = AgentAttribution.callerOwner(callerPid: callerPid, in: table, environment: environment)
+        return AgentAttribution.callerOwner(callerPid: callerPid, in: table, environment: environment)
+    }
+
+    /// Prints how the friendly-fire guard identifies the calling process, so
+    /// an agent can check itself before a kill is refused.
+    private static func whoami(json: Bool) -> Int32 {
+        let me = callerIdentity()
 
         if json {
             return printJSON(WhoAmI(detected: me != nil, owner: me)) ? CLIExit.ok : CLIExit.internalError
@@ -228,7 +234,7 @@ enum PortKillaCLI {
 
     /// Blocks until nothing listens on the port, polling the native scanner.
     /// The CLI half of the app's "notify me when this frees up".
-    private static func wait(port: Int, timeout: TimeInterval, json: Bool) -> Int32 {
+    static func waitUntilFree(port: Int, timeout: TimeInterval) -> WaitReport {
         let start = Date()
         var isFree = false
         while true {
@@ -238,15 +244,20 @@ enum PortKillaCLI {
             Thread.sleep(forTimeInterval: 0.25)
         }
         let waited = Date().timeIntervalSince(start)
-        let exit = isFree ? CLIExit.ok : CLIExit.stillRunning
+        return WaitReport(port: port, free: isFree, waitedSeconds: (waited * 100).rounded() / 100,
+                          exitCode: isFree ? CLIExit.ok : CLIExit.stillRunning)
+    }
+
+    private static func wait(port: Int, timeout: TimeInterval, json: Bool) -> Int32 {
+        let report = waitUntilFree(port: port, timeout: timeout)
         if json {
-            return printJSON(WaitReport(port: port, free: isFree, waitedSeconds: (waited * 100).rounded() / 100, exitCode: exit)) ? exit : CLIExit.internalError
-        } else if isFree {
+            return printJSON(report) ? report.exitCode : CLIExit.internalError
+        } else if report.free {
             print(":\(port) is free.")
         } else {
             printError(":\(port) is still in use after \(Int(timeout))s.")
         }
-        return exit
+        return report.exitCode
     }
 
     // MARK: - history

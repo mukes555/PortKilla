@@ -29,7 +29,30 @@ enum CLIKill {
         }
     }
 
+    /// What a kill produced: the report for JSON consumers, the text for
+    /// people, and where the text belongs.
+    struct Outcome {
+        let report: Report
+        let text: String
+        let toStderr: Bool
+    }
+
     static func run(_ options: CLICommand.KillOptions) -> Int32 {
+        let outcome = perform(options)
+        if options.json {
+            return PortKillaCLI.printJSON(outcome.report) ? outcome.report.exitCode : CLIExit.internalError
+        }
+        if outcome.toStderr {
+            PortKillaCLI.printError(outcome.text)
+        } else {
+            print(outcome.text)
+        }
+        return outcome.report.exitCode
+    }
+
+    /// The whole kill decision and action, without touching stdout: the CLI
+    /// prints the outcome, the MCP server wraps it in a tool result.
+    static func perform(_ options: CLICommand.KillOptions) -> Outcome {
         let scan = PortKillaCLI.scan(refreshDocker: false)
         let targets = select(from: scan.ports, options: options)
         var report = Report(
@@ -42,13 +65,14 @@ enum CLIKill {
             let what = options.pid.map { "PID \($0) is not listening on any port." } ?? "Nothing is listening on :\(options.port ?? 0)."
             // `free` treats an already-free port as done.
             let exit = options.freeIsSuccess && options.pid == nil ? CLIExit.ok : CLIExit.notFound
-            return finish(&report, action: exit == CLIExit.ok ? "already-free" : "not-found", exit: exit, json: options.json, text: what)
+            return finish(&report, action: exit == CLIExit.ok ? "already-free" : "not-found", exit: exit, text: what)
         }
         report.guardVerdict = targets.map { KillDecision.verdict(caller: scan.caller, target: $0.agentOwner, forced: options.force) }
             .first { $0 != "allowed" } ?? "allowed"
-        if scan.caller == nil, let owned = targets.first(where: { $0.agentOwner?.isLiveAgentSession == true }), !options.json {
+        var notes: [String] = []
+        if scan.caller == nil, let owned = targets.first(where: { $0.agentOwner?.isLiveAgentSession == true }) {
             // The guard can't protect what it can't compare against.
-            PortKillaCLI.printError("note: :\(owned.port) belongs to \(owned.agentOwner?.described ?? "an agent") and you are not identified as an agent, so the friendly-fire guard did not apply. Run `portkilla whoami` or export PORTKILLA_OWNER=<name>.")
+            notes.append("note: :\(owned.port) belongs to \(owned.agentOwner?.described ?? "an agent") and you are not identified as an agent, so the friendly-fire guard did not apply. Run `portkilla whoami` or export PORTKILLA_OWNER=<name>.")
         }
 
         // The guard: refuse the whole request if any target is another agent's.
@@ -63,7 +87,7 @@ enum CLIKill {
             let text = refusals.joined(separator: "\n")
                 + "\nRefusing to kill another agent's server. Ask the user, or start yours on a free port. Pass --force only if the user says so; run `portkilla whoami` to check how you are identified."
             let action = options.dryRun ? "would-refuse" : "refused"
-            return finish(&report, action: action, exit: CLIExit.refused, json: options.json, text: text, toStderr: !options.dryRun)
+            return finish(&report, action: action, exit: CLIExit.refused, text: text, toStderr: !options.dryRun)
         }
 
         if options.force && !refusals.isEmpty {
@@ -73,10 +97,14 @@ enum CLIKill {
 
         if options.dryRun {
             let text = targets.map { "Would \(options.force ? "force-" : "")kill \($0.processName) (PID \($0.pid)) on :\($0.port)." }.joined(separator: "\n")
-            return finish(&report, action: "would-kill", exit: CLIExit.ok, json: options.json, text: text)
+            return finish(&report, action: "would-kill", exit: CLIExit.ok, text: (notes + [text]).joined(separator: "\n"))
         }
 
-        return kill(targets, options: options, report: &report)
+        var outcome = kill(targets, options: options, report: &report)
+        if !notes.isEmpty {
+            outcome = Outcome(report: outcome.report, text: (notes + [outcome.text]).joined(separator: "\n"), toStderr: outcome.toStderr)
+        }
+        return outcome
     }
 
     /// Every distinct process on the port, or the one pid asked for.
@@ -90,7 +118,7 @@ enum CLIKill {
         }
     }
 
-    private static func kill(_ targets: [PortInfo], options: CLICommand.KillOptions, report: inout Report) -> Int32 {
+    private static func kill(_ targets: [PortInfo], options: CLICommand.KillOptions, report: inout Report) -> Outcome {
         let killer = ProcessKiller()
         var failures: [String] = []
         var signalled: [PortInfo] = []
@@ -120,12 +148,12 @@ enum CLIKill {
         report.reasons += failures
 
         if signalled.isEmpty {
-            return finish(&report, action: "failed", exit: CLIExit.killFailed, json: options.json, text: lines.joined(separator: "\n"), toStderr: true)
+            return finish(&report, action: "failed", exit: CLIExit.killFailed, text: lines.joined(separator: "\n"), toStderr: true)
         }
         if !stillRunning.isEmpty {
-            return finish(&report, action: "still-running", exit: CLIExit.stillRunning, json: options.json, text: lines.joined(separator: "\n"))
+            return finish(&report, action: "still-running", exit: CLIExit.stillRunning, text: lines.joined(separator: "\n"))
         }
-        return finish(&report, action: "killed", exit: CLIExit.ok, json: options.json, text: lines.joined(separator: "\n"))
+        return finish(&report, action: "killed", exit: CLIExit.ok, text: lines.joined(separator: "\n"))
     }
 
     /// Polls because the CLI has no run loop to host dispatch sources.
@@ -139,16 +167,9 @@ enum CLIKill {
         return alive
     }
 
-    private static func finish(_ report: inout Report, action: String, exit: Int32, json: Bool, text: String, toStderr: Bool = false) -> Int32 {
+    private static func finish(_ report: inout Report, action: String, exit: Int32, text: String, toStderr: Bool = false) -> Outcome {
         report.action = action
         report.exitCode = exit
-        if json {
-            if !PortKillaCLI.printJSON(report) { return CLIExit.internalError }
-        } else if toStderr {
-            PortKillaCLI.printError(text)
-        } else {
-            print(text)
-        }
-        return exit
+        return Outcome(report: report, text: text, toStderr: toStderr)
     }
 }

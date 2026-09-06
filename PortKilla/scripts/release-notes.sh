@@ -12,8 +12,10 @@ CHANGELOG="$REPO_ROOT/CHANGELOG.md"
 
 # Pull the section for this version: everything between "## <version>" and the
 # next "## " heading.
+# The heading must be exactly this version ("## 1.1" must not match 1.13.0).
 SECTION="$(awk -v ver="$VERSION" '
-    $0 ~ "^## " ver { capture=1; next }
+    BEGIN { gsub(/\./, "\\.", ver) }
+    $0 ~ "^## " ver "([^0-9.]|$)" { capture=1; next }
     capture && /^## / { exit }
     capture { print }
 ' "$CHANGELOG")"
@@ -22,7 +24,10 @@ SECTION="$(awk -v ver="$VERSION" '
 SECTION="$(printf '%s\n' "$SECTION" | sed -e '/./,$!d' | sed -e ':a' -e '/^\n*$/{$d;N;ba' -e '}')"
 
 if [ -z "$SECTION" ]; then
-    SECTION="See the [changelog](https://github.com/mukes555/PortKilla/blob/main/CHANGELOG.md)."
+    # Fail the release rather than publish one with no notes: it means the
+    # "[Unreleased]" section was never renamed.
+    echo "release-notes.sh: no '## $VERSION' section in CHANGELOG.md" >&2
+    exit 1
 fi
 
 cat <<EOF
@@ -37,7 +42,9 @@ Download **PortKilla-${VERSION}.dmg** below, open it, and drag PortKilla to
 Applications. Universal binary — runs natively on Apple Silicon and Intel;
 requires macOS 13 (Ventura) or newer.
 
-> Not notarized (no Apple Developer account): on first launch, right-click
-> PortKilla.app → **Open** → **Open**, or run
-> \`xattr -dr com.apple.quarantine /Applications/PortKilla.app\`.
+> Not notarized (no Apple Developer account). First launch on macOS 15 or
+> newer: open it once, then System Settings → Privacy & Security → **Open
+> Anyway**. On macOS 13 and 14: right-click PortKilla.app → **Open** → **Open**.
+> Either way, \`xattr -dr com.apple.quarantine /Applications/PortKilla.app\`
+> skips the dialog. Homebrew (\`brew install --cask portkilla\`) does this for you.
 EOF

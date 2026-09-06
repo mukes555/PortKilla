@@ -271,6 +271,7 @@ class PortManager: ObservableObject {
                 if manual { self.showToast("You're up to date") }
             case .failed(let reason):
                 // Not marked as checked, so the next launch tries again.
+                Log.update.error("update check failed: \(reason, privacy: .public)")
                 if manual { self.showToast("Couldn't check for updates: \(reason)") }
             }
         }

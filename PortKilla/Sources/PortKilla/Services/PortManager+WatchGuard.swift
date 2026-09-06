@@ -146,6 +146,7 @@ extension PortManager {
                 case .occupied(let name):
                     if let intruder = guardKillTarget(for: event.port, in: ports) {
                         let owner = intruder.agentOwner ?? guardOwners[intruder.pid]
+                        Log.guardLog.info("guard on :\(event.port) saw \(intruder.processName, privacy: .private) owner=\(owner?.sessionId ?? "none", privacy: .public)")
                         if case .warn(let reason) = KillDecision.forHuman(target: owner) {
                             // The only unattended kill in the app never takes
                             // another agent's live server; the person decides.

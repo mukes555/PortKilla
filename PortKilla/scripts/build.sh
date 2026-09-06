@@ -3,7 +3,7 @@
 set -euo pipefail
 
 APP_NAME="PortKilla"
-VERSION="1.14.0"
+VERSION="1.15.0"
 BUNDLE_ID="${BUNDLE_ID:-com.mukes555.$APP_NAME}"
 MAKE_DMG=0
 
@@ -90,7 +90,13 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
     <key>CFBundleShortVersionString</key>
     <string>$VERSION</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>$VERSION</string>
+    <key>CFBundleDisplayName</key>
+    <string>$APP_NAME</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.developer-tools</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>MIT License. https://github.com/mukes555/PortKilla</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleURLTypes</key>

@@ -80,6 +80,7 @@ struct SettingsView: View {
 private struct GeneralSettings: View {
     @ObservedObject var portManager: PortManager
     @State private var launchAtLogin = LoginItem.isEnabled
+    @State private var loginNeedsApproval = LoginItem.requiresApproval
     @State private var notificationsBlocked = false
 
     private let historyLimits = [50, 100, 200, 500]
@@ -97,8 +98,17 @@ private struct GeneralSettings: View {
                     set: { newValue in
                         if LoginItem.setEnabled(newValue) { launchAtLogin = newValue }
                         else { portManager.showToast("Needs the installed .app bundle") }
+                        loginNeedsApproval = LoginItem.requiresApproval
                     }
                 ))
+                if loginNeedsApproval {
+                    HStack {
+                        Label("macOS is waiting for you to allow PortKilla in Login Items (this happens after an update).", systemImage: "exclamationmark.triangle")
+                            .foregroundColor(.orange)
+                        Spacer()
+                        Button("Open Login Items") { LoginItem.openLoginItemsSettings() }
+                    }
+                }
                 Picker("Auto refresh", selection: $portManager.refreshInterval) {
                     ForEach(intervals, id: \.0) { Text($0.1).tag($0.0) }
                 }
@@ -160,7 +170,11 @@ private struct GeneralSettings: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear(perform: checkNotificationStatus)
+        .onAppear {
+            checkNotificationStatus()
+            launchAtLogin = LoginItem.isEnabled
+            loginNeedsApproval = LoginItem.requiresApproval
+        }
         .onChange(of: portManager.notificationsEnabled) { _ in checkNotificationStatus() }
     }
 
@@ -289,11 +303,19 @@ private struct AboutSettings: View {
             Text(version).foregroundColor(.secondary)
 
             if let newer = portManager.updateAvailableVersion {
-                Button("Download v\(newer)…") { NSWorkspace.shared.open(UpdateChecker.releasesPageURL) }
-                    .buttonStyle(.borderedProminent)
-            } else {
+                UpdateButton(version: newer, portManager: portManager)
+            } else if UpdateChecker.currentVersion != nil {
                 Button("Check for Updates…") { portManager.checkForUpdates(manual: true) }
+            } else {
+                Text("Development build: no update check.")
+                    .settingsCaption()
             }
+
+            Button("Copy debug info") {
+                Pasteboard.copy(Diagnostics.text())
+                portManager.showToast("Debug info copied")
+            }
+            .help("Version, macOS, install source, scanner path, and more, for bug reports")
 
             Divider().padding(.vertical, 6)
 
@@ -321,5 +343,26 @@ private struct AboutSettings: View {
 private extension View {
     func settingsCaption() -> some View {
         self.font(.caption).foregroundColor(.secondary)
+    }
+}
+
+/// "Download vX" for a DMG install; for a Homebrew install the download
+/// would overwrite the cask's managed bundle, so it offers the brew command.
+struct UpdateButton: View {
+    let version: String
+    @ObservedObject var portManager: PortManager
+
+    var body: some View {
+        if InstallSource.detect() == .homebrew {
+            Button("Update to v\(version) with Homebrew") {
+                Pasteboard.copy("brew reinstall --cask portkilla")
+                portManager.showToast("Copied: brew reinstall --cask portkilla")
+            }
+            .buttonStyle(.borderedProminent)
+            .help("Copies the Homebrew command; the cask replaces the app and quits the running copy")
+        } else {
+            Button("Download v\(version)…") { NSWorkspace.shared.open(UpdateChecker.releasesPageURL) }
+                .buttonStyle(.borderedProminent)
+        }
     }
 }

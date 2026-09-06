@@ -62,10 +62,10 @@ final class CLIArgumentsTests: XCTestCase {
     func testOtherCommands() {
         XCTAssertEqual(parse("whoami --json"), .success(.whoami(json: true)))
         XCTAssertEqual(parse("whoami --yaml"), .failure(.unknownOption("--yaml", command: "whoami")))
-        XCTAssertEqual(parse("version"), .success(.version))
-        XCTAssertEqual(parse("--version"), .success(.version))
-        XCTAssertEqual(parse("help"), .success(.help))
-        XCTAssertEqual(parse("-h"), .success(.help))
+        XCTAssertEqual(parse("version"), .success(.version(json: false)))
+        XCTAssertEqual(parse("--version"), .success(.version(json: false)))
+        XCTAssertEqual(parse("help"), .success(.help(topic: nil)))
+        XCTAssertEqual(parse("-h"), .success(.help(topic: nil)))
         XCTAssertEqual(parse("agent-docs"), .success(.agentDocs))
     }
 

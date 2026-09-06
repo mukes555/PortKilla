@@ -62,6 +62,9 @@ class PortScanner {
         }
 
         // Fallback: the lsof pipeline
+        if !lastScanUsedFallback {
+            Log.scan.warning("libproc returned nothing; scanning through lsof")
+        }
         setUsedFallback(true)
         return try scanWithLsof(processes: processes)
     }

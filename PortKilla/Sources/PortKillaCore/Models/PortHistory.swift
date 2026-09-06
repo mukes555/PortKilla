@@ -14,6 +14,8 @@ public struct PortHistoryItem: Identifiable, Codable {
     public enum HistoryAction: String, Codable {
         case detected = "Detected"
         case killed = "Killed"
+        /// The guard refused an agent; `killedBy` names the agent it refused.
+        case refused = "Refused"
     }
 
     public init(port: Int, processName: String, action: HistoryAction, owner: String? = nil, killedBy: String? = nil) {
@@ -72,7 +74,15 @@ public final class HistoryManager: ObservableObject {
     public static let shared = HistoryManager()
 
     @Published public private(set) var history: [PortHistoryItem] = []
+    /// Refusals the guard issued to agents, newest first, capped at twenty.
+    @Published public private(set) var refusals: [PortHistoryItem] = []
     private let defaults: UserDefaults
+    private static let maxRefusals = 20
+
+    /// Kills and refusals together, newest first.
+    public var events: [PortHistoryItem] {
+        (history + refusals).sorted { $0.timestamp > $1.timestamp }
+    }
 
     /// Set from the History preference; trimming applies immediately.
     public var maxHistoryItems = 50 {
@@ -94,6 +104,16 @@ public final class HistoryManager: ObservableObject {
         trimAndSave()
     }
 
+    public func addRefusal(port: Int, processName: String, owner: String?, refused caller: String) {
+        loadHistory()
+        let item = PortHistoryItem(port: port, processName: processName, action: .refused, owner: owner, killedBy: caller)
+        refusals.insert(item, at: 0)
+        refusals = Array(refusals.prefix(Self.maxRefusals))
+        if let data = try? JSONEncoder().encode(refusals) {
+            defaults.set(data, forKey: DefaultsKey.refusals)
+        }
+    }
+
     public func reload() {
         loadHistory()
     }
@@ -102,7 +122,18 @@ public final class HistoryManager: ObservableObject {
     /// would not resolve to the app's domain (the binary is reached through
     /// a symlink), so the domain is named explicitly.
     public static func appStore() -> HistoryManager {
-        HistoryManager(defaults: UserDefaults(suiteName: "com.mukes555.PortKilla") ?? .standard)
+        HistoryManager(defaults: UserDefaults(suiteName: appSuiteName) ?? .standard)
+    }
+
+    /// The shared preference domain. Debug builds honour PORTKILLA_DEFAULTS_SUITE
+    /// so the scenario tests write to a throwaway domain instead of the user's.
+    public static var appSuiteName: String {
+        #if DEBUG
+        if let override = ProcessInfo.processInfo.environment["PORTKILLA_DEFAULTS_SUITE"], !override.isEmpty {
+            return override
+        }
+        #endif
+        return "com.mukes555.PortKilla"
     }
 
     private func trimAndSave() {
@@ -119,10 +150,16 @@ public final class HistoryManager: ObservableObject {
            let items = try? JSONDecoder().decode([PortHistoryItem].self, from: data) {
             history = items
         }
+        if let data = defaults.data(forKey: DefaultsKey.refusals),
+           let items = try? JSONDecoder().decode([PortHistoryItem].self, from: data) {
+            refusals = items
+        }
     }
 
     public func clearHistory() {
         history.removeAll()
+        refusals.removeAll()
         defaults.removeObject(forKey: DefaultsKey.history)
+        defaults.removeObject(forKey: DefaultsKey.refusals)
     }
 }

@@ -7,7 +7,7 @@ import UserNotifications
 /// the bare SwiftPM binary during development), so every call is guarded.
 public enum Notifier {
 
-    private static var isAvailable: Bool {
+    public static var isAvailable: Bool {
         // A bundle identifier alone is not enough: the xctest runner has one
         // yet UNUserNotificationCenter still throws ("bundleProxyForCurrentProcess
         // is nil"). Only a real .app bundle can use notifications.
@@ -28,6 +28,33 @@ public enum Notifier {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             DispatchQueue.main.async { completion(settings.authorizationStatus) }
         }
+    }
+
+    public static let refusalCategory = "PORTKILLA_REFUSAL"
+    public static let stopAnywayAction = "PORTKILLA_STOP_ANYWAY"
+    public static let showAction = "PORTKILLA_SHOW"
+
+    /// Registers the refusal category so its buttons appear; call once at launch.
+    public static func registerCategories() {
+        guard isAvailable else { return }
+        let stop = UNNotificationAction(identifier: stopAnywayAction, title: "Stop it anyway", options: [.destructive])
+        let show = UNNotificationAction(identifier: showAction, title: "Show in PortKilla", options: [.foreground])
+        let category = UNNotificationCategory(identifier: refusalCategory, actions: [stop, show], intentIdentifiers: [], options: [])
+        UNUserNotificationCenter.current().setNotificationCategories([category])
+    }
+
+    /// "Claude Code was refused :3000" with the buttons a person needs to
+    /// settle it; `port` rides along for the action handler.
+    public static func sendRefusal(_ payload: RefusalSignal.Payload, sound: Bool = true) {
+        guard isAvailable else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "\(payload.caller.components(separatedBy: " via ").first ?? payload.caller) was refused :\(payload.port)"
+        let owner = payload.owner.map { " owned by \($0)" } ?? " that nobody claims"
+        content.body = "It asked to stop \(payload.processName)\(owner). Stop it yourself, or leave it running."
+        content.sound = sound ? .default : nil
+        content.categoryIdentifier = refusalCategory
+        content.userInfo = payload.userInfo
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "refusal-\(payload.port)", content: content, trigger: nil))
     }
 
     public static func send(title: String, body: String, sound: Bool = true) {

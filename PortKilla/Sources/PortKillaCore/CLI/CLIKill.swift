@@ -18,6 +18,8 @@ public enum CLIKill {
         /// "refused", "allowed", "overridden", or "not-evaluated: …" so an
         /// agent can tell "checked and cleared" from "could not check".
         var guardVerdict = ""
+        /// Supervisors stopped or commands run in place of a plain kill.
+        var stoppedVia: [String] = []
         var exitCode: Int32
 
         struct Target: Encodable {
@@ -28,6 +30,7 @@ public enum CLIKill {
             let agentOwner: AgentOwner?
             let connections: Int
             let projectPath: String?
+            let managedBy: ManagedRuntime?
         }
     }
 
@@ -59,7 +62,7 @@ public enum CLIKill {
         let targets = select(from: scan.ports, options: options)
         var report = Report(
             action: "", port: options.port, force: options.force, caller: scan.caller,
-            targets: targets.map { Report.Target(pid: $0.pid, processName: $0.processName, port: $0.port, proto: $0.proto, agentOwner: $0.agentOwner, connections: $0.connections, projectPath: $0.projectPath) },
+            targets: targets.map { Report.Target(pid: $0.pid, processName: $0.processName, port: $0.port, proto: $0.proto, agentOwner: $0.agentOwner, connections: $0.connections, projectPath: $0.projectPath, managedBy: $0.managedBy) },
             reasons: [], exitCode: CLIExit.ok
         )
 
@@ -95,6 +98,9 @@ public enum CLIKill {
             let text = refusals.joined(separator: "\n")
                 + "\nRefusing to kill another agent's server. Ask the user, or start yours on a free port. Pass --force only if the user says so; run `portkilla whoami` to check how you are identified."
             let action = options.dryRun ? "would-refuse" : "refused"
+            if !options.dryRun {
+                recordRefusals(targets, caller: scan.caller)
+            }
             return finish(&report, action: action, exit: CLIExit.refused, text: text, toStderr: !options.dryRun)
         }
 
@@ -103,19 +109,40 @@ public enum CLIKill {
             report.reasons = []
         }
 
+        let plans = targets.map { plan(for: $0, force: options.force, table: scan.table) }
         if options.dryRun {
-            let text = targets.map { target -> String in
+            let blocked = plans.compactMap(\.blocked)
+            if !blocked.isEmpty {
+                report.reasons += blocked
+                return finish(&report, action: "managed", exit: CLIExit.managed, text: blocked.joined(separator: "\n"))
+            }
+            let text = plans.map { plan -> String in
+                let target = plan.target
                 let clients = target.connections > 0 ? " It has \(target.connections) connected client\(target.connections == 1 ? "" : "s")." : ""
+                if let substitution = plan.substitution {
+                    return "Would \(substitution).\(clients)"
+                }
                 return "Would \(options.force ? "force-" : "")kill \(target.processName) (PID \(target.pid)) on :\(target.port).\(clients)"
             }.joined(separator: "\n")
             return finish(&report, action: "would-kill", exit: CLIExit.ok, text: (notes + [text]).joined(separator: "\n"))
         }
 
-        var outcome = kill(targets, options: options, report: &report)
+        var outcome = execute(plans, options: options, report: &report)
         if !notes.isEmpty {
             outcome = Outcome(report: outcome.report, text: (notes + [outcome.text]).joined(separator: "\n"), toStderr: outcome.toStderr)
         }
         return outcome
+    }
+
+    /// A refusal is an event the person may want to act on: it goes into
+    /// History and, at once, to the running app.
+    private static func recordRefusals(_ targets: [PortInfo], caller: AgentOwner?) {
+        let store = HistoryManager.appStore()
+        let actor = caller.map { "\($0.described) via CLI" } ?? "CLI"
+        for target in targets where KillDecision.forAgent(caller: caller, target: target.agentOwner).isRefusal {
+            store.addRefusal(port: target.port, processName: target.processName, owner: target.agentOwner?.name, refused: actor)
+            RefusalSignal.post(RefusalSignal.Payload(port: target.port, processName: target.processName, owner: target.agentOwner?.name, caller: actor))
+        }
     }
 
     /// Every distinct process on the port, the one pid asked for, or with
@@ -144,49 +171,8 @@ public enum CLIKill {
         return target == mine || target.hasPrefix(mine + "/") || mine.hasPrefix(target + "/")
     }
 
-    private static func kill(_ targets: [PortInfo], options: CLICommand.KillOptions, report: inout Report) -> Outcome {
-        let killer = ProcessKiller()
-        var failures: [String] = []
-        var signalled: [PortInfo] = []
-
-        for target in targets {
-            do {
-                try killer.killProcess(pid: target.pid, force: options.force, expectedName: target.processName)
-                signalled.append(target)
-            } catch {
-                failures.append("\(target.processName) (PID \(target.pid)): \(error.localizedDescription)")
-            }
-        }
-
-        let stillRunning = waitForExit(signalled.map(\.pid), timeout: PortManager.exitTimeout(force: options.force), killer: killer)
-        let killed = signalled.filter { !stillRunning.contains($0.pid) }
-
-        let store = HistoryManager.appStore()
-        let killedBy = report.caller.map { "\($0.described) via CLI" } ?? "CLI"
-        for target in killed {
-            store.addEntry(port: target.port, processName: target.processName, action: .killed,
-                           owner: target.agentOwner?.name, killedBy: killedBy)
-        }
-
-        var lines = killed.map { target -> String in
-            let leftover = options.orphaned ? " (\(target.agentOwner?.label ?? "orphaned"))" : ""
-            return "Killed \(target.processName) (PID \(target.pid)) on :\(target.port)\(leftover)."
-        }
-        lines += signalled.filter { stillRunning.contains($0.pid) }.map { "\($0.processName) (PID \($0.pid)) is still running. Try --force." }
-        lines += failures.map { "Failed to kill \($0)" }
-        report.reasons += failures
-
-        if signalled.isEmpty {
-            return finish(&report, action: "failed", exit: CLIExit.killFailed, text: lines.joined(separator: "\n"), toStderr: true)
-        }
-        if !stillRunning.isEmpty {
-            return finish(&report, action: "still-running", exit: CLIExit.stillRunning, text: lines.joined(separator: "\n"))
-        }
-        return finish(&report, action: "killed", exit: CLIExit.ok, text: lines.joined(separator: "\n"))
-    }
-
     /// Polls because the CLI has no run loop to host dispatch sources.
-    private static func waitForExit(_ pids: [Int], timeout: TimeInterval, killer: ProcessKiller) -> Set<Int> {
+    static func waitForExit(_ pids: [Int], timeout: TimeInterval, killer: ProcessKiller) -> Set<Int> {
         var alive = Set(pids)
         let deadline = Date().addingTimeInterval(timeout)
         while !alive.isEmpty && Date() < deadline {
@@ -196,7 +182,7 @@ public enum CLIKill {
         return alive
     }
 
-    private static func finish(_ report: inout Report, action: String, exit: Int32, text: String, toStderr: Bool = false) -> Outcome {
+    static func finish(_ report: inout Report, action: String, exit: Int32, text: String, toStderr: Bool = false) -> Outcome {
         report.action = action
         report.exitCode = exit
         return Outcome(report: report, text: text, toStderr: toStderr)

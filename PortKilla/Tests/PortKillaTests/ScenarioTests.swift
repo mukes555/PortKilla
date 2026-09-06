@@ -17,12 +17,16 @@ final class ScenarioTests: XCTestCase {
     private var servers: [Process] = []
     private var detachedPids: [Int32] = []
 
+    /// The CLI writes History to this throwaway domain instead of the user's.
+    private static let suite = "com.mukes555.PortKilla.scenario"
+
     override func tearDown() {
         servers.forEach { $0.terminate() }
         detachedPids.forEach { kill($0, SIGKILL) }
         servers.forEach { waitForExit($0, timeout: 5) }
         servers = []
         detachedPids = []
+        UserDefaults.standard.removePersistentDomain(forName: Self.suite)
     }
 
     /// waitUntilExit has no timeout; a server that survives a failed kill
@@ -64,6 +68,34 @@ final class ScenarioTests: XCTestCase {
         }
         XCTFail("detached server on :\(port) did not start")
         return pid
+    }
+
+    /// A server under a fake reloader: a shell whose command line says
+    /// "nodemon" runs the server in the foreground, the way nodemon does.
+    /// Returns the shell; the listener's pid is tracked for teardown.
+    private func startSupervisedServer(port: Int) throws -> Process {
+        let shell = Process()
+        shell.executableURL = URL(fileURLWithPath: "/bin/sh")
+        // Two commands, so sh forks instead of exec'ing the server in place.
+        shell.arguments = ["-c", "\"$0\" __serve \"$1\"; exit $?", Self.cli.path, "\(port)", "nodemon-lookalike"]
+        var env = ProcessInfo.processInfo.environment
+        for key in AgentSignatures.markerKeys { env[key] = nil }
+        env["PORTKILLA_OWNER"] = "scenario-bot"
+        shell.environment = env
+        shell.standardError = FileHandle.nullDevice
+        try shell.run()
+        servers.append(shell)
+
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            if let listener = (NativeScanner.allListeners() ?? []).first(where: { $0.port == port }) {
+                detachedPids.append(Int32(listener.pid))
+                return shell
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        XCTFail("supervised server on :\(port) did not start")
+        return shell
     }
 
     /// Spawns `portkilla __serve <port>` with the given environment and waits
@@ -154,6 +186,7 @@ final class ScenarioTests: XCTestCase {
         process.arguments = arguments
         var env = ProcessInfo.processInfo.environment
         for key in AgentSignatures.markerKeys { env[key] = nil }
+        env["PORTKILLA_DEFAULTS_SUITE"] = Self.suite
         if let owner { env["PORTKILLA_OWNER"] = owner }
         if let session { env["PORTKILLA_SESSION"] = session }
         process.environment = env
@@ -273,6 +306,52 @@ final class ScenarioTests: XCTestCase {
         XCTAssertEqual(cleaned.exitCode, 0, cleaned.stderr)
         XCTAssertEqual((try json(cleaned.stdout) as? [String: Any])?["action"] as? String, "killed")
         waitUntilGone(pid, timeout: 5)
+    }
+
+    func testAReloaderIsStoppedInsteadOfItsChild() throws {
+        let port = 47041
+        let supervisor = try startSupervisedServer(port: port)
+        let supervisorPid = Int(supervisor.processIdentifier)
+
+        let planned = try portkilla(["kill", "\(port)", "--dry-run", "--json"], owner: "scenario-bot")
+        XCTAssertEqual(planned.exitCode, 0, planned.stderr)
+        let plan = try XCTUnwrap(try json(planned.stdout) as? [String: Any])
+        let target = try XCTUnwrap((plan["targets"] as? [[String: Any]])?.first)
+        let managed = try XCTUnwrap(target["managedBy"] as? [String: Any], "the shell's command line names nodemon")
+        XCTAssertEqual(managed["kind"] as? String, "reloader")
+        XCTAssertEqual(managed["name"] as? String, "nodemon")
+        XCTAssertEqual(managed["supervisorPid"] as? Int, supervisorPid)
+        let text = try portkilla(["kill", "\(port)", "--dry-run"], owner: "scenario-bot")
+        XCTAssertTrue(text.stdout.hasPrefix("Would stop nodemon (PID \(supervisorPid)) instead of"), text.stdout)
+
+        let killed = try portkilla(["kill", "\(port)", "--json"], owner: "scenario-bot")
+        XCTAssertEqual(killed.exitCode, 0, killed.stderr)
+        let report = try XCTUnwrap(try json(killed.stdout) as? [String: Any])
+        XCTAssertEqual(report["action"] as? String, "killed")
+        // The kernel names /bin/sh "bash" on macOS; the pid is what matters.
+        XCTAssertTrue((report["stoppedVia"] as? [String])?.first?.hasSuffix("(PID \(supervisorPid))") == true, killed.stdout)
+        waitForExit(supervisor, timeout: 5)
+        XCTAssertTrue(ManagedRuntime.waitForPortsFree([port], timeout: 5).isEmpty, "the child went down with its supervisor")
+    }
+
+    func testARefusalIsRecordedAndSignalledToTheApp() throws {
+        let port = 47042
+        _ = try startServer(port: port, environment: ["PORTKILLA_OWNER": "scenario-bot"])
+        let signalled = expectation(forNotification: RefusalSignal.name, object: nil, notificationCenter: DistributedNotificationCenter.default()) { note in
+            RefusalSignal.Payload(userInfo: note.userInfo)?.port == port
+        }
+
+        let refused = try portkilla(["kill", "\(port)"], owner: "other-bot")
+        XCTAssertEqual(refused.exitCode, CLIExit.refused, refused.stdout)
+        wait(for: [signalled], timeout: 5)
+
+        let history = try portkilla(["history", "--json", "--port", "\(port)"], owner: nil)
+        let items = try XCTUnwrap(try json(history.stdout) as? [[String: Any]])
+        let refusal = try XCTUnwrap(items.first { $0["action"] as? String == "Refused" }, history.stdout)
+        XCTAssertEqual(refusal["killedBy"] as? String, "other-bot via CLI")
+        XCTAssertEqual(refusal["owner"] as? String, "scenario-bot")
+        let text = try portkilla(["history", "--port", "\(port)"], owner: nil)
+        XCTAssertTrue(text.stdout.contains("refused: other-bot via CLI"), text.stdout)
     }
 
     func testRealKillFreesThePortAndRecordsHistory() throws {

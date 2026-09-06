@@ -8,6 +8,8 @@ public enum CLIExit {
     public static let refused: Int32 = 3
     public static let killFailed: Int32 = 4
     public static let stillRunning: Int32 = 5
+    /// A supervisor would undo the kill; the stop command was printed instead.
+    public static let managed: Int32 = 6
     /// EX_SOFTWARE: PortKilla itself failed (e.g. could not encode JSON).
     public static let internalError: Int32 = 70
 }

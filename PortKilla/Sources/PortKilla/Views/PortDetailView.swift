@@ -64,6 +64,9 @@ struct PortDetailView: View {
                 if let agent = port.agentOwner {
                     DetailRow(label: "Agent", value: agent.detail)
                 }
+                if let managed = port.managedBy {
+                    DetailRow(label: "Managed by", value: "\(managed.label); \(managed.consequence)")
+                }
                 if let project = port.projectName {
                     DetailRow(label: "Project", value: project)
                 }

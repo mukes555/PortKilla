@@ -33,8 +33,16 @@ extension CLIArguments {
             stops every server left behind by an agent session that has ended
             (any agent's); exit 0 when there is nothing to clean up.
 
+            A supervised listener is stopped the way its supervisor expects: a
+            reloader (nodemon, next dev, uvicorn --reload, a gunicorn master) is
+            stopped together with its child; a pm2 app, a launchd job, or a Docker
+            container gets its own stop command (pm2 stop, brew services stop or
+            launchctl bootout, docker stop), run for you when the tool is on PATH
+            and printed with exit 6 when it is not. --force kills the listener
+            itself regardless.
+
             Exit codes: 0 done, 1 nothing listening, 2 usage, 3 refused, 4 kill
-            failed, 5 still running after the wait, 70 internal error.
+            failed, 5 still running after the wait, 6 managed, 70 internal error.
             """
         case "whois": return """
             portkilla whois <port> [--json]
@@ -152,9 +160,10 @@ extension CLIArguments {
 
     Exit codes: 0 done, 1 nothing listening, 2 usage, 3 refused (another
     agent's live session owns it, or nobody claims it), 4 kill failed,
-    5 still running after the wait, 70 internal error. --dry-run exits 0
-    when it would kill and 3 when it would refuse. `portkilla help <command>`
-    or `<command> --help` for more.
+    5 still running after the wait, 6 managed (a supervisor would undo the
+    kill; the stop command is printed), 70 internal error. --dry-run exits
+    0 when it would kill and 3 when it would refuse. `portkilla help
+    <command>` or `<command> --help` for more.
 
     The GUI launches when run with no arguments.
     """

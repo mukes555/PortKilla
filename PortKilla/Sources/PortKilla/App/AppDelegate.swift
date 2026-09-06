@@ -15,6 +15,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     private(set) var pinnedPanel: NSPanel?
     @Published var isPinned = false
     private var hotKey: GlobalHotKey?
+    private var refusalWatcher: RefusalWatcher?
 
 
     @Published var hotkeyDisplay: String = GlobalHotKey.defaultDisplay
@@ -73,6 +74,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         // Global hotkey from anywhere toggles the popover (permission-free
         // Carbon API); the shortcut is user-configurable via the gear menu.
         registerStoredHotKey()
+
+        // A refusal the CLI issues to an agent becomes a notification here.
+        refusalWatcher = RefusalWatcher(portManager: portManager) { [weak self] in self?.revealPorts() }
 
         // First launch: open the popover once so the user finds the app,
         // instead of it silently vanishing into the menu bar.
@@ -276,6 +280,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
 
     func closePopover() {
         popover.performClose(nil)
+    }
+
+    /// Brings the port list forward without toggling it away when it is
+    /// already showing.
+    func revealPorts() {
+        if pinnedPanel != nil || !popover.isShown {
+            togglePopover()
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     /// Opens the dedicated Settings window (gear icon / ⌘,).

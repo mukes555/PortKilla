@@ -120,6 +120,10 @@ struct PortRowView: View {
         return nil
     }
 
+    private var isTerminating: Bool {
+        manager.terminatingPids.contains(port.pid)
+    }
+
     private var rowTooltip: String {
         var lines = ["PID: \(port.pid)"]
         if let age = port.age {
@@ -195,43 +199,19 @@ struct PortRowView: View {
                             }
 
                             if port.isExposed {
-                                HStack(spacing: 2) {
-                                    Image(systemName: "wifi.exclamationmark")
-                                        .font(.system(size: 8))
-                                    Text("exposed")
-                                        .font(.system(size: 10))
-                                        .lineLimit(1)
-                                        .truncationMode(.tail)
-                                }
-                                .foregroundColor(.orange)
-                                .padding(.horizontal, 4)
-                                .background(Color.orange.opacity(0.12))
-                                .cornerRadius(4)
-                                .help("Listening on all interfaces (\(port.bindAddress ?? "*")) — reachable from your local network")
+                                Chip(icon: "wifi.exclamationmark", text: "exposed", tint: .chipOrange)
+                                    .help("Listening on all interfaces (\(port.bindAddress ?? "*")) — reachable from your local network")
                             }
 
                             // Which AI agent spawned this: the friendly-fire
                             // signal. Live sessions are teal; an ended session
                             // or a plain editor terminal is grey (safe to kill).
                             if let agent = port.agentOwner {
-                                let tint: Color = agent.isLiveAgentSession ? .teal : .secondary
-                                HStack(spacing: 2) {
-                                    Image(systemName: agent.sessionEnded ? "moon.zzz" : "sparkles")
-                                        .font(.system(size: 8))
-                                    // Grey plus the moon says "ended"; the
-                                    // suffix lives in the tooltip and the CLI.
-                                    // The one flexible item on the line: it
-                                    // truncates when the row runs out of room.
-                                    Text(agent.name)
-                                        .font(.system(size: 10))
-                                        .lineLimit(1)
-                                        .truncationMode(.tail)
-                                }
-                                .foregroundColor(tint)
-                                .padding(.horizontal, 4)
-                                .background(tint.opacity(0.12))
-                                .cornerRadius(4)
-                                .help(agent.detail)
+                                // Grey plus the moon says "ended"; the suffix
+                                // lives in the tooltip and the CLI.
+                                Chip(icon: agent.sessionEnded ? "moon.zzz" : "sparkles", text: agent.name,
+                                     tint: agent.isLiveAgentSession ? .chipTeal : .secondary)
+                                    .help(agent.detail)
                             }
 
                             // Clean mode: surface the project/container inline
@@ -252,40 +232,21 @@ struct PortRowView: View {
                             Text("└─")
                                 .foregroundColor(.secondary)
                             if port.proto == "udp" {
-                                Text("UDP")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundColor(.purple)
-                                    .padding(.horizontal, 3)
-                                    .background(Color.purple.opacity(0.12))
-                                    .cornerRadius(3)
+                                Chip(text: "UDP", tint: .chipPurple)
                                     .fixedSize()
                             }
                             // Chips truncate at the string level and render at
                             // fixed size — layout-level truncation kept stealing
                             // width from its HStack siblings.
                             if let project = port.projectName {
-                                Text(Self.chipText(project))
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.secondary)
-                                    .padding(.horizontal, 4)
-                                    .background(Color.secondary.opacity(0.12))
-                                    .cornerRadius(4)
+                                Chip(text: Self.chipText(project), tint: .secondary)
                                     .fixedSize()
                                     .help(port.projectPath ?? project)
                             }
                             if let container = port.containerName {
-                                HStack(spacing: 2) {
-                                    Image(systemName: "shippingbox")
-                                        .font(.system(size: 8))
-                                    Text(Self.chipText(container))
-                                        .font(.system(size: 10))
-                                }
-                                .foregroundColor(.blue)
-                                .padding(.horizontal, 4)
-                                .background(Color.blue.opacity(0.1))
-                                .cornerRadius(4)
-                                .fixedSize()
-                                .help(container)
+                                Chip(icon: "shippingbox", text: Self.chipText(container), tint: .chipBlue)
+                                    .fixedSize()
+                                    .help(container)
                             }
                             Text(port.command)
                                 .lineLimit(1)
@@ -327,27 +288,37 @@ struct PortRowView: View {
                         .help("Show Details")
                     }
 
-                    Button(action: {
-                        // Option = force kill (SIGKILL), Shift = kill process tree
-                        let force = NSEvent.modifierFlags.contains(.option)
-                        let killTree = NSEvent.modifierFlags.contains(.shift)
-                        onKillRequest(force, killTree)
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
+                    if isTerminating {
+                        ProgressView()
+                            .controlSize(.small)
+                            .help("Shutting down…")
+                    } else {
+                        Button(action: {
+                            // Option = force kill (SIGKILL), Shift = kill process tree
+                            let force = NSEvent.modifierFlags.contains(.option)
+                            let killTree = NSEvent.modifierFlags.contains(.shift)
+                            onKillRequest(force, killTree)
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Kill \(port.processName) on port \(port.port)")
+                        .help("Click to kill. Option+Click to force kill. Shift+Click to kill process tree.")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Kill \(port.processName) on port \(port.port)")
-                    .help("Click to kill. Option+Click to force kill. Shift+Click to kill process tree.")
                 }
                 .frame(width: 80, alignment: .trailing)
             }
+            .opacity(isTerminating ? 0.5 : 1)
             .contextMenu {
                 Button("Open in Browser") {
                     Browser.openLocalhost(port: port.port)
                 }
                 Button(manager.isWatched(port.port) ? "Unwatch :\(String(port.port))" : "Watch :\(String(port.port))") {
                     manager.toggleWatch(port.port)
+                }
+                Button(manager.isGuarded(port.port) ? "Remove Guard on :\(String(port.port))" : "Guard :\(String(port.port))") {
+                    GuardConfirm.toggle(port.port, in: manager)
                 }
                 Button("Show Details") {
                     onSelect()

@@ -69,7 +69,7 @@ struct SettingsView: View {
         case .general:   GeneralSettings(portManager: portManager)
         case .display:   DisplaySettings(portManager: portManager)
         case .shortcuts: ShortcutsSettings()
-        case .protected: ProtectedProcessListView(portManager: portManager, embedded: true)
+        case .protected: ProtectedProcessListView(portManager: portManager)
         case .about:     AboutSettings(portManager: portManager)
         }
     }
@@ -80,6 +80,9 @@ struct SettingsView: View {
 private struct GeneralSettings: View {
     @ObservedObject var portManager: PortManager
     @State private var launchAtLogin = LoginItem.isEnabled
+    @State private var notificationsBlocked = false
+
+    private let historyLimits = [50, 100, 200, 500]
 
     private let intervals: [(TimeInterval, String)] = [
         (0, "Manual only"), (2, "Every 2 seconds"), (5, "Every 5 seconds"),
@@ -109,11 +112,65 @@ private struct GeneralSettings: View {
 
             Section("Notifications") {
                 Toggle("Notify on watched / guarded port changes", isOn: $portManager.notificationsEnabled)
+                Toggle("Play a sound", isOn: $portManager.notificationSound)
+                    .disabled(!portManager.notificationsEnabled)
+                if notificationsBlocked {
+                    HStack {
+                        Label("Notifications are blocked for PortKilla in System Settings.", systemImage: "bell.slash")
+                            .foregroundColor(.orange)
+                        Spacer()
+                        Button("Open System Settings") { openNotificationSettings() }
+                    }
+                }
                 Text("Alerts when a watched port frees up or gets taken, and when a guard auto-kills.")
                     .settingsCaption()
             }
+
+            Section("Watched ports") {
+                if portManager.watchedPorts.isEmpty {
+                    Text("Right-click any port in the list and choose Watch. Guards are opt-in per watched port.")
+                        .settingsCaption()
+                } else {
+                    ForEach(portManager.watchedPorts.sorted(), id: \.self) { port in
+                        HStack {
+                            Text(":\(String(port))")
+                                .font(.system(.body, design: .monospaced))
+                            Spacer()
+                            Toggle("Guard", isOn: Binding(
+                                get: { portManager.isGuarded(port) },
+                                set: { _ in GuardConfirm.toggle(port, in: portManager) }
+                            ))
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                            Button("Unwatch") { portManager.toggleWatch(port) }
+                                .controlSize(.small)
+                        }
+                    }
+                    Text("A guard auto-kills any unprotected process of yours that takes the port, except servers of a running AI agent session.")
+                        .settingsCaption()
+                }
+            }
+
+            Section("History") {
+                Picker("Keep the last", selection: $portManager.historyLimit) {
+                    ForEach(historyLimits, id: \.self) { Text("\($0) kills").tag($0) }
+                }
+            }
         }
         .formStyle(.grouped)
+        .onAppear(perform: checkNotificationStatus)
+        .onChange(of: portManager.notificationsEnabled) { _ in checkNotificationStatus() }
+    }
+
+    private func checkNotificationStatus() {
+        Notifier.authorizationStatus { status in
+            notificationsBlocked = status == .denied
+        }
+    }
+
+    private func openNotificationSettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!
+        NSWorkspace.shared.open(url)
     }
 }
 
@@ -180,7 +237,18 @@ private struct ShortcutsSettings: View {
                 shortcutRow("Kill selected", "⏎")
                 shortcutRow("Force kill selected", "⌘⏎")
                 shortcutRow("Open selected in browser", "⌘O")
+                shortcutRow("Copy selected port", "⌘C")
                 shortcutRow("Settings", "⌘,")
+            }
+
+            Section("Mouse") {
+                shortcutRow("Force kill (SIGKILL)", "⌥ click ✕")
+                shortcutRow("Kill the whole process tree", "⇧ click ✕")
+                shortcutRow("Watch, guard, open project, copy…", "right-click a row")
+                Button("Show the tips banner again") {
+                    UserDefaults.standard.set(false, forKey: "PortKilla.didDismissHotkeyTip")
+                }
+                .controlSize(.small)
             }
         }
         .formStyle(.grouped)

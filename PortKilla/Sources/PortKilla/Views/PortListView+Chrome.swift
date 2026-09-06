@@ -172,6 +172,21 @@ extension PortListView {
         return chip.rawValue
     }
 
+    /// Before the first scan lands nothing is known yet; "no ports" would
+    /// be a claim made without data.
+    var loadingStateView: some View {
+        VStack(spacing: 8) {
+            Spacer()
+            ProgressView()
+                .controlSize(.small)
+            Text("Scanning ports…")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     /// Searching a free port number gets a positive answer instead of a
     /// dead-end "no results".
     var emptyStateView: some View {
@@ -238,6 +253,10 @@ extension PortListView {
                 } else {
                     Text("\(filteredPorts.count) of \(portManager.visiblePorts.count) ports · \(portManager.totalPortsMemory)")
                 }
+                if portManager.isCompatibilityScan {
+                    Text("· compatibility scan")
+                        .help("The native scanner is unavailable here, so PortKilla is reading ports through lsof. It works, but each refresh is slower.")
+                }
                 Spacer()
                 UpdatedLabel(clock: portManager.clock, isOnScreen: isOnScreen)
             }
@@ -250,21 +269,15 @@ extension PortListView {
             Divider()
 
             HStack(spacing: 12) {
-                Button(action: {
-                    if filter == .tests {
-                        killAllTests()
-                    } else {
-                        killAllDev()
-                    }
-                }) {
+                Button(action: { killAllForCurrentFilter() }) {
                     HStack(spacing: 4) {
                         Image(systemName: "trash")
-                        Text(filter == .tests ? "Kill All Tests ⌘K" : "Kill All Dev ⌘K")
+                        Text("\(filter.bulkKillLabel) ⌘K")
                     }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .help(filter == .tests ? "Kill all test processes (⌘K)" : "Kill all unprotected dev servers (⌘K)")
+                .help("\(filter.bulkKillLabel): unprotected processes on this filter (⌘K)")
 
                 Spacer()
 

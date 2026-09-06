@@ -3,6 +3,7 @@ import SwiftUI
 /// A modern segmented "radio" toggle: a pill with a sliding selection.
 /// Simple ⟷ Advanced row density.
 struct DensityToggle: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var density: PortManager.ViewDensity
     @Namespace private var slider
 
@@ -24,7 +25,7 @@ struct DensityToggle: View {
     private func segment(_ title: String, icon: String, value: PortManager.ViewDensity) -> some View {
         let selected = density == value
         return Button {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.85)) {
                 density = value
             }
         } label: {

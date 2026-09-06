@@ -13,6 +13,25 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+## 1.16.0 — 2026-09-06
+
+### The agent tools batch
+
+### Added
+- **`portkilla mcp`**: a Model Context Protocol server over stdin/stdout,
+  no dependencies. Tools: `list_ports`, `kill_port` (dry-run by default,
+  refusals come back as tool errors the model reads), `whoami`,
+  `wait_for_port_free`. The agent spawns and reaps it, so nothing is
+  resident or registered: the guard becomes a tool instead of a habit.
+  Register with `{"mcpServers":{"portkilla":{"command":"portkilla","args":["mcp"]}}}`
+  (Claude Code, Cursor) or `[mcp_servers.portkilla]` in Codex's config.
+- **`portkilla agent-docs --write [--file CLAUDE.md]`** appends the agent
+  snippet between markers, once, and updates it in place on later runs.
+  Opt-in only; no other command writes into your repository.
+- **`portkilla agent-docs --claude-hook`** prints a Claude Code PreToolUse
+  hook that turns `kill -9 $(lsof -ti:PORT)` into a nudge toward
+  `portkilla free`, at the point of the habit.
+
 ## 1.15.0 — 2026-09-06
 
 ### The distribution batch

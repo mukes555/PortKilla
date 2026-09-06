@@ -66,7 +66,7 @@ final class CLIArgumentsTests: XCTestCase {
         XCTAssertEqual(parse("--version"), .success(.version(json: false)))
         XCTAssertEqual(parse("help"), .success(.help(topic: nil)))
         XCTAssertEqual(parse("-h"), .success(.help(topic: nil)))
-        XCTAssertEqual(parse("agent-docs"), .success(.agentDocs))
+        XCTAssertEqual(parse("agent-docs"), .success(.agentDocs(CLICommand.AgentDocsOptions())))
     }
 
     func testUsageDocumentsEveryExitCode() {

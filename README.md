@@ -90,7 +90,16 @@ portkilla kill 3000
   the session, since a multiplexer inherits the environment of whoever
   started it.
 - `portkilla agent-docs` prints a snippet for your CLAUDE.md / AGENTS.md so
-  agents call `portkilla kill` instead of `kill -9 $(lsof -ti:PORT)`.
+  agents call `portkilla free` instead of `kill -9 $(lsof -ti:PORT)`;
+  `--write` puts it there for you, `--claude-hook` prints a Claude Code hook
+  that intercepts the old habit.
+- `portkilla mcp` runs an MCP server over stdio (tools `list_ports`,
+  `kill_port`, `whoami`, `wait_for_port_free`) so the guard is a tool the
+  agent has rather than a convention it remembers:
+
+  ```json
+  { "mcpServers": { "portkilla": { "command": "portkilla", "args": ["mcp"] } } }
+  ```
 - Export `PORTKILLA_OWNER=<name>` to declare who you are and to label every
   server you start. When nothing is known about a port, PortKilla says so
   rather than guessing.
@@ -193,7 +202,7 @@ Drag `PortKilla.app` to `/Applications`.
 ./scripts/build.sh --dmg
 ```
 
-This produces `dist/PortKilla-1.15.0.dmg`.
+This produces `dist/PortKilla-1.16.0.dmg`.
 
 To distribute to other Macs without Gatekeeper prompts, you’ll eventually want Developer ID signing + notarization.
 

@@ -1,3 +1,4 @@
+import PortKillaCore
 import SwiftUI
 
 /// Pinned section at the top of the port list showing every watched port and

@@ -1,3 +1,4 @@
+import PortKillaCore
 import SwiftUI
 import Foundation
 import AppKit
@@ -132,10 +133,15 @@ extension PortListView {
     /// Single entry point for killing a port: applies the confirm-before-kill
     /// setting (with a "don't ask again" checkbox) and then delegates.
     func requestKill(_ port: PortInfo, force: Bool, killTree: Bool) {
+        var message = "This will terminate '\(port.processName)' (PID \(port.pid))."
+        if port.connections > 0 {
+            message += "\n\n\(port.connections) client\(port.connections == 1 ? " is" : "s are") connected to it right now."
+        }
         let confirmed = confirmIfNeeded(
             title: "Kill Process on :\(port.port)?",
-            message: "This will terminate '\(port.processName)' (PID \(port.pid)).",
-            owner: port.agentOwner
+            message: message,
+            owner: port.agentOwner,
+            alwaysAsk: port.connections > 0
         )
         guard confirmed else { return }
         moveSelectionOff(port.id)
@@ -169,9 +175,9 @@ extension PortListView {
 
     /// Honours confirm-before-kill, and always asks when another agent's
     /// live session owns the target, whatever the setting says.
-    private func confirmIfNeeded(title: String, message: String, owner: AgentOwner?) -> Bool {
+    private func confirmIfNeeded(title: String, message: String, owner: AgentOwner?, alwaysAsk: Bool = false) -> Bool {
         let decision = KillDecision.forHuman(target: owner)
-        guard portManager.confirmBeforeKill || decision != .allow else { return true }
+        guard portManager.confirmBeforeKill || decision != .allow || alwaysAsk else { return true }
 
         var text = message
         if case .warn(let reason) = decision {

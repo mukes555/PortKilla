@@ -13,7 +13,45 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+### Added
+- **Connected clients.** Each listener shows how many established
+  connections it has (a chip in the row, a Clients line in the detail
+  view, `connections` in `list --json`), and killing a server with live
+  clients always confirms first.
+- **`portkilla free-port [--prefer N] [--range A-B] [--json]`** prints the
+  first port that is neither listening nor bound (a real bind probe),
+  starting from the preferred one. Exit 1 when the range is full.
+- **`portkilla schema <command>`** documents every field of that command's
+  `--json` output, so scripts and agents do not have to guess.
+- **Agents no longer kill what nobody claims.** An identified agent that
+  asks to stop a server PortKilla cannot attribute is refused (exit 3,
+  `guardVerdict: "refused"`, reason "not attributed"); it should start its
+  own servers with `PORTKILLA_OWNER` set or ask the person. People at a
+  plain terminal and the GUI are unaffected; `--force` still overrides.
+  Commands from an editor terminal count as a person's, except against
+  another agent's running server, where they need `--force`.
+- Scenario tests spawn real servers (`portkilla __serve <port>`, debug
+  builds only) and drive the guard through the CLI as a separate process:
+  attribution by declaration and by environment after reparenting,
+  refusals, overrides, real kills, `free-port`, `whoami`.
+
+### Security
+- Command lines are redacted before they are shown, exported, written to
+  History, or handed to an agent: `--token=...`, `--api-key ...`,
+  `DATABASE_PASSWORD=...`, passwords inside URLs, and bearer tokens become
+  `[redacted]`. Classification and project detection still see the original.
+
 ### Changed
+- **The core is a library.** `PortKillaCore` (models, scanners, guard, CLI,
+  MCP; Foundation only) sits under three targets: the menu-bar app, the new
+  standalone `portkilla` executable, and the tests. The CLI no longer
+  links AppKit, so it starts faster and uses less memory; the app binary
+  still answers the same subcommands.
+- A declared `PORTKILLA_OWNER` now wins over process ancestry for both the
+  caller and the target, so a bot started from inside another agent's
+  session keeps its own name.
+- `portkilla kill --dry-run` mentions connected clients, and `agent-docs`
+  explains the new refusal and points at `free-port`.
 - Row text uses relative text styles (`body`, `subheadline`, `caption`)
   instead of fixed point sizes, and the column widths are `ScaledMetric`,
   so the list follows whatever text scaling the system applies rather than
@@ -33,6 +71,10 @@ release, rename it to the version and date.
   needs one and stops it afterwards.
 
 ### Distribution
+- `scripts/build.sh` bundles the standalone CLI as
+  `PortKilla.app/Contents/Helpers/portkilla`, and the cask's `binary` stanza
+  links that instead of the app binary. CI builds before testing so the
+  scenario tests find the debug `portkilla`.
 - The release workflow can pin the Homebrew cask to each release with its
   SHA-256 (`packaging/homebrew/portkilla.rb.tmpl`, `livecheck`,
   `brew upgrade` support). It runs only when a `HOMEBREW_TAP_TOKEN` secret

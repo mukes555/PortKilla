@@ -1,3 +1,4 @@
+import PortKillaCore
 import Cocoa
 import SwiftUI
 import Combine

@@ -50,6 +50,9 @@ jobs:
       - name: Run tests
         run: |
           cd PortKilla
+          # The scenario tests spawn the debug `portkilla` binary, which is
+          # not a dependency of the test target; build every product first.
+          swift build
           swift test --disable-sandbox
 
       - name: UI render smoke test

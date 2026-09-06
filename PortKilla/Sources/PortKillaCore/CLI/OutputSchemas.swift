@@ -22,6 +22,13 @@ public enum OutputSchemas {
         "containerName": "Docker container, when the port is published by one", "children": "child processes [{pid, name, command}]",
         "bindAddress": "\"*\" / \"0.0.0.0\" / \"::\" mean all interfaces", "proto": "\"tcp\" | \"udp\"", "cpuPercent": "CPU between scans",
         "age": "human-readable process age, when known", "agentOwner": "AgentOwner or absent", "connections": "established TCP connections on this port",
+        "managedBy": "ManagedRuntime or absent: a supervisor that would undo a plain kill",
+    ]
+
+    public static let managedRuntime: [String: String] = [
+        "kind": "pm2 | launchd | docker | reloader", "name": "pm2 app, launchd label, container, or the reloader (nodemon, next dev, ...)",
+        "supervisorPid": "the process kill signals instead of the listener, for reloaders and masters", "supervisorName": "its executable name",
+        "stopArguments": "argv of the command that stops it for real, when one exists", "stopCommand": "the same command, for display",
     ]
 
     public static let evidence: [String: String] = [
@@ -40,6 +47,7 @@ public enum OutputSchemas {
         "projectName": "project folder name, when known", "projectPath": "working directory, when known",
         "containerName": "Docker container, when published by one", "connections": "established TCP connections",
         "children": "child processes [{pid, name, command}]", "agentOwner": "AgentOwner or absent",
+        "managedBy": "ManagedRuntime or absent",
         "evidence": "AttributionEvidence (fields below)",
         "verdict": "what kill would do for this caller, same vocabulary as kill.guardVerdict",
         "reason": "the refusal reason, when refused",
@@ -57,11 +65,12 @@ public enum OutputSchemas {
     public static let all: [String: [String: String]] = [
         "list": ["<array>": "PortInfo objects (see fields below)"].merging(port) { a, _ in a },
         "kill": [
-            "schema": "1", "action": "not-found | already-free | no-orphans | would-kill | would-refuse | refused | killed | still-running | failed",
+            "schema": "1", "action": "not-found | already-free | no-orphans | would-kill | would-refuse | refused | managed | killed | stopped | still-running | failed",
             "port": "requested port, absent for --pid and --orphaned", "force": "whether --force was given", "caller": "AgentOwner of the caller, or absent",
-            "targets": "[{pid, processName, port, proto, agentOwner, connections, projectPath}]", "reasons": "refusal or failure lines",
+            "targets": "[{pid, processName, port, proto, agentOwner, connections, projectPath, managedBy}]", "reasons": "refusal or failure lines",
+            "stoppedVia": "supervisors signalled or commands run in place of a plain kill",
             "overriddenRefusals": "refusals --force overrode", "guardVerdict": "refused | allowed | overridden | not-evaluated: … | allowed: caller is not an agent",
-            "exitCode": "0 done, 1 nothing listening, 3 refused, 4 failed, 5 still running",
+            "exitCode": "0 done, 1 nothing listening, 3 refused, 4 failed, 5 still running, 6 managed (a supervisor would undo it; the stop command is in reasons)",
         ],
         "whois": [
             "schema": "1", "port": "requested port, absent for --pid", "pid": "requested pid, absent for a port",
@@ -69,7 +78,7 @@ public enum OutputSchemas {
         ],
         "whoami": ["schema": "1", "detected": "whether an agent was identified", "owner": "AgentOwner or absent"],
         "wait": ["schema": "1", "port": "port", "free": "true when nothing listens", "waitedSeconds": "time waited", "exitCode": "0 free, 5 timeout"],
-        "history": ["<array>": "[{id, port, processName, timestamp, action, owner, killedBy}] newest first"],
+        "history": ["<array>": "[{id, port, processName, timestamp, action, owner, killedBy}] newest first; action is Killed, Detected, or Refused (then killedBy names the agent that was refused)"],
         "version": ["schema": "1", "version": "semver", "bundleIdentifier": "com.mukes555.PortKilla", "installSource": "Homebrew | Applications (DMG) | development build", "architecture": "arm64 | x86_64"],
         "doctor": ["<object>": "label -> value, one entry per diagnostic line"],
         "agents": ["schema": "1", "caller": "AgentOwner of the caller, or absent", "agents": "[AgentStatus] the compatibility matrix against this machine (fields below)"],
@@ -78,10 +87,10 @@ public enum OutputSchemas {
 
     /// Sub-objects a command's output embeds, printed under it.
     static let nested: [String: [(String, [String: String])]] = [
-        "list": [("AgentOwner", agentOwner)],
-        "kill": [("AgentOwner", agentOwner)],
+        "list": [("AgentOwner", agentOwner), ("ManagedRuntime", managedRuntime)],
+        "kill": [("AgentOwner", agentOwner), ("ManagedRuntime", managedRuntime)],
         "whoami": [("AgentOwner", agentOwner)],
-        "whois": [("Dossier", whoisTarget), ("AttributionEvidence", evidence), ("AgentOwner", agentOwner)],
+        "whois": [("Dossier", whoisTarget), ("AttributionEvidence", evidence), ("AgentOwner", agentOwner), ("ManagedRuntime", managedRuntime)],
         "agents": [("AgentStatus", agentStatus), ("AgentOwner", agentOwner)],
     ]
 

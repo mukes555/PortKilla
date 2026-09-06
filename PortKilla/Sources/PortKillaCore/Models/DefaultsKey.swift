@@ -22,4 +22,7 @@ public enum DefaultsKey {
     public static let lastUpdateCheck = "PortKilla.lastUpdateCheck"
     /// Unprefixed for compatibility with history saved by 1.0.
     public static let history = "portHistory"
+    /// Refusals live apart from kills so an older app reading `history`
+    /// never meets an action it cannot decode.
+    public static let refusals = "PortKilla.refusals"
 }

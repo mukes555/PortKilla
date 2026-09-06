@@ -207,7 +207,8 @@ public class PortScanner {
                 cpuPercent: processes.cpuPercent(for: raw.pid) ?? 0,
                 age: processes.ageSeconds(for: raw.pid).flatMap { ElapsedFormat.humanize(seconds: $0) },
                 agentOwner: isFull ? agentOwner(for: raw, type: type, containerName: containerName, processes: processes) : nil,
-                connections: raw.connections
+                connections: raw.connections,
+                managedBy: isFull ? ManagedRuntime.detect(pid: raw.pid, containerName: containerName, type: type, in: processes) : nil
             )
         }
 

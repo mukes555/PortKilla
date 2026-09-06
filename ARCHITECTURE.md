@@ -71,7 +71,12 @@ per port:
    passwords, bearer tokens), so nothing PortKilla shows, exports, or hands
    to an agent carries a secret.
 4. **`DockerService`** decorates ports that map to running containers.
-5. **`AgentAttribution`** ([Services/AgentAttribution.swift](PortKilla/Sources/PortKillaCore/Services/AgentAttribution.swift))
+5. **`ManagedRuntime`** ([Services/ManagedRuntime.swift](PortKilla/Sources/PortKillaCore/Services/ManagedRuntime.swift))
+   names the supervisor that would undo a plain kill (a Docker container,
+   the outermost pm2 or launchd job, the nearest reloader) and the verb that
+   stops it for real. Every kill path plans around it: the CLI in
+   `CLIKill+Managed.swift`, the app in `PortManager+Managed.swift`.
+6. **`AgentAttribution`** ([Services/AgentAttribution.swift](PortKilla/Sources/PortKillaCore/Services/AgentAttribution.swift))
    names the AI agent that spawned each listener: a declared
    `PORTKILLA_OWNER` first, then process ancestry, then the allowlisted
    environment markers agents leave on children (read from the same
@@ -121,7 +126,8 @@ PortKilla/Sources/
     CLI/               Argument parsing, commands, output schemas, MCP server,
                        and the debug-only `__serve` test server
   PortKilla/           The menu-bar app
-    App/               AppDelegate (@main), DemoReel (dev-only)
+    App/               AppDelegate (@main), RefusalWatcher (CLI refusals
+                       become actionable notifications), DemoReel (dev-only)
     Services/          GlobalHotKey
     Views/             SwiftUI; PortListView is the root, +Actions / +Chrome
                        are its extensions; PortRowViews, SettingsView, etc.

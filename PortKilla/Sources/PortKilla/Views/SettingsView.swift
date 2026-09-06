@@ -205,6 +205,7 @@ private struct ShortcutsSettings: View {
 
 private struct AboutSettings: View {
     @ObservedObject var portManager: PortManager
+    @EnvironmentObject var appDelegate: AppDelegate
     @State private var showResetConfirm = false
 
     private var version: String {
@@ -236,7 +237,10 @@ private struct AboutSettings: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(24)
         .alert("Reset all settings?", isPresented: $showResetConfirm) {
-            Button("Reset", role: .destructive) { portManager.resetAllSettings() }
+            Button("Reset", role: .destructive) {
+                portManager.resetAllSettings()
+                appDelegate.resetHotKey()
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Restores refresh interval, density, protected list, hotkey, and toggles to their defaults. Watched/guarded ports are cleared.")

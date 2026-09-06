@@ -303,11 +303,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
 
         hotkeyDisplay = defaults.string(forKey: HotKeyDefaults.display) ?? GlobalHotKey.defaultDisplay
         hotKey = GlobalHotKey(
-            keyCode: keyCode.map(UInt32.init) ?? GlobalHotKey.defaultKeyCode,
-            modifiers: modifiers.map(UInt32.init) ?? GlobalHotKey.defaultModifiers
+            keyCode: keyCode.flatMap(Self.storedKeyCode) ?? GlobalHotKey.defaultKeyCode,
+            modifiers: modifiers.flatMap(UInt32.init(exactly:)) ?? GlobalHotKey.defaultModifiers
         ) { [weak self] in
             self?.togglePopover()
         }
+    }
+
+    /// Preferences are untrusted: a negative or oversized value would trap in
+    /// `UInt32(_:)` and crash every launch with no way to recover in-app.
+    private static func storedKeyCode(_ value: Int) -> UInt32? {
+        guard let code = UInt32(exactly: value), code <= 0x7F else { return nil }
+        return code
     }
 
     /// Replaces the global hotkey; returns false if registration failed
@@ -347,14 +354,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     /// kill is never silent: it always asks for confirmation first. (In-app
     /// kills have their own confirmation flow / explicit modifier keys.)
     func application(_ application: NSApplication, open urls: [URL]) {
+        var askedThisDelivery = false
         for url in urls {
             switch url.host {
             case "kill":
-                guard let portNumber = Int(url.lastPathComponent) else { break }
+                // One confirmation per delivery, and a cooldown after it: a page
+                // could otherwise stack modal dialogs until one is clicked through.
+                guard !askedThisDelivery, urlKillCooldownElapsed,
+                      let portNumber = Int(url.lastPathComponent) else { break }
+                askedThisDelivery = true
+                lastURLKillAsked = Date()
                 let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
                 let force = components?.queryItems?.contains { $0.name == "force" && $0.value == "1" } ?? false
                 confirmAndKillFromURL(port: portNumber, force: force)
             case "show":
+                // The URL can arrive during launch, before the popover exists.
+                guard popover != nil else { break }
                 if !popover.isShown {
                     togglePopover()
                 }
@@ -362,6 +377,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
                 break
             }
         }
+    }
+
+    private var lastURLKillAsked = Date.distantPast
+    private static let urlKillCooldown: TimeInterval = 3
+
+    private var urlKillCooldownElapsed: Bool {
+        Date().timeIntervalSince(lastURLKillAsked) > Self.urlKillCooldown
     }
 
     private func confirmAndKillFromURL(port: Int, force: Bool) {

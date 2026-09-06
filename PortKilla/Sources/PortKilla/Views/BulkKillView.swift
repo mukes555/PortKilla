@@ -173,10 +173,11 @@ struct BulkKillView: View {
 
                     let listText = matchingPorts.prefix(12).map { "• \($0.processName) (:\($0.port))" }.joined(separator: "\n")
                     let suffix = count > 12 ? "\n\n…and \(count - 12) more." : ""
+                    let agentNote = KillDecision.liveAgentNote(for: matchingPorts.map(\.agentOwner)).map { "\n\n\($0)" } ?? ""
 
                     let confirmed = KillConfirm.run(
                         title: "Kill \(count) Process\(count == 1 ? "" : "es")?",
-                        message: "This will terminate the following:\n\n\(listText)\(suffix)\n\nAre you sure?"
+                        message: "This will terminate the following:\n\n\(listText)\(suffix)\(agentNote)\n\nAre you sure?"
                     )
                     if confirmed {
                         portManager.killPorts(matchingPorts, force: forceKill)

@@ -387,14 +387,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     }
 
     private func confirmAndKillFromURL(port: Int, force: Bool) {
-        NSApp.activate(ignoringOtherApps: true)
-        let confirmed = KillConfirm.run(
-            title: "Kill process on :\(port)?",
-            message: "A link asked PortKilla to \(force ? "force-" : "")kill whatever is listening on :\(port). Only continue if you initiated this."
-        )
-        if confirmed {
-            // respectProtected: a link must not be able to kill a protected process
-            portManager.killPortNumber(port, force: force, respectProtected: true)
+        // respectProtected: a link must not be able to kill a protected process
+        portManager.killPortNumber(port, force: force, respectProtected: true, initiator: .link) { target in
+            NSApp.activate(ignoringOtherApps: true)
+            var message = "A link asked PortKilla to \(force ? "force-" : "")kill '\(target.processName)' (PID \(target.pid)) on :\(port). Only continue if you initiated this."
+            if case .warn(let reason) = KillDecision.forHuman(target: target.agentOwner) {
+                message += "\n\n\(reason)"
+            }
+            return KillConfirm.run(title: "Kill process on :\(port)?", message: message)
         }
     }
 

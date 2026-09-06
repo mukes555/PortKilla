@@ -144,6 +144,8 @@ class PortScanner {
             }
             let projectPath = projectWorthyPath(cwdCache[raw.pid])
 
+            let type = determinePortType(processName: processName, command: command)
+            let containerName = DockerService.shared.getContainerName(forPort: raw.port)
             return PortInfo(
                 port: raw.port,
                 pid: raw.pid,
@@ -152,20 +154,28 @@ class PortScanner {
                 user: raw.user,
                 memoryUsage: memory,
                 memorySizeKB: memoryKb,
-                type: determinePortType(processName: processName, command: command),
+                type: type,
                 projectName: projectPath.map { ($0 as NSString).lastPathComponent } ?? extractProjectName(command: command),
                 projectPath: projectPath,
-                containerName: DockerService.shared.getContainerName(forPort: raw.port),
+                containerName: containerName,
                 children: children.isEmpty ? nil : children,
                 bindAddress: raw.host,
                 proto: raw.proto,
                 cpuPercent: processes.cpuPercent(for: raw.pid) ?? 0,
                 age: processes.ageSeconds(for: raw.pid).flatMap { ElapsedFormat.humanize(seconds: $0) },
-                agentOwner: AgentAttribution.owner(ofPid: raw.pid, in: processes)
+                agentOwner: agentOwner(for: raw, type: type, containerName: containerName, processes: processes)
             )
         }
 
         return ports.sorted { $0.port < $1.port }
+    }
+
+    /// A port fronted by Docker belongs to the container, not to whoever
+    /// happened to launch Docker Desktop (its env would say so forever).
+    private func agentOwner(for raw: RawListener, type: PortInfo.PortType, containerName: String?, processes: ProcessTable) -> AgentOwner? {
+        let isDockerFronted = containerName != nil || type == .docker
+        if isDockerFronted { return nil }
+        return AgentAttribution.owner(ofPid: raw.pid, in: processes)
     }
 
     // MARK: - Working directories

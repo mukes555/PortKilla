@@ -14,26 +14,27 @@ final class AgentAttributionTests: XCTestCase {
     // MARK: - Tree signatures (executable, not args)
 
     func testMatchesClaudeCodeExecutable() {
-        XCTAssertEqual(AgentAttribution.match(command: "claude bg-pty-host --foo"), "Claude Code")
+        XCTAssertEqual(AgentAttribution.match(command: "claude bg-pty-host --foo")?.name, "Claude Code")
+        XCTAssertEqual(AgentAttribution.match(command: "claude")?.confidence, .agent)
     }
 
     func testMatchesOtherTerminalAgents() {
-        XCTAssertEqual(AgentAttribution.match(command: "/opt/homebrew/bin/codex"), "Codex CLI")
-        XCTAssertEqual(AgentAttribution.match(command: "gemini -p hi"), "Gemini CLI")
-        XCTAssertEqual(AgentAttribution.match(command: "/usr/local/bin/aider --model x"), "Aider")
+        XCTAssertEqual(AgentAttribution.match(command: "/opt/homebrew/bin/codex")?.name, "Codex CLI")
+        XCTAssertEqual(AgentAttribution.match(command: "gemini -p hi")?.name, "Gemini CLI")
+        XCTAssertEqual(AgentAttribution.match(command: "/usr/local/bin/aider --model x")?.name, "Aider")
     }
 
-    func testMatchesAppBundles() {
-        XCTAssertEqual(AgentAttribution.match(command: "/Applications/Cursor.app/Contents/MacOS/Cursor"), "Cursor")
-        XCTAssertEqual(AgentAttribution.match(command: "/Applications/Visual Studio Code.app/Contents/MacOS/Code"), "VS Code")
-        XCTAssertEqual(AgentAttribution.match(command: "/Applications/Windsurf.app/Contents/MacOS/Windsurf"), "Windsurf")
+    func testAppBundlesAreEditorTerminals() {
+        let cursor = AgentAttribution.match(command: "/Applications/Cursor.app/Contents/MacOS/Cursor")
+        XCTAssertEqual(cursor?.name, "Cursor")
+        XCTAssertEqual(cursor?.confidence, .editorTerminal)
+        XCTAssertEqual(AgentAttribution.match(command: "/Applications/Visual Studio Code.app/Contents/MacOS/Code")?.name, "VS Code")
+        XCTAssertEqual(AgentAttribution.match(command: "/Applications/Windsurf.app/Contents/MacOS/Windsurf")?.name, "Windsurf")
     }
 
     func testKernelNameWinsOverSpacedPath() {
-        // The CLI bundled inside the desktop app lives under "Application Support";
-        // splitting on spaces would yield "Application", so the kernel name decides.
         let path = "/Users/me/Library/Application Support/Claude/claude-code/2.1.0/claude.app/Contents/MacOS/claude --flag"
-        XCTAssertEqual(AgentAttribution.match(command: path, executableName: "claude"), "Claude Code")
+        XCTAssertEqual(AgentAttribution.match(command: path, executableName: "claude")?.name, "Claude Code")
         XCTAssertNil(AgentAttribution.match(command: path))
     }
 
@@ -42,8 +43,6 @@ final class AgentAttributionTests: XCTestCase {
     }
 
     func testDoesNotMatchProjectFolderNamedClaude() {
-        // Regression: a project path containing "claude-code" must NOT be
-        // attributed to Claude Code; only the executable counts.
         XCTAssertNil(AgentAttribution.match(command: "node /Users/me/Documents/claude-code/app/server.js"))
     }
 
@@ -60,10 +59,22 @@ final class AgentAttributionTests: XCTestCase {
         XCTAssertEqual(owner?.name, "Claude Code")
         XCTAssertEqual(owner?.sessionPid, 100)
         XCTAssertEqual(owner?.source, .processTree)
+        XCTAssertTrue(owner?.isLiveAgentSession == true)
+    }
+
+    func testListenerItselfIsNeverTheAgent() {
+        // An editor helper that listens resolves to the editor above it, so
+        // every helper of one window shares one session.
+        let t = table([
+            (50, 1, "/Applications/Cursor.app/Contents/MacOS/Cursor"),
+            (300, 50, "/Applications/Cursor.app/Contents/Frameworks/Cursor Helper.app/Contents/MacOS/Cursor Helper --type=utility"),
+        ])
+        let owner = AgentAttribution.owner(ofPid: 300, in: t, environmentOf: noEnvironment)
+        XCTAssertEqual(owner?.name, "Cursor")
+        XCTAssertEqual(owner?.sessionPid, 50)
     }
 
     func testSessionIsTheCliNotTheDesktopAppAboveIt() {
-        // desktop Claude(50) -> claude CLI(100) -> zsh(200) -> server(300)
         let t = table([
             (50, 1, "/Applications/Claude.app/Contents/MacOS/Claude"),
             (100, 50, "claude"),
@@ -74,15 +85,11 @@ final class AgentAttributionTests: XCTestCase {
     }
 
     func testUnattributedWhenNoAgentAncestorAndNoMarkers() {
-        let t = table([
-            (200, 1, "/sbin/launchd"),
-            (300, 200, "node server.js"),
-        ])
+        let t = table([(200, 1, "/sbin/launchd"), (300, 200, "node server.js")])
         XCTAssertNil(AgentAttribution.owner(ofPid: 300, in: t, environmentOf: noEnvironment))
     }
 
     func testStopsAtRootWithoutInfiniteLoop() {
-        // A cycle must not hang the walk.
         let t = table([(300, 300, "node server.js")])
         XCTAssertNil(AgentAttribution.owner(ofPid: 300, in: t, environmentOf: noEnvironment))
     }
@@ -91,7 +98,6 @@ final class AgentAttributionTests: XCTestCase {
 
     func testDetachedServerAttributedByEnvironment() {
         // The shell that started the server is gone: server(300) -> launchd.
-        // The CLAUDECODE marker it inherited still names the owner.
         let t = table([(4242, 1, "claude"), (300, 1, "node server.js")])
         let owner = AgentAttribution.owner(ofPid: 300, in: t) { pid in
             pid == 300 ? ["CLAUDECODE": "1", "CLAUDE_PID": "4242"] : [:]
@@ -99,65 +105,89 @@ final class AgentAttributionTests: XCTestCase {
         XCTAssertEqual(owner?.name, "Claude Code")
         XCTAssertEqual(owner?.sessionPid, 4242)
         XCTAssertEqual(owner?.source, .environment)
+        XCTAssertFalse(owner?.sessionEnded ?? true)
     }
 
-    func testDeadSessionDropsSessionPidButKeepsName() {
-        // The agent process named by CLAUDE_PID has exited: a restarted agent
-        // (new pid) must still be allowed to kill its old server.
+    func testEndedSessionIsReportedAsEnded() {
+        // The agent named by CLAUDE_PID has exited.
         let t = table([(300, 1, "node server.js")])
         let owner = AgentAttribution.owner(ofPid: 300, in: t) { _ in ["CLAUDECODE": "1", "CLAUDE_PID": "1433"] }
         XCTAssertEqual(owner?.name, "Claude Code")
         XCTAssertNil(owner?.sessionPid)
-        let restarted = AgentOwner(name: "Claude Code", sessionPid: 9000, source: .processTree)
-        XCTAssertFalse(AgentAttribution.isFriendlyFire(caller: restarted, target: owner))
+        XCTAssertTrue(owner?.sessionEnded == true)
+        XCTAssertFalse(owner?.isLiveAgentSession ?? true)
+        XCTAssertEqual(owner?.label, "Claude Code (ended)")
     }
 
     func testReusedSessionPidIsNotTrusted() {
-        // pid 1433 is alive but is no longer an agent: treat the session as gone.
         let t = table([(1433, 1, "/usr/bin/sleep 100"), (300, 1, "node server.js")])
         let owner = AgentAttribution.owner(ofPid: 300, in: t) { _ in ["CLAUDECODE": "1", "CLAUDE_PID": "1433"] }
-        XCTAssertNil(owner?.sessionPid)
-    }
-
-    func testLiveSessionKeepsSessionPid() {
-        let t = table([(4242, 1, "claude"), (300, 1, "node server.js")])
-        let owner = AgentAttribution.owner(ofPid: 300, in: t) { _ in ["CLAUDECODE": "1", "CLAUDE_PID": "4242"] }
-        XCTAssertEqual(owner?.sessionPid, 4242)
+        XCTAssertTrue(owner?.sessionEnded == true)
     }
 
     func testAncestryWinsOverEnvironment() {
-        // Both signals present: the tree is session-precise, so it wins.
-        let t = table([
-            (100, 1, "claude"),
-            (300, 100, "node server.js"),
-        ])
+        let t = table([(100, 1, "claude"), (300, 100, "node server.js")])
         let owner = AgentAttribution.owner(ofPid: 300, in: t) { _ in ["CLAUDECODE": "1", "CLAUDE_PID": "999"] }
         XCTAssertEqual(owner?.sessionPid, 100)
         XCTAssertEqual(owner?.source, .processTree)
     }
 
     func testTerminalAgentOutranksEditorMarker() {
-        // Claude Code running inside a Cursor terminal stamps both markers.
         let env = ["CLAUDECODE": "1", "CURSOR_TRACE_ID": "abc", "TERM_PROGRAM": "vscode"]
-        XCTAssertEqual(AgentAttribution.ownerFromEnvironment(env)?.name, "Claude Code")
+        XCTAssertEqual(AgentAttribution.ownerFromEnvironment(env, in: .empty)?.name, "Claude Code")
     }
 
-    func testEditorMarkers() {
-        XCTAssertEqual(AgentAttribution.ownerFromEnvironment(["CURSOR_TRACE_ID": "x", "TERM_PROGRAM": "vscode"])?.name, "Cursor")
-        XCTAssertEqual(AgentAttribution.ownerFromEnvironment(["TERM_PROGRAM": "vscode"])?.name, "VS Code")
-        XCTAssertNil(AgentAttribution.ownerFromEnvironment(["TERM_PROGRAM": "iTerm.app"]))
+    func testEditorMarkersAreTerminalsNotAgents() {
+        let cursor = AgentAttribution.ownerFromEnvironment(["CURSOR_TRACE_ID": "x", "TERM_PROGRAM": "vscode"], in: .empty)
+        XCTAssertEqual(cursor?.name, "Cursor")
+        XCTAssertEqual(cursor?.confidence, .editorTerminal)
+        XCTAssertEqual(AgentAttribution.ownerFromEnvironment(["TERM_PROGRAM": "vscode"], in: .empty)?.name, "VS Code")
+        XCTAssertNil(AgentAttribution.ownerFromEnvironment(["TERM_PROGRAM": "iTerm.app"], in: .empty))
+    }
+
+    func testCursorAgentMarkerIsAnAgent() {
+        let owner = AgentAttribution.ownerFromEnvironment(["CURSOR_AGENT": "1", "CURSOR_TRACE_ID": "x"], in: .empty)
+        XCTAssertEqual(owner?.name, "Cursor")
+        XCTAssertEqual(owner?.confidence, .agent)
+    }
+
+    func testVSCodeForkResolvedFromAskpassPath() {
+        let env = ["TERM_PROGRAM": "vscode", "VSCODE_GIT_ASKPASS_MAIN": "/Applications/Windsurf.app/Contents/Resources/app/extensions/git/dist/askpass-main.js"]
+        let owner = AgentAttribution.ownerFromEnvironment(env, in: .empty)
+        XCTAssertEqual(owner?.name, "Windsurf")
+        XCTAssertEqual(owner?.confidence, .editorTerminal)
+    }
+
+    func testDeclaredOwnerInEnvironmentLabelsChildren() {
+        let owner = AgentAttribution.ownerFromEnvironment(["PORTKILLA_OWNER": "claude-code", "TERM_PROGRAM": "vscode"], in: .empty)
+        XCTAssertEqual(owner?.name, "Claude Code")
+        XCTAssertEqual(owner?.source, .declared)
+        XCTAssertEqual(owner?.confidence, .agent)
     }
 
     func testSessionPidIgnoredWhenNotNumeric() {
-        let owner = AgentAttribution.ownerFromEnvironment(["CLAUDECODE": "1", "CLAUDE_PID": "nope"])
+        let owner = AgentAttribution.ownerFromEnvironment(["CLAUDECODE": "1", "CLAUDE_PID": "nope"], in: .empty)
         XCTAssertEqual(owner?.name, "Claude Code")
         XCTAssertNil(owner?.sessionPid)
+        XCTAssertFalse(owner?.sessionEnded ?? true)
     }
 
     func testOnlyAllowlistedKeysAreRequested() {
-        // The scanner must never be asked for anything beyond the markers.
-        XCTAssertEqual(AgentAttribution.markerKeys,
-                       ["CLAUDECODE", "GEMINI_CLI", "CURSOR_TRACE_ID", "TERM_PROGRAM", "CLAUDE_PID"])
+        XCTAssertEqual(AgentSignatures.markerKeys, [
+            "CLAUDECODE", "CURSOR_AGENT", "GEMINI_CLI", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED",
+            "CURSOR_TRACE_ID", "TERM_PROGRAM", "PORTKILLA_OWNER", "CLAUDE_PID",
+            "VSCODE_GIT_ASKPASS_MAIN", "VSCODE_GIT_ASKPASS_NODE",
+        ])
+    }
+
+    // MARK: - Names people type
+
+    func testCanonicalNames() {
+        XCTAssertEqual(AgentSignatures.canonicalName("claude"), "Claude Code")
+        XCTAssertEqual(AgentSignatures.canonicalName("Claude-Code"), "Claude Code")
+        XCTAssertEqual(AgentSignatures.canonicalName(" vscode\n"), "VS Code")
+        XCTAssertEqual(AgentSignatures.canonicalName("my-bot"), "my-bot")
+        XCTAssertEqual(AgentSignatures.canonicalName("evil\nline"), "evil line")
     }
 
     // MARK: - Caller identity
@@ -171,46 +201,13 @@ final class AgentAttributionTests: XCTestCase {
         XCTAssertEqual(owner?.source, .declared)
     }
 
-    func testCallerFallsBackToOwnEnvironment() {
-        // A CLI invoked by an agent through a shell that already exited.
-        let t = table([(300, 1, "portkilla kill 3000")])
-        let owner = AgentAttribution.callerOwner(callerPid: 300, in: t,
-                                                 environment: ["CLAUDECODE": "1", "CLAUDE_PID": "77"])
-        XCTAssertEqual(owner?.name, "Claude Code")
-        XCTAssertEqual(owner?.sessionPid, 77)
-    }
+    func testCallerFallsBackToOwnEnvironmentWithLivenessCheck() {
+        let t = table([(77, 1, "claude"), (300, 1, "portkilla kill 3000")])
+        let live = AgentAttribution.callerOwner(callerPid: 300, in: t, environment: ["CLAUDECODE": "1", "CLAUDE_PID": "77"])
+        XCTAssertEqual(live?.sessionPid, 77)
 
-    // MARK: - Friendly-fire decision
-
-    func testDifferentAgentsIsFriendlyFire() {
-        let cursor = AgentOwner(name: "Cursor", sessionPid: 10, source: .processTree)
-        let claude = AgentOwner(name: "Claude Code", sessionPid: 20, source: .processTree)
-        XCTAssertTrue(AgentAttribution.isFriendlyFire(caller: cursor, target: claude))
-    }
-
-    func testSameAgentDifferentSessionIsFriendlyFire() {
-        let a = AgentOwner(name: "Claude Code", sessionPid: 10, source: .processTree)
-        let b = AgentOwner(name: "Claude Code", sessionPid: 99, source: .environment)
-        XCTAssertTrue(AgentAttribution.isFriendlyFire(caller: a, target: b))
-    }
-
-    func testSameSessionAcrossSourcesIsAllowed() {
-        // Tree finds the claude pid; env carries CLAUDE_PID with the same value.
-        let fromTree = AgentOwner(name: "Claude Code", sessionPid: 10, source: .processTree)
-        let fromEnv = AgentOwner(name: "Claude Code", sessionPid: 10, source: .environment)
-        XCTAssertFalse(AgentAttribution.isFriendlyFire(caller: fromTree, target: fromEnv))
-    }
-
-    func testUnknownOwnerNeverBlocks() {
-        let claude = AgentOwner(name: "Claude Code", sessionPid: 10, source: .processTree)
-        XCTAssertFalse(AgentAttribution.isFriendlyFire(caller: nil, target: claude))
-        XCTAssertFalse(AgentAttribution.isFriendlyFire(caller: claude, target: nil))
-    }
-
-    func testSameNameUnknownSessionAllowed() {
-        // Same tool, session unknown on one side: allow (never block on a guess).
-        let declared = AgentOwner(name: "Claude Code", sessionPid: nil, source: .declared)
-        let target = AgentOwner(name: "Claude Code", sessionPid: 55, source: .processTree)
-        XCTAssertFalse(AgentAttribution.isFriendlyFire(caller: declared, target: target))
+        let stale = AgentAttribution.callerOwner(callerPid: 300, in: t, environment: ["CLAUDECODE": "1", "CLAUDE_PID": "78"])
+        XCTAssertEqual(stale?.name, "Claude Code")
+        XCTAssertNil(stale?.sessionPid, "a stale CLAUDE_PID must not pin the caller to a dead session")
     }
 }

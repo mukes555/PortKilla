@@ -60,7 +60,7 @@ struct PortDetailView: View {
                     DetailRow(label: "Age", value: age)
                 }
                 if let agent = port.agentOwner {
-                    DetailRow(label: "Agent", value: agent.name)
+                    DetailRow(label: "Agent", value: agent.detail)
                 }
                 if let project = port.projectName {
                     DetailRow(label: "Project", value: project)

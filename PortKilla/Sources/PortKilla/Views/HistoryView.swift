@@ -57,9 +57,16 @@ struct HistoryView: View {
                                 .font(.system(size: 11, design: .monospaced))
                                 .frame(width: 50, alignment: .leading)
 
-                            Text(item.processName)
-                                .font(.system(size: 12))
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(item.processName)
+                                    .font(.system(size: 12))
+                                if let provenance = provenance(of: item) {
+                                    Text(provenance)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
                             HStack(spacing: 6) {
                                 Spacer()
@@ -120,13 +127,22 @@ struct HistoryView: View {
         portManager.activePorts.contains { $0.port == port }
     }
 
+    /// "started by Claude Code · killed by port guard"
+    private func provenance(of item: PortHistoryItem) -> String? {
+        var parts: [String] = []
+        if let owner = item.owner { parts.append("started by \(owner)") }
+        if let killedBy = item.killedBy, killedBy != KillInitiator.user.rawValue { parts.append("killed by \(killedBy)") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     private func killAgain(_ item: PortHistoryItem) {
         guard let target = portManager.activePorts.first(where: { $0.port == item.port }) else { return }
 
-        let confirmed = KillConfirm.run(
-            title: "Kill Process on :\(target.port)?",
-            message: "This will terminate '\(target.processName)' (PID \(target.pid))."
-        )
+        var message = "This will terminate '\(target.processName)' (PID \(target.pid))."
+        if case .warn(let reason) = KillDecision.forHuman(target: target.agentOwner) {
+            message += "\n\n\(reason)"
+        }
+        let confirmed = KillConfirm.run(title: "Kill Process on :\(target.port)?", message: message)
         if confirmed {
             portManager.killPort(target)
         }

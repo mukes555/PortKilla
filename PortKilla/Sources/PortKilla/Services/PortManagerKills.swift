@@ -1,5 +1,13 @@
 import Foundation
 
+/// Who asked for a kill; recorded in history so an agent whose server
+/// vanished can find out what happened to it.
+enum KillInitiator: String {
+    case user = "you"
+    case portGuard = "port guard"
+    case link = "link"
+}
+
 // MARK: - Kill flows
 // Every product-facing kill runs the same pipeline: signal on a background
 // queue (identity-checked), wait for the exit event, then report on main.
@@ -101,7 +109,7 @@ extension PortManager {
     }
 
     /// Kills a specific port
-    func killPort(_ portInfo: PortInfo, force: Bool = false, killTree: Bool = false) {
+    func killPort(_ portInfo: PortInfo, force: Bool = false, killTree: Bool = false, initiator: KillInitiator = .user) {
         performSingleKill(
             pid: portInfo.pid,
             expectedName: portInfo.processName,
@@ -115,7 +123,8 @@ extension PortManager {
                 self.activePorts.removeAll { $0.id == portInfo.id }
                 self.showToast("\(killTree ? "Killed Tree" : "Killed") :\(portInfo.port)")
                 HistoryManager.shared.addEntry(
-                    port: portInfo.port, processName: portInfo.processName, action: .killed
+                    port: portInfo.port, processName: portInfo.processName, action: .killed,
+                    owner: portInfo.agentOwner?.name, killedBy: initiator.rawValue
                 )
                 self.scheduleRefresh()
             },
@@ -130,7 +139,12 @@ extension PortManager {
     /// Scans fresh so it works even when the cached list is stale.
     /// `respectProtected` refuses to kill a protected process — always true for
     /// link-initiated kills so a webpage can't terminate the user's IDE/tools.
-    func killPortNumber(_ portNumber: Int, force: Bool = false, respectProtected: Bool = false) {
+    ///
+    /// `confirm` runs on the main thread with the target found by the fresh
+    /// scan, so a link-initiated kill can show who owns the port before
+    /// asking; returning false cancels.
+    func killPortNumber(_ portNumber: Int, force: Bool = false, respectProtected: Bool = false,
+                        initiator: KillInitiator = .user, confirm: ((PortInfo) -> Bool)? = nil) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
@@ -152,7 +166,10 @@ extension PortManager {
                 }
                 return
             }
-            self.killPort(target, force: force)
+            DispatchQueue.main.async {
+                if let confirm, !confirm(target) { return }
+                self.killPort(target, force: force, initiator: initiator)
+            }
         }
     }
 
@@ -256,7 +273,8 @@ extension PortManager {
 
                     for port in ports where deadPids.contains(port.pid) {
                         HistoryManager.shared.addEntry(
-                            port: port.port, processName: port.processName, action: .killed
+                            port: port.port, processName: port.processName, action: .killed,
+                            owner: port.agentOwner?.name, killedBy: KillInitiator.user.rawValue
                         )
                     }
                 } else {

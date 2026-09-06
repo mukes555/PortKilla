@@ -1,69 +1,88 @@
 import Foundation
 
 /// Command-line mode: the same binary doubles as a CLI when invoked with a
-/// known subcommand, e.g.
-///
-///   PortKilla.app/Contents/MacOS/PortKilla list
-///   PortKilla.app/Contents/MacOS/PortKilla list --json
-///   PortKilla.app/Contents/MacOS/PortKilla kill 3000 [--force]
-///
-/// Symlink the binary as `portkilla` somewhere on PATH for daily use.
+/// known subcommand. Homebrew links it as `portkilla`; otherwise symlink
+/// PortKilla.app/Contents/MacOS/PortKilla somewhere on PATH.
 enum PortKillaCLI {
 
     /// Returns an exit code when the arguments were a CLI invocation,
     /// or nil to continue launching the GUI.
     static func run(_ arguments: [String]) -> Int32? {
-        guard let command = arguments.first, !command.hasPrefix("-psn") else { return nil }
+        guard let parsed = CLIArguments.parse(arguments) else { return nil }
 
-        switch command {
-        case "list":
-            return list(json: arguments.contains("--json"))
-        case "kill":
-            return kill(arguments: Array(arguments.dropFirst()))
-        case "whoami":
-            return whoami()
-        case "help", "--help", "-h":
-            printUsage()
-            return 0
-        case "version", "--version":
+        switch parsed {
+        case .failure(let error):
+            printError("portkilla: \(error.message)\nRun `portkilla help` for usage.")
+            return CLIExit.usage
+        case .success(.list(let options)):
+            return list(options)
+        case .success(.kill(let options)):
+            return CLIKill.run(options)
+        case .success(.whoami(let json)):
+            return whoami(json: json)
+        case .success(.help):
+            print(CLIArguments.usage)
+            return CLIExit.ok
+        case .success(.version):
             print(UpdateChecker.currentVersion ?? "dev")
-            return 0
-        default:
-            // Unknown args (e.g. system-injected launch flags) -> GUI
-            return nil
+            return CLIExit.ok
+        case .success(.agentDocs):
+            print(agentDocs)
+            return CLIExit.ok
         }
     }
 
-    private static func scan() -> [PortInfo] {
-        scanWithTable().ports
+    // MARK: - Shared helpers
+
+    struct Scan {
+        let ports: [PortInfo]
+        let table: ProcessTable
+        let caller: AgentOwner?
     }
 
-    /// Scan plus the underlying process snapshot (needed to attribute the
-    /// caller's own agent for the friendly-fire guard).
-    private static func scanWithTable() -> (ports: [PortInfo], table: ProcessTable) {
+    /// One scan plus the caller's own identity, which the guard compares
+    /// against each target's owner.
+    static func scan() -> Scan {
         let table = ProcessTable.capture()
         let ports = (try? PortScanner().scanActivePorts(processes: table)) ?? []
-        return (ports, table)
+        let callerPid = Int(Foundation.ProcessInfo.processInfo.processIdentifier)
+        let caller = AgentAttribution.callerOwner(callerPid: callerPid, in: table)
+        return Scan(ports: ports, table: table, caller: caller)
     }
 
-    private static func list(json: Bool) -> Int32 {
-        let ports = scan()
+    static func printError(_ text: String) {
+        FileHandle.standardError.write(Data((text + "\n").utf8))
+    }
 
-        if json {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            if let data = try? encoder.encode(ports), let text = String(data: data, encoding: .utf8) {
-                print(text)
-            }
-            return 0
+    static func printJSON<T: Encodable>(_ value: T) {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(value), let text = String(data: data, encoding: .utf8) else {
+            printError("portkilla: could not encode output as JSON")
+            return
+        }
+        print(text)
+    }
+
+    // MARK: - list
+
+    private static func list(_ options: CLICommand.ListOptions) -> Int32 {
+        let scan = scan()
+        let ports = filtered(scan.ports, by: options, caller: scan.caller)
+
+        if options.json {
+            // The array shape is a stable contract (scripts and the Raycast
+            // extension depend on it); new fields are only ever added.
+            printJSON(ports)
+            return CLIExit.ok
         }
 
         if ports.isEmpty {
-            print("No listening TCP ports found.")
-            return 0
+            print(scan.ports.isEmpty ? "No listening ports found." : "No ports match that filter.")
+            return CLIExit.ok
         }
 
-        print("PORT   PROTO  PID     PROCESS               MEMORY    AGENT         BIND")
+        print("PORT   PROTO  PID     PROCESS               MEMORY    AGENT                 BIND")
         for port in ports {
             let line = [
                 ":\(port.port)".padding(toLength: 7, withPad: " ", startingAt: 0),
@@ -71,104 +90,82 @@ enum PortKillaCLI {
                 "\(port.pid)".padding(toLength: 8, withPad: " ", startingAt: 0),
                 port.processName.padding(toLength: 22, withPad: " ", startingAt: 0),
                 port.memoryUsage.padding(toLength: 10, withPad: " ", startingAt: 0),
-                (port.agentOwner?.name ?? "—").padding(toLength: 14, withPad: " ", startingAt: 0),
+                (port.agentOwner?.label ?? "—").padding(toLength: 22, withPad: " ", startingAt: 0),
                 port.bindAddress ?? ""
             ].joined()
             print(line)
         }
-        return 0
+        return CLIExit.ok
     }
 
-    private static func kill(arguments: [String]) -> Int32 {
-        let force = arguments.contains("--force") || arguments.contains("-9")
-
-        guard let portArg = arguments.first(where: { !$0.hasPrefix("-") }),
-              let portNumber = Int(portArg) else {
-            print("Usage: portkilla kill <port> [--force]")
-            return 2
+    static func filtered(_ ports: [PortInfo], by options: CLICommand.ListOptions, caller: AgentOwner?) -> [PortInfo] {
+        if options.unowned {
+            return ports.filter { $0.agentOwner == nil }
         }
-
-        let (ports, table) = scanWithTable()
-        guard let target = ports.first(where: { $0.port == portNumber }) else {
-            print("Nothing is listening on :\(portNumber).")
-            return 1
+        if options.orphaned {
+            return ports.filter { $0.agentOwner?.sessionEnded == true }
         }
-
-        // Friendly-fire guard: refuse to kill a port owned by a different agent
-        // session unless --force. Prevents AI agents from killing each other's
-        // dev servers. (Set PORTKILLA_OWNER to declare the caller's identity.)
-        let callerPid = Int(Foundation.ProcessInfo.processInfo.processIdentifier)
-        let caller = AgentAttribution.callerOwner(callerPid: callerPid, in: table)
-        if !force, AgentAttribution.isFriendlyFire(caller: caller, target: target.agentOwner) {
-            let owner = target.agentOwner.map(describe) ?? "another agent"
-            let you = caller.map(describe) ?? "you"
-            FileHandle.standardError.write(Data("""
-                :\(portNumber) is owned by \(owner), not \(you). Refusing to kill another agent's server.
-                Pass --force to override, or run `portkilla whoami` to check how you are identified.
-
-                """.utf8))
-            return 3
+        if let agent = options.agent {
+            let wanted = AgentSignatures.canonicalName(agent)
+            return ports.filter { $0.agentOwner?.name == wanted }
         }
-
-        let killer = ProcessKiller()
-        do {
-            try killer.killProcess(
-                pid: target.pid, force: force, expectedName: target.processName
-            )
-        } catch {
-            print("Failed to kill \(target.processName) (PID \(target.pid)): \(error.localizedDescription)")
-            return 1
-        }
-
-        // Give it up to a second to actually exit
-        for _ in 0..<10 {
-            if !killer.isProcessRunning(target.pid) {
-                print("Killed \(target.processName) (PID \(target.pid)) on :\(portNumber).")
-                return 0
+        if options.mine {
+            guard let caller else { return [] }
+            return ports.filter { port in
+                guard let owner = port.agentOwner, owner.name == caller.name else { return false }
+                // Same tool; a known-but-different session is not mine.
+                if let mine = caller.sessionPid, let theirs = owner.sessionPid { return mine == theirs }
+                return true
             }
-            Thread.sleep(forTimeInterval: 0.1)
         }
+        return ports
+    }
 
-        print("\(target.processName) (PID \(target.pid)) did not terminate. Try --force.")
-        return 1
+    // MARK: - whoami
+
+    struct WhoAmI: Encodable {
+        let schema = 1
+        let detected: Bool
+        let owner: AgentOwner?
     }
 
     /// Prints how the friendly-fire guard identifies the calling process, so
     /// an agent can check itself before a kill is refused.
-    private static func whoami() -> Int32 {
+    private static func whoami(json: Bool) -> Int32 {
         let table = ProcessTable.capture()
         let callerPid = Int(Foundation.ProcessInfo.processInfo.processIdentifier)
-        guard let me = AgentAttribution.callerOwner(callerPid: callerPid, in: table) else {
-            print("Not running under a known AI agent. Set PORTKILLA_OWNER=<name> to declare one.")
-            return 0
+        let me = AgentAttribution.callerOwner(callerPid: callerPid, in: table)
+
+        if json {
+            printJSON(WhoAmI(detected: me != nil, owner: me))
+            return CLIExit.ok
+        }
+        guard let me else {
+            print("Not running under a known AI agent. Export PORTKILLA_OWNER=<name> to declare one.")
+            return CLIExit.ok
         }
         let how = me.source == .declared ? "declared via PORTKILLA_OWNER" : "detected from \(me.source.rawValue)"
-        print("\(describe(me)), \(how)")
-        return 0
+        let kind = me.confidence == .editorTerminal ? " (editor terminal, not treated as an agent)" : ""
+        print("\(me.described), \(how)\(kind)")
+        return CLIExit.ok
     }
 
-    /// "Claude Code (session 845)" or just the name when the session is unknown.
-    private static func describe(_ owner: AgentOwner) -> String {
-        owner.sessionPid.map { "\(owner.name) (session \($0))" } ?? owner.name
-    }
+    // MARK: - agent-docs
 
-    private static func printUsage() {
-        print("""
-        PortKilla — macOS port manager
+    /// A snippet for CLAUDE.md / AGENTS.md. The guard only helps agents that
+    /// call `portkilla kill` instead of reaching for lsof by reflex.
+    static let agentDocs = """
+    ## Freeing ports
 
-        Usage:
-          portkilla list [--json]          List listening ports (with owning agent)
-          portkilla kill <port> [--force]  Kill the process on a port
-          portkilla whoami                 Show which AI agent you are seen as
-          portkilla version                Print version
-          portkilla help                   Show this help
+    Use PortKilla to stop whatever is on a port. Never run `kill -9 $(lsof -ti:PORT)`:
+    other AI agents may be using that port, and PortKilla knows who owns what.
 
-        Friendly-fire guard: `kill` refuses to stop a port owned by a different
-        AI-agent session unless --force (exit code 3). Owners are detected from
-        the process tree and from the environment agents leave on their
-        children; set PORTKILLA_OWNER to declare who you are instead.
-
-        The GUI launches when run with no arguments.
-        """)
-    }
+    - `portkilla kill <port>` frees the port (SIGTERM, verified).
+    - Exit code 3 means the port belongs to another agent's running session.
+      Do not retry with `--force`; tell the user which agent owns it instead.
+    - `portkilla list --json` lists every listener with its owning agent;
+      `portkilla list --mine` shows only yours.
+    - `portkilla whoami` shows how PortKilla identifies you. If it reports no
+      agent, export `PORTKILLA_OWNER=<your name>` before starting servers.
+    """
 }

@@ -26,7 +26,10 @@ class ProcessScanner {
     /// (no subprocess spawned here).
     func scanTestProcesses(processes: ProcessTable) -> [TestProcessInfo] {
         processes.allEntries
-            .compactMap { makeTestInfo(pid: $0.pid, memoryKb: $0.rssKB, command: $0.command, cpuPercent: $0.cpuPercent) }
+            .compactMap { entry -> TestProcessInfo? in
+                guard let info = makeTestInfo(pid: entry.pid, memoryKb: entry.rssKB, command: entry.command, cpuPercent: entry.cpuPercent) else { return nil }
+                return info.withOwner(AgentAttribution.owner(ofPid: entry.pid, in: processes))
+            }
             .sorted { $0.pid < $1.pid }
     }
 

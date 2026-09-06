@@ -22,7 +22,8 @@ public enum CLICommand: Equatable {
     case version(json: Bool)
     case help(topic: String?)
     case agentDocs(AgentDocsOptions)
-    case doctor(json: Bool)
+    case doctor(json: Bool, agents: Bool)
+    case whois(WhoisOptions)
     case completions(shell: String)
     case mcp
     case freePort(prefer: Int, range: ClosedRange<Int>, json: Bool)
@@ -39,6 +40,12 @@ public enum CLICommand: Equatable {
         var file = "CLAUDE.md"
         /// Print a Claude Code PreToolUse hook that redirects lsof-based kills.
         var claudeHook = false
+    }
+
+    public struct WhoisOptions: Equatable {
+        var port: Int?
+        var pid: Int?
+        var json = false
     }
 
     public struct HistoryOptions: Equatable {
@@ -64,6 +71,8 @@ public enum CLICommand: Equatable {
         /// `free`: an already-free port is success, so `portkilla free 3000
         /// && npm run dev` works under `set -e`.
         var freeIsSuccess = false
+        /// Every server whose agent session has ended, instead of a port.
+        var orphaned = false
     }
 }
 
@@ -87,9 +96,9 @@ public enum CLIArguments {
             case .unknownOption(let option, let command): return "unknown option '\(option)' for '\(command)'"
             case .missingValue(let option): return "'\(option)' needs a value"
             case .invalidNumber(let value, let option): return "'\(value)' is not a valid number for \(option)"
-            case .missingTarget: return "kill needs a port number (or --pid <pid>)"
-            case .tooManyTargets: return "kill takes one port number"
-            case .conflictingTargets: return "use a port number or --pid, not both"
+            case .missingTarget: return "a port number (or --pid <pid>) is required"
+            case .tooManyTargets: return "one port number at a time"
+            case .conflictingTargets: return "use one of: a port number, --pid, --orphaned"
             }
         }
     }
@@ -116,6 +125,7 @@ public enum CLIArguments {
         case "open": return parseOpen(rest)
         case "history": return parseHistory(rest)
         case "whoami": return parseWhoami(rest)
+        case "whois": return parseWhois(rest)
         case "version", "--version", "-v":
             if rest.isEmpty { return .success(.version(json: false)) }
             return rest == ["--json"] ? .success(.version(json: true)) : .failure(.unknownOption(rest[0], command: "version"))
@@ -137,9 +147,7 @@ public enum CLIArguments {
             }
             return .success(.serve(port: port))
         #endif
-        case "doctor":
-            if rest.isEmpty { return .success(.doctor(json: false)) }
-            return rest == ["--json"] ? .success(.doctor(json: true)) : .failure(.unknownOption(rest[0], command: "doctor"))
+        case "doctor": return parseDoctor(rest)
         case "completions":
             guard let shell = rest.first, rest.count == 1 else { return .failure(.missingValue("completions <zsh|bash|fish>")) }
             return CLICompletions.script(for: shell) == nil ? .failure(.unknownOption(shell, command: "completions")) : .success(.completions(shell: shell))
@@ -181,6 +189,7 @@ public enum CLIArguments {
             let arg = args[index]
             switch arg {
             case "--force", "-9": options.force = true
+            case "--orphaned": options.orphaned = true
             case "--dry-run": options.dryRun = true
             case "--json": options.json = true
             case "--pid":
@@ -204,9 +213,56 @@ public enum CLIArguments {
             }
             index += 1
         }
+        if options.orphaned {
+            guard options.port == nil, options.pid == nil else { return .failure(.conflictingTargets) }
+            return .success(.kill(options))
+        }
         guard options.port != nil || options.pid != nil else { return .failure(.missingTarget) }
         guard options.port == nil || options.pid == nil else { return .failure(.conflictingTargets) }
         return .success(.kill(options))
+    }
+
+    private static func parseWhois(_ args: [String]) -> Result<CLICommand, ParseError> {
+        var options = CLICommand.WhoisOptions()
+        var index = 0
+        while index < args.count {
+            let arg = args[index]
+            if arg == "--json" {
+                options.json = true
+            } else if arg == "--pid" {
+                guard index + 1 < args.count else { return .failure(.missingValue(arg)) }
+                index += 1
+                guard let pid = Int(args[index]) else { return .failure(.invalidNumber(args[index], option: "--pid")) }
+                options.pid = pid
+            } else if let value = valueOf(option: "--pid", in: arg) {
+                guard let pid = Int(value) else { return .failure(.invalidNumber(value, option: "--pid")) }
+                options.pid = pid
+            } else if arg.hasPrefix("-") {
+                return .failure(.unknownOption(arg, command: "whois"))
+            } else if let port = Int(arg), PortManager.isValidPortNumber(port) {
+                guard options.port == nil else { return .failure(.tooManyTargets) }
+                options.port = port
+            } else {
+                return .failure(.invalidNumber(arg, option: "port"))
+            }
+            index += 1
+        }
+        guard options.port != nil || options.pid != nil else { return .failure(.missingTarget) }
+        guard options.port == nil || options.pid == nil else { return .failure(.conflictingTargets) }
+        return .success(.whois(options))
+    }
+
+    private static func parseDoctor(_ args: [String]) -> Result<CLICommand, ParseError> {
+        var json = false
+        var agents = false
+        for arg in args {
+            switch arg {
+            case "--json": json = true
+            case "--agents": agents = true
+            default: return .failure(.unknownOption(arg, command: "doctor"))
+            }
+        }
+        return .success(.doctor(json: json, agents: agents))
     }
 
     private static func parseWait(_ args: [String]) -> Result<CLICommand, ParseError> {
@@ -354,138 +410,4 @@ public enum CLIArguments {
         guard arg.hasPrefix(option + "=") else { return nil }
         return String(arg.dropFirst(option.count + 1))
     }
-
-    /// Per-command help; nil topic (or an unknown one) gives the overview.
-    public static func usage(for topic: String?) -> String {
-        switch topic {
-        case "list": return """
-            portkilla list [--json] [--mine | --agent <name> | --unowned | --orphaned]
-
-            Lists listening TCP ports and bound UDP sockets with process, memory,
-            owning AI agent, and bind address. --json prints the same as an array
-            (stable field names; new fields are only ever added). The header is
-            omitted when stdout is not a terminal.
-              --mine      ports kill would let you stop without --force
-              --agent X   ports owned by that agent (names are case-insensitive)
-              --unowned   ports with no known owner
-              --orphaned  ports whose owning session has ended
-            """
-        case "kill", "free": return """
-            portkilla kill <port> [--force|-9] [--dry-run] [--json]
-            portkilla kill --pid <pid> [...]
-            portkilla free <port> [...]
-
-            Stops every process listening on the port (SIGTERM, verified; --force
-            sends SIGKILL). Refuses (exit 3) when another AI agent's running
-            session owns it, unless --force. --dry-run reports the decision
-            without signalling. free is the same command with exit 0 when the
-            port was already free, for `portkilla free 3000 && npm run dev`.
-
-            Exit codes: 0 done, 1 nothing listening, 2 usage, 3 refused, 4 kill
-            failed, 5 still running after the wait, 70 internal error.
-            """
-        case "wait": return """
-            portkilla wait <port> [--timeout 30] [--json]
-
-            Blocks until nothing listens on the port. Exit 0 when free, 5 on timeout.
-            """
-        case "history": return """
-            portkilla history [--json] [--port <port>] [--limit 20]
-
-            Recent kills from the app and the CLI, newest first, with who started
-            and who stopped each process.
-            """
-        case "whoami": return """
-            portkilla whoami [--json]
-
-            How the friendly-fire guard identifies the calling process: agent name,
-            session, and whether it was detected from the process tree, the
-            environment, or declared via PORTKILLA_OWNER.
-            """
-        case "agent-docs": return """
-            portkilla agent-docs [--write [--file <path>]] [--claude-hook]
-
-            Prints the snippet that tells AI agents to free ports through PortKilla.
-            --write appends it to CLAUDE.md (or --file) between markers, once; run
-            again to update it. --claude-hook prints a Claude Code PreToolUse hook
-            for settings.json that turns `kill -9 $(lsof -ti:PORT)` into a nudge.
-            """
-        case "mcp": return """
-            portkilla mcp
-            portkilla mcp --setup [claude|cursor|codex]
-
-            Runs a Model Context Protocol server over stdin/stdout with the tools
-            list_ports, kill_port (dry-run by default), whoami, and
-            wait_for_port_free. It is not a background service: each agent starts
-            its own copy when it needs one and stops it afterwards, so register it
-            once and forget it. `--setup` prints the registration (the exact
-            `claude mcp add` command, Cursor's mcp.json, Codex's config.toml).
-            Run by hand it waits silently for requests; Ctrl-C stops it.
-            """
-        case "free-port": return """
-            portkilla free-port [--prefer 3000] [--range A-B] [--json]
-
-            Prints the first port in the range that nothing listens on and that can
-            be bound right now, starting at --prefer (default 3000; default range is
-            the preferred port plus 999). Stateless: no reservation is made. Exit 1
-            when the whole range is taken.
-            """
-        case "schema": return """
-            portkilla schema [list|kill|whoami|wait|history|version|doctor|free-port]
-
-            Prints the JSON contract for a command's --json output: every field and
-            its meaning. Fields are only ever added, never renamed or removed, within
-            a schema version.
-            """
-        case "doctor": return """
-            portkilla doctor [--json]
-
-            Version, macOS, architecture, install source, quarantine state, which
-            scanner is in use and how long a scan takes, PATH resolution, and login
-            item status. Paste it into bug reports.
-            """
-        default: return usage
-        }
-    }
-
-    public static let usage = """
-    PortKilla — macOS port manager
-
-    Usage:
-      portkilla list [--json] [--mine | --agent <name> | --unowned | --orphaned]
-      portkilla kill <port> [--force|-9] [--dry-run] [--json]
-      portkilla kill --pid <pid> [--force|-9] [--dry-run] [--json]
-      portkilla free <port> [...]        like kill, but exit 0 if already free
-      portkilla wait <port> [--timeout 30] [--json]
-      portkilla open <port>
-      portkilla history [--json] [--port <port>] [--limit 20]
-      portkilla whoami [--json]
-      portkilla free-port [--prefer 3000] [--range 3000-3999] [--json]
-      portkilla schema [command]         JSON output contracts
-      portkilla doctor [--json]
-      portkilla agent-docs [--write [--file CLAUDE.md]] [--claude-hook]
-      portkilla mcp                      MCP server over stdio (for agents)
-      portkilla mcp --setup [claude|cursor|codex]   how to register it
-      portkilla completions <zsh|bash|fish>
-      portkilla version [--json]
-      portkilla help [command]
-
-    kill stops every process listening on the port (use --pid for one of
-    them). --dry-run reports what would happen without signalling anything.
-    free is kill for scripts: `portkilla free 3000 && npm run dev`. wait
-    blocks until the port is free (exit 5 on timeout). history lists recent
-    kills from the app and the CLI, with who started and who stopped each.
-
-    Friendly-fire guard: kill refuses to stop a port owned by a different AI
-    agent session unless --force. Owners are detected from the process tree
-    and from the environment agents leave on their children; export
-    PORTKILLA_OWNER=<name> to declare who you are (and to label what you start).
-
-    Exit codes: 0 done, 1 nothing listening, 2 usage, 3 refused (another
-    agent's live session owns it), 4 kill failed, 5 still running after the
-    wait, 70 internal error. --dry-run exits 0 when it would kill and 3 when
-    it would refuse. `portkilla help <command>` or `<command> --help` for more.
-
-    The GUI launches when run with no arguments.
-    """
 }

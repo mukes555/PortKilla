@@ -30,7 +30,9 @@ final class GuardHolesTests: XCTestCase {
             ["CLAUDECODE": "1", "CLAUDE_PID": "4242", "CLAUDE_CODE_SESSION_ID": "11111111-2222"]
         }
         XCTAssertEqual(owner?.sessionKey, "11111111-2222")
-        XCTAssertEqual(owner?.sessionId, "Claude Code@11111111")
+        XCTAssertEqual(owner?.sessionId, "Claude Code@11111111-2222", "a short key is shown whole")
+        let uuid = AgentOwner(name: "Claude Code", sessionKey: "3f2a9c1d-0000-4000-8000-000000000000", source: .environment)
+        XCTAssertEqual(uuid.sessionId, "Claude Code@3f2a9c1d", "a UUID is shortened")
     }
 
     // MARK: - Pid reuse by a different agent

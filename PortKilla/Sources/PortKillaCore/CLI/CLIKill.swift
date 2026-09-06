@@ -27,6 +27,7 @@ public enum CLIKill {
             let proto: String
             let agentOwner: AgentOwner?
             let connections: Int
+            let projectPath: String?
         }
     }
 
@@ -53,16 +54,19 @@ public enum CLIKill {
 
     /// The whole kill decision and action, without touching stdout: the CLI
     /// prints the outcome, the MCP server wraps it in a tool result.
-    public static func perform(_ options: CLICommand.KillOptions) -> Outcome {
+    public static func perform(_ options: CLICommand.KillOptions, cwd: String = FileManager.default.currentDirectoryPath) -> Outcome {
         let scan = PortKillaCLI.scan(refreshDocker: false)
         let targets = select(from: scan.ports, options: options)
         var report = Report(
             action: "", port: options.port, force: options.force, caller: scan.caller,
-            targets: targets.map { Report.Target(pid: $0.pid, processName: $0.processName, port: $0.port, proto: $0.proto, agentOwner: $0.agentOwner, connections: $0.connections) },
+            targets: targets.map { Report.Target(pid: $0.pid, processName: $0.processName, port: $0.port, proto: $0.proto, agentOwner: $0.agentOwner, connections: $0.connections, projectPath: $0.projectPath) },
             reasons: [], exitCode: CLIExit.ok
         )
 
         guard !targets.isEmpty else {
+            if options.orphaned {
+                return finish(&report, action: "no-orphans", exit: CLIExit.ok, text: "No orphaned servers: nothing is left over from an ended agent session.")
+            }
             let what = options.pid.map { "PID \($0) is not listening on any port." } ?? "Nothing is listening on :\(options.port ?? 0)."
             // `free` treats an already-free port as done.
             let exit = options.freeIsSuccess && options.pid == nil ? CLIExit.ok : CLIExit.notFound
@@ -79,7 +83,10 @@ public enum CLIKill {
         // The guard: refuse the whole request if any target is another agent's.
         let refusals = targets.compactMap { target -> String? in
             if case .refuse(let reason) = KillDecision.forAgent(caller: scan.caller, target: target.agentOwner) {
-                return ":\(target.port) (PID \(target.pid)) is \(reason)"
+                // A hint, not a permission: the caller's own project is where
+                // its own unclaimed server would be, and also the user's.
+                let location = isSameProject(target.projectPath, cwd: cwd) ? " (it runs in your working directory)" : ""
+                return ":\(target.port) (PID \(target.pid)) is \(reason)\(location)"
             }
             return nil
         }
@@ -111,15 +118,30 @@ public enum CLIKill {
         return outcome
     }
 
-    /// Every distinct process on the port, or the one pid asked for.
+    /// Every distinct process on the port, the one pid asked for, or with
+    /// --orphaned every process whose agent session has ended.
     public static func select(from ports: [PortInfo], options: CLICommand.KillOptions) -> [PortInfo] {
         var seenPids = Set<Int>()
         return ports.filter { port in
-            let matches = options.pid.map { $0 == port.pid } ?? (port.port == options.port)
+            let matches: Bool
+            if options.orphaned {
+                matches = port.agentOwner?.sessionEnded == true
+            } else {
+                matches = options.pid.map { $0 == port.pid } ?? (port.port == options.port)
+            }
             guard matches, !seenPids.contains(port.pid) else { return false }
             seenPids.insert(port.pid)
             return true
         }
+    }
+
+    /// True when `path` is the working directory, or inside it, or above it.
+    public static func isSameProject(_ path: String?, cwd: String) -> Bool {
+        guard let path, !path.isEmpty else { return false }
+        let target = path.hasSuffix("/") && path.count > 1 ? String(path.dropLast()) : path
+        let mine = cwd.hasSuffix("/") && cwd.count > 1 ? String(cwd.dropLast()) : cwd
+        guard target != "/", mine != "/" else { return false }
+        return target == mine || target.hasPrefix(mine + "/") || mine.hasPrefix(target + "/")
     }
 
     private static func kill(_ targets: [PortInfo], options: CLICommand.KillOptions, report: inout Report) -> Outcome {
@@ -146,7 +168,10 @@ public enum CLIKill {
                            owner: target.agentOwner?.name, killedBy: killedBy)
         }
 
-        var lines = killed.map { "Killed \($0.processName) (PID \($0.pid)) on :\($0.port)." }
+        var lines = killed.map { target -> String in
+            let leftover = options.orphaned ? " (\(target.agentOwner?.label ?? "orphaned"))" : ""
+            return "Killed \(target.processName) (PID \(target.pid)) on :\(target.port)\(leftover)."
+        }
         lines += signalled.filter { stillRunning.contains($0.pid) }.map { "\($0.processName) (PID \($0.pid)) is still running. Try --force." }
         lines += failures.map { "Failed to kill \($0)" }
         report.reasons += failures

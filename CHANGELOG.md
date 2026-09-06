@@ -13,6 +13,16 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+## 1.8.1 — 2026-09-06
+
+### Fixed
+- `portkilla version` printed `dev` when run through a symlink (as installed
+  by Homebrew); it now resolves the link to the app bundle.
+
+### Distribution
+- The Homebrew cask links `portkilla` onto your PATH, so the CLI (`list`,
+  `kill`, `whoami`) works right after `brew install --cask portkilla`.
+
 ## 1.8.0 — 2026-09-06
 
 ### Changed

@@ -26,6 +26,8 @@ struct PortInfo: Identifiable, Codable, Equatable {
     let cpuPercent: Double
     /// Human-readable process age, e.g. "3h 12m"
     let age: String?
+    /// The AI coding agent that spawned this process, if it could be attributed.
+    let agentOwner: AgentOwner?
 
     /// A host bound to all interfaces (reachable from the local network, not
     /// just this machine). One source of truth for the "exposed" check —
@@ -40,7 +42,7 @@ struct PortInfo: Identifiable, Codable, Equatable {
         return Self.isWildcardHost(bindAddress)
     }
 
-    init(port: Int, pid: Int, processName: String, command: String, user: String, memoryUsage: String, memorySizeKB: Int, type: PortType, projectName: String? = nil, projectPath: String? = nil, containerName: String? = nil, children: [ProcessInfo]? = nil, bindAddress: String? = nil, proto: String = "tcp", cpuPercent: Double = 0, age: String? = nil) {
+    init(port: Int, pid: Int, processName: String, command: String, user: String, memoryUsage: String, memorySizeKB: Int, type: PortType, projectName: String? = nil, projectPath: String? = nil, containerName: String? = nil, children: [ProcessInfo]? = nil, bindAddress: String? = nil, proto: String = "tcp", cpuPercent: Double = 0, age: String? = nil, agentOwner: AgentOwner? = nil) {
         self.port = port
         self.pid = pid
         self.processName = processName
@@ -57,6 +59,7 @@ struct PortInfo: Identifiable, Codable, Equatable {
         self.proto = proto
         self.cpuPercent = cpuPercent
         self.age = age
+        self.agentOwner = agentOwner
     }
 
     struct ProcessInfo: Identifiable, Codable, Equatable {

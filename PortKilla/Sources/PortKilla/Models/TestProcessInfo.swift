@@ -12,8 +12,9 @@ struct TestProcessInfo: Identifiable, Codable, Equatable {
     let memorySizeKB: Int
     let cpuPercent: Double
     let type: TestType
+    let agentOwner: AgentOwner?
 
-    init(pid: Int, processName: String, command: String, memoryUsage: String, memorySizeKB: Int, cpuPercent: Double = 0, type: TestType) {
+    init(pid: Int, processName: String, command: String, memoryUsage: String, memorySizeKB: Int, cpuPercent: Double = 0, type: TestType, agentOwner: AgentOwner? = nil) {
         self.pid = pid
         self.processName = processName
         self.command = command
@@ -21,6 +22,12 @@ struct TestProcessInfo: Identifiable, Codable, Equatable {
         self.memorySizeKB = memorySizeKB
         self.cpuPercent = cpuPercent
         self.type = type
+        self.agentOwner = agentOwner
+    }
+
+    func withOwner(_ owner: AgentOwner?) -> TestProcessInfo {
+        TestProcessInfo(pid: pid, processName: processName, command: command, memoryUsage: memoryUsage,
+                        memorySizeKB: memorySizeKB, cpuPercent: cpuPercent, type: type, agentOwner: owner)
     }
 
     // Only the runners ProcessScanner actually detects are represented here.

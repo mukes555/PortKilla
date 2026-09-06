@@ -13,6 +13,46 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+## 1.10.0 — 2026-09-06
+
+### The agent batch
+
+### Changed
+- **One kill decision for every path.** The friendly-fire guard used to live
+  only in the CLI. Now the GUI warns before you kill a port owned by another
+  agent's running session (even with confirmations off), bulk dialogs say how
+  many targets belong to running agents, link-initiated kills show the owner
+  before asking, and port guards never auto-kill one.
+- **Agent versus editor terminal.** `TERM_PROGRAM=vscode` fires for every VS
+  Code fork and for humans typing in an editor terminal, and Windsurf or Trae
+  collapsed into "VS Code". Editor signals now mean "started inside the
+  editor" and are never a reason to refuse; the fork is resolved from the
+  editor's own environment; `CURSOR_AGENT`, `GEMINI_CLI`, and Codex's sandbox
+  markers identify real agents.
+- **Session ended** is a first-class state: a grey "(ended)" chip, no longer
+  blocking anyone, and `list --orphaned` to find abandoned servers. Ports
+  fronted by Docker never get an agent owner.
+- The tree walk starts at the parent, so an editor's own helper resolves to
+  the editor instead of a "session" of one; the caller's identity gets the
+  same session-liveness check as targets.
+- `PORTKILLA_OWNER` is canonicalised (`claude-code` is "Claude Code") and,
+  when exported before starting servers, labels them.
+- Kill history records who started the process and who stopped it (you, the
+  port guard, or a link).
+
+### Added
+- `portkilla kill --dry-run`, `--json`, `--pid <pid>`; `kill` stops every
+  process on the port; documented exit codes (0 done, 1 nothing listening,
+  2 usage, 3 refused, 4 failed, 5 still running); errors on stderr.
+- `portkilla list --mine`, `--agent <name>`, `--unowned`, `--orphaned`;
+  `whoami --json`; `portkilla agent-docs` prints a CLAUDE.md / AGENTS.md
+  snippet.
+- Strict argument parsing: an unknown flag is an error. (`kill 3000
+  --dry-run` on 1.9 killed for real because the flag was ignored.) A mistyped
+  subcommand no longer launches the GUI.
+- The GUI search matches agent names; the detail sheet shows session and
+  source; the chip tooltip explains how PortKilla knows.
+
 ## 1.9.0 — 2026-09-06
 
 ### The safety batch

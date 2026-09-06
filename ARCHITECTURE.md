@@ -50,8 +50,9 @@ per port:
 5. **`AgentAttribution`** ([Services/AgentAttribution.swift](PortKilla/Sources/PortKilla/Services/AgentAttribution.swift))
    names the AI agent that spawned each listener: process ancestry first, then
    the allowlisted environment markers agents leave on children (read from the
-   same `KERN_PROCARGS2` buffer as the command line). The CLI's friendly-fire
-   guard compares that owner with the caller's own.
+   same `KERN_PROCARGS2` buffer as the command line). `KillDecision` turns
+   the caller's and the target's owners into allow / warn / refuse; every kill
+   path (CLI, GUI, bulk, link, port guard) asks it.
 
 > The native-fast-path-with-lsof-fallback is the single most surprising design
 > decision. If you touch scanning, keep both paths producing equivalent results

@@ -6,18 +6,24 @@ struct PortHistoryItem: Identifiable, Codable {
     let processName: String
     let timestamp: Date
     let action: HistoryAction
-    
+    /// Agent that had started the process, and who stopped it ("you", "port
+    /// guard", "link"). Optional so entries from older versions still decode.
+    let owner: String?
+    let killedBy: String?
+
     enum HistoryAction: String, Codable {
         case detected = "Detected"
         case killed = "Killed"
     }
-    
-    init(port: Int, processName: String, action: HistoryAction) {
+
+    init(port: Int, processName: String, action: HistoryAction, owner: String? = nil, killedBy: String? = nil) {
         self.id = UUID()
         self.port = port
         self.processName = processName
         self.timestamp = Date()
         self.action = action
+        self.owner = owner
+        self.killedBy = killedBy
     }
 }
 
@@ -53,8 +59,9 @@ class HistoryManager {
         loadHistory()
     }
     
-    func addEntry(port: Int, processName: String, action: PortHistoryItem.HistoryAction) {
-        let item = PortHistoryItem(port: port, processName: processName, action: action)
+    func addEntry(port: Int, processName: String, action: PortHistoryItem.HistoryAction,
+                  owner: String? = nil, killedBy: String? = nil) {
+        let item = PortHistoryItem(port: port, processName: processName, action: action, owner: owner, killedBy: killedBy)
         history.insert(item, at: 0)
         
         if history.count > maxHistoryItems {

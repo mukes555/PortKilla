@@ -27,6 +27,7 @@ we'll work on a fix and disclosure timeline with you.
 To attribute a port to the AI agent that started it, PortKilla reads a fixed
 allowlist of environment variables from listening processes it owns (via the
 same `KERN_PROCARGS2` buffer it already uses for command lines). The allowlist
-is `AgentAttribution.markerKeys`; nothing else in a process environment is
-read, stored, logged, or displayed. Environments of other users' processes are
+is `AgentSignatures.markerKeys`; nothing else in a process environment is
+read, stored, logged, or displayed; the allowlist is applied to the raw
+bytes and the buffer is zeroed afterwards. Environments of other users' processes are
 not readable by the kernel to begin with.

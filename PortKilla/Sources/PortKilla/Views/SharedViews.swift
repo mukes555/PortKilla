@@ -87,10 +87,10 @@ struct Chip: View {
         HStack(spacing: 2) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 8))
+                    .font(.caption2)
             }
             Text(text)
-                .font(.system(size: 10))
+                .font(.caption)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }

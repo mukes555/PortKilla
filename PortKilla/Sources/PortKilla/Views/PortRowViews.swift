@@ -54,7 +54,7 @@ struct PortSectionView: View {
         Section(header:
             HStack {
                 Text(category.rawValue.uppercased())
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.secondary)
                 Spacer()
             }
@@ -65,6 +65,10 @@ struct PortSectionView: View {
             ForEach(ports) { port in
                 PortRowView(
                     port: port,
+                    density: portManager.viewDensity,
+                    isProtected: portManager.isProtectedProcessName(port.processName),
+                    isWatched: portManager.isWatched(port.port),
+                    isTerminating: portManager.terminatingPids.contains(port.pid),
                     manager: portManager,
                     isExpanded: expansionBinding(for: port.id),
                     isSelected: selectedId == port.id,
@@ -120,10 +124,6 @@ struct PortRowView: View {
         return nil
     }
 
-    private var isTerminating: Bool {
-        manager.terminatingPids.contains(port.pid)
-    }
-
     /// What VoiceOver reads for the row: the custom stack of Texts has no
     /// label of its own, and arrow-key selection is otherwise silent.
     private var accessibilityLabel: String {
@@ -146,28 +146,42 @@ struct PortRowView: View {
     }
 
     let port: PortInfo
-    @ObservedObject var manager: PortManager
+    // Plain values, not an observed manager: a publish on PortManager used
+    // to re-evaluate every visible row. The section computes these once.
+    let density: PortManager.ViewDensity
+    let isProtected: Bool
+    let isWatched: Bool
+    let isTerminating: Bool
+    /// Unobserved; only the context menu's actions need it.
+    let manager: PortManager
     @Binding var isExpanded: Bool
     let isSelected: Bool
     let onSelect: () -> Void
     let onKillRequest: (_ force: Bool, _ killTree: Bool) -> Void
     let onKillChild: (PortInfo.ProcessInfo) -> Void
 
+    // Column widths follow the text size so Larger Text reflows instead of clipping.
+    @ScaledMetric(relativeTo: .body) private var gutterWidth: CGFloat = 16
+    @ScaledMetric(relativeTo: .body) private var portColumnWidth: CGFloat = 80
+    @ScaledMetric(relativeTo: .body) private var nameCapWidth: CGFloat = 130
+    @ScaledMetric(relativeTo: .body) private var memoryColumnWidth: CGFloat = 70
+    @ScaledMetric(relativeTo: .body) private var actionColumnWidth: CGFloat = 80
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 // Expand/Collapse Button (Process Tree) — Advanced only
-                if manager.viewDensity == .advanced, let children = port.children, !children.isEmpty {
+                if density == .advanced, let children = port.children, !children.isEmpty {
                     Button(action: { isExpanded.toggle() }) {
                         Image(systemName: "chevron.right")
                             .rotationEffect(.degrees(isExpanded ? 90 : 0))
                             .foregroundColor(.secondary)
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.caption.weight(.bold))
                     }
                     .buttonStyle(.plain)
-                    .frame(width: 16)
+                    .frame(width: gutterWidth)
                 } else {
-                    Spacer().frame(width: 16)
+                    Spacer().frame(width: gutterWidth)
                 }
 
                 HStack {
@@ -179,32 +193,32 @@ struct PortRowView: View {
                             .font(.system(.body, design: .monospaced))
                             .foregroundColor(.primary)
                     }
-                    .frame(width: 80, alignment: .leading)
+                    .frame(width: portColumnWidth, alignment: .leading)
 
                     // Process
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
                             Text(port.processName)
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.body.weight(.medium))
                                 .foregroundColor(.primary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                                 // Natural width, capped: fixedSize keeps the
                                 // frame from filling (which starved the chips)
                                 // while the cap still truncates long names.
-                                .frame(maxWidth: 130, alignment: .leading)
+                                .frame(maxWidth: nameCapWidth, alignment: .leading)
                                 .fixedSize(horizontal: true, vertical: false)
 
-                            if manager.isProtectedProcessName(port.processName) {
+                            if isProtected {
                                 Image(systemName: "shield.fill")
-                                    .font(.system(size: 9))
+                                    .font(.caption2)
                                     .foregroundColor(.orange)
                                     .help("Protected: skipped by bulk kill actions")
                             }
 
-                            if manager.isWatched(port.port) {
+                            if isWatched {
                                 Image(systemName: "star.fill")
-                                    .font(.system(size: 9))
+                                    .font(.caption2)
                                     .foregroundColor(.yellow)
                                     .help("Watched: you'll be notified when this port frees up or gets taken")
                             }
@@ -227,9 +241,9 @@ struct PortRowView: View {
 
                             // Clean mode: surface the project/container inline
                             // since the second detail line is hidden.
-                            if manager.viewDensity == .simple, let label = cleanSubtitle {
+                            if density == .simple, let label = cleanSubtitle {
                                 Text(label)
-                                    .font(.system(size: 11))
+                                    .font(.subheadline)
                                     .foregroundColor(.secondary)
                                     .lineLimit(1)
                                     .truncationMode(.tail)
@@ -238,7 +252,7 @@ struct PortRowView: View {
 
                         // Advanced-only second line: project/container chips
                         // followed by the command path.
-                        if manager.viewDensity == .advanced {
+                        if density == .advanced {
                         HStack(spacing: 4) {
                             Text("└─")
                                 .foregroundColor(.secondary)
@@ -263,7 +277,7 @@ struct PortRowView: View {
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                         }
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.caption.monospaced())
                         .foregroundColor(.secondary)
                         }
                     }
@@ -272,15 +286,15 @@ struct PortRowView: View {
 
                     // Memory
                     Text(port.memoryUsage)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.subheadline.monospaced())
                         .foregroundColor(.secondary)
-                        .frame(width: 70, alignment: .trailing)
+                        .frame(width: memoryColumnWidth, alignment: .trailing)
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
                     // Advanced: tap toggles the tree if there is one. Clean:
                     // tap always opens details (no tree, no info button).
-                    if manager.viewDensity == .advanced, let children = port.children, !children.isEmpty {
+                    if density == .advanced, let children = port.children, !children.isEmpty {
                         isExpanded.toggle()
                     } else {
                         onSelect()
@@ -289,7 +303,7 @@ struct PortRowView: View {
 
                 // Action
                 HStack(spacing: 6) {
-                    if manager.viewDensity == .advanced {
+                    if density == .advanced {
                         Button(action: onSelect) {
                             Image(systemName: "info.circle")
                                 .foregroundColor(.secondary)
@@ -318,7 +332,7 @@ struct PortRowView: View {
                         .help("Click to kill. Option+Click to force kill. Shift+Click to kill process tree.")
                     }
                 }
-                .frame(width: 80, alignment: .trailing)
+                .frame(width: actionColumnWidth, alignment: .trailing)
             }
             .opacity(isTerminating ? 0.5 : 1)
             .accessibilityElement(children: .contain)
@@ -336,7 +350,7 @@ struct PortRowView: View {
 
                         Image(systemName: "arrow.turn.down.right")
                             .foregroundColor(.secondary.opacity(0.5))
-                            .font(.system(size: 10))
+                            .font(.caption)
 
                         VStack(alignment: .leading, spacing: 1) {
                             Text(child.name)

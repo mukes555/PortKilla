@@ -12,7 +12,25 @@ enum UpdateChecker {
     private static let lastCheckKey = "PortKilla.lastUpdateCheck"
 
     static var currentVersion: String? {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String {
+            return version
+        }
+        return versionViaSymlinkedExecutable
+    }
+
+    /// When the CLI runs through a symlink (`/opt/homebrew/bin/portkilla`),
+    /// Bundle.main does not resolve the .app around it. Follow the link to the
+    /// real executable and read the bundle's Info.plist from there.
+    private static var versionViaSymlinkedExecutable: String? {
+        let executable = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+        // <App>.app/Contents/MacOS/<exe> -> <App>.app/Contents/Info.plist
+        let plist = executable.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Info.plist")
+        guard let data = try? Data(contentsOf: plist),
+              let info = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] else {
+            return nil
+        }
+        return info["CFBundleShortVersionString"] as? String
     }
 
     /// Fetches the latest release tag; calls back on the main queue with the

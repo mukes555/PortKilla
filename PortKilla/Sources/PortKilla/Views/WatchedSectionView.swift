@@ -7,11 +7,17 @@ struct WatchedSectionView: View {
     @ObservedObject var portManager: PortManager
     let onKillRequest: (PortInfo) -> Void
 
+    @ScaledMetric(relativeTo: .body) private var gutterWidth: CGFloat = 16
+    @ScaledMetric(relativeTo: .body) private var portColumnWidth: CGFloat = 80
+    @ScaledMetric(relativeTo: .body) private var nameCapWidth: CGFloat = 130
+    @ScaledMetric(relativeTo: .body) private var memoryColumnWidth: CGFloat = 70
+    @ScaledMetric(relativeTo: .body) private var actionColumnWidth: CGFloat = 80
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 Text("WATCHED")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.secondary)
                 Spacer()
             }
@@ -34,7 +40,7 @@ struct WatchedSectionView: View {
         let active = portManager.activePorts.first { $0.port == port }
 
         HStack(spacing: 8) {
-            Spacer().frame(width: 16)
+            Spacer().frame(width: gutterWidth)
 
             HStack(spacing: 4) {
                 Image(systemName: "star.fill")
@@ -42,15 +48,15 @@ struct WatchedSectionView: View {
                 Text(":\(String(port))")
                     .font(.system(.body, design: .monospaced))
             }
-            .frame(width: 80, alignment: .leading)
+            .frame(width: portColumnWidth, alignment: .leading)
 
             HStack(spacing: 6) {
                 if let active {
                     Text(active.processName)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.body.weight(.medium))
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .frame(maxWidth: 130, alignment: .leading)
+                        .frame(maxWidth: nameCapWidth, alignment: .leading)
                         .fixedSize(horizontal: true, vertical: false)
                     if active.isExposed {
                         Chip(icon: "wifi.exclamationmark", text: "exposed", tint: .chipOrange)
@@ -65,16 +71,16 @@ struct WatchedSectionView: View {
                         .fill(Color.green)
                         .frame(width: 6, height: 6)
                     Text("free")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.body.weight(.medium))
                         .foregroundColor(.green)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(active?.memoryUsage ?? "")
-                .font(.system(size: 11, design: .monospaced))
+                .font(.subheadline.monospaced())
                 .foregroundColor(.secondary)
-                .frame(width: 70, alignment: .trailing)
+                .frame(width: memoryColumnWidth, alignment: .trailing)
 
             HStack(spacing: 6) {
                 if let active {
@@ -89,7 +95,7 @@ struct WatchedSectionView: View {
 
                 Button(action: { GuardConfirm.toggle(port, in: portManager) }) {
                     Image(systemName: portManager.isGuarded(port) ? "bolt.shield.fill" : "bolt.shield")
-                        .font(.system(size: 11))
+                        .font(.subheadline)
                         .foregroundColor(portManager.isGuarded(port) ? .orange : .secondary)
                 }
                 .buttonStyle(.plain)
@@ -100,14 +106,14 @@ struct WatchedSectionView: View {
 
                 Button(action: { portManager.toggleWatch(port) }) {
                     Image(systemName: "star.slash")
-                        .font(.system(size: 11))
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Stop watching port \(port)")
                 .help("Stop watching :\(port)")
             }
-            .frame(width: 80, alignment: .trailing)
+            .frame(width: actionColumnWidth, alignment: .trailing)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)

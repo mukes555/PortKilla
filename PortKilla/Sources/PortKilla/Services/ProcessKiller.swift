@@ -42,13 +42,11 @@ class ProcessKiller {
         }
 
         if killTree {
-            // Capture each child's name at enumeration time so the recursive
-            // kill still runs the PID-reuse identity check where possible.
-            // A nil name (lookup failed) means "can't verify" — kill anyway,
-            // preserving the original unconditional tree-kill behavior.
-            for (childPid, childName) in getChildProcesses(for: pid) {
-                try? killProcess(pid: childPid, force: force, killTree: true, expectedName: childName)
-            }
+            // One snapshot of the process tree for the whole walk. Enumerating
+            // the table again at every node cost depth x (all processes)
+            // syscalls, and a reparent race could make the recursion cycle.
+            var seen: Set<Int> = [pid]
+            killDescendants(of: pid, force: force, children: childrenByParent(), seen: &seen, depth: 0)
         }
 
         // The user explicitly chooses SIGKILL (force); a graceful kill must
@@ -78,25 +76,41 @@ class ProcessKiller {
         return actualLower.hasPrefix(expectedLower) || expectedLower.hasPrefix(actualLower)
     }
 
-    private func getChildProcesses(for pid: Int) -> [(pid: Int, name: String?)] {
-        let children = NativeScanner.childPids(of: Int32(pid))
-        if !children.isEmpty {
-            return children.map { (Int($0), NativeScanner.processName($0)) }
-        }
+    private static let maxTreeDepth = 32
 
-        // pgrep -l lists "pid name"; exits 1 with no children
+    /// Kills grandchildren before children before the caller signals the
+    /// parent. Each child's name is looked up at kill time so the PID-reuse
+    /// identity check still applies; a nil name means "can't verify", and the
+    /// child is killed anyway, as tree kills always did.
+    private func killDescendants(of pid: Int, force: Bool, children: (Int) -> [Int], seen: inout Set<Int>, depth: Int) {
+        guard depth < Self.maxTreeDepth else { return }
+        for child in children(pid) where !seen.contains(child) {
+            seen.insert(child)
+            killDescendants(of: child, force: force, children: children, seen: &seen, depth: depth + 1)
+            let name = NativeScanner.processName(Int32(child))
+            try? killProcess(pid: child, force: force, expectedName: name)
+        }
+    }
+
+    /// Children lookup from one native snapshot; pgrep per node only when
+    /// libproc gave nothing (sandboxed or unexpected OS).
+    private func childrenByParent() -> (Int) -> [Int] {
+        let parents = NativeScanner.parentMap()
+        guard !parents.isEmpty else { return Self.pgrepChildren }
+
+        var byParent: [Int: [Int]] = [:]
+        for (child, parent) in parents {
+            byParent[Int(parent), default: []].append(Int(child))
+        }
+        return { byParent[$0] ?? [] }
+    }
+
+    private static func pgrepChildren(of pid: Int) -> [Int] {
+        // pgrep exits 1 with no children
         let output = (try? CommandRunner.run(
-            "/usr/bin/pgrep", ["-lP", "\(pid)"], timeout: 2.0, allowedExitCodes: [0, 1]
+            "/usr/bin/pgrep", ["-P", "\(pid)"], timeout: 2.0, allowedExitCodes: [0, 1]
         )) ?? ""
-
-        return output.components(separatedBy: .newlines).compactMap { line -> (pid: Int, name: String?)? in
-            let parts = line.split(separator: " ", maxSplits: 1)
-            guard let first = parts.first, let childPid = Int(first.trimmingCharacters(in: .whitespaces)) else {
-                return nil
-            }
-            let name = parts.count > 1 ? String(parts[1]) : nil
-            return (childPid, name)
-        }
+        return output.components(separatedBy: .newlines).compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
     }
 
     /// Returns the executable base name currently running under `pid`,

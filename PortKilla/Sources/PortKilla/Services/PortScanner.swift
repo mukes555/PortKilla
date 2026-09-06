@@ -14,8 +14,10 @@ class PortScanner {
     /// Scans listening TCP ports and bound UDP sockets. `processes` supplies
     /// per-PID command, memory, and children so we don't shell out per port.
     func scanActivePorts(processes: ProcessTable) throws -> [PortInfo] {
-        // Fast path: raw libproc syscalls, no subprocesses at all
-        if let native = NativeScanner.allListeners(), !native.isEmpty {
+        // Fast path: raw libproc syscalls, no subprocesses at all. nil means
+        // libproc is unavailable; an empty list is a real answer and must not
+        // fall through to lsof on every refresh of a quiet machine.
+        if let native = NativeScanner.allListeners() {
             var raws: [RawListener] = []
             for listener in native {
                 let raw = RawListener(
@@ -171,7 +173,8 @@ class PortScanner {
     /// Resolves working directories for PIDs not yet cached — native syscall
     /// first, one lsof batch as fallback — and drops entries for dead PIDs.
     private func refreshWorkingDirectories(for pids: [Int]) {
-        cwdCache = cwdCache.filter { pids.contains($0.key) }
+        let live = Set(pids)
+        cwdCache = cwdCache.filter { live.contains($0.key) }
 
         var missing = pids.filter { cwdCache[$0] == nil }
         guard !missing.isEmpty else { return }

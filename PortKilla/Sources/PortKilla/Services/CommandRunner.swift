@@ -43,39 +43,76 @@ enum CommandRunner {
         let exited = DispatchSemaphore(value: 0)
         task.terminationHandler = { _ in exited.signal() }
 
-        try task.run()
-
-        // Read on a separate queue so a child filling the pipe buffer can never
-        // deadlock against us waiting for it to exit.
+        // Output arrives through a readability handler instead of a blocking
+        // read on a worker thread: nothing ever parks inside read(2), so the
+        // handle can always be closed, timeout included. A blocking design
+        // leaks one fd and one dispatch thread every time a child hangs.
+        let output = OutputCollector()
         let reader = stdout.fileHandleForReading
-        var outputData = Data()
-        let readFinished = DispatchSemaphore(value: 0)
-        DispatchQueue.global(qos: .utility).async {
-            outputData = reader.readDataToEndOfFile()
-            readFinished.signal()
+        reader.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
+                output.finish()
+            } else {
+                output.append(chunk)
+            }
+        }
+        defer {
+            reader.readabilityHandler = nil
+            try? reader.close()
         }
 
         let commandName = (path as NSString).lastPathComponent
+        try task.run()
+
         if exited.wait(timeout: .now() + timeout) == .timedOut {
-            kill(task.processIdentifier, SIGKILL)
+            // Re-check before signalling: the pid could have been reaped and
+            // reused in the gap after the wait gave up.
+            if task.isRunning {
+                kill(task.processIdentifier, SIGKILL)
+            }
             _ = exited.wait(timeout: .now() + 1.0)
-            _ = readFinished.wait(timeout: .now() + 1.0)
             throw CommandError.timedOut(commandName)
         }
 
-        // Only close the handle once the reader is done with it; closing a
-        // handle another thread is blocked on raises an exception.
-        let readCompleted = readFinished.wait(timeout: .now() + timeout) == .success
-        if readCompleted {
-            reader.closeFile()
-        }
+        // The child has exited; give the pipe a moment to deliver its tail.
+        output.waitForEOF(timeout: 1.0)
 
         guard allowedExitCodes.contains(task.terminationStatus) else {
             throw CommandError.failed(command: commandName, exitCode: task.terminationStatus)
         }
-        guard let output = String(data: outputData, encoding: .utf8) else {
+        guard let text = String(data: output.data, encoding: .utf8) else {
             throw CommandError.notUTF8(commandName)
         }
-        return output
+        return text
+    }
+
+    /// Accumulates pipe output from the readability handler's queue and lets
+    /// the caller wait for end-of-file.
+    private final class OutputCollector {
+        private let lock = NSLock()
+        private let eof = DispatchSemaphore(value: 0)
+        private var buffer = Data()
+
+        func append(_ chunk: Data) {
+            lock.lock()
+            buffer.append(chunk)
+            lock.unlock()
+        }
+
+        func finish() {
+            eof.signal()
+        }
+
+        func waitForEOF(timeout: TimeInterval) {
+            _ = eof.wait(timeout: .now() + timeout)
+        }
+
+        var data: Data {
+            lock.lock()
+            defer { lock.unlock() }
+            return buffer
+        }
     }
 }

@@ -102,7 +102,8 @@ final class DockerService {
         }
 
         // `docker stop` waits up to 10s for a graceful shutdown; allow that plus slack.
-        _ = try CommandRunner.run(docker, ["stop", name], timeout: 15.0)
+        // "--" ends option parsing so a name can never be read as a flag.
+        _ = try CommandRunner.run(docker, ["stop", "--", name], timeout: 15.0)
 
         // Invalidate cache so the UI updates quickly
         lock.lock(); lastUpdate = .distantPast; lock.unlock()

@@ -35,23 +35,43 @@ enum UpdateChecker {
         return info["CFBundleShortVersionString"] as? String
     }
 
-    /// Fetches the latest release tag; calls back on the main queue with the
-    /// newer version string, or nil when up to date / undeterminable.
-    static func fetchNewerVersion(completion: @escaping (String?) -> Void) {
+    enum CheckResult: Equatable {
+        case newer(String)
+        case upToDate
+        case failed(String)
+    }
+
+    /// Fetches the latest release tag and calls back on the main queue. A
+    /// network or HTTP failure is reported as such, never as "up to date".
+    static func fetchNewerVersion(completion: @escaping (CheckResult) -> Void) {
         guard let current = currentVersion else {
-            // Dev binary without a bundle — nothing meaningful to compare.
-            DispatchQueue.main.async { completion(nil) }
+            // Dev binary without a bundle: nothing meaningful to compare.
+            DispatchQueue.main.async { completion(.failed("no version information")) }
             return
         }
 
-        var request = URLRequest(url: apiURL, timeoutInterval: 10)
+        // Ignore the URL cache: a stale cached body would hide a new release.
+        var request = URLRequest(url: apiURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
 
-        URLSession.shared.dataTask(with: request) { data, _, _ in
-            let latest = data.flatMap(parseTagName)
-            let newer = latest.flatMap { isVersion($0, newerThan: current) ? $0 : nil }
-            DispatchQueue.main.async { completion(newer) }
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            let result = evaluate(data: data, response: response, error: error, current: current)
+            DispatchQueue.main.async { completion(result) }
         }.resume()
+    }
+
+    static func evaluate(data: Data?, response: URLResponse?, error: Error?, current: String) -> CheckResult {
+        if let error {
+            return .failed(error.localizedDescription)
+        }
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            // 403 is GitHub's unauthenticated rate limit; common on shared IPs.
+            return .failed("GitHub responded with \(http.statusCode)")
+        }
+        guard let data, let latest = parseTagName(data) else {
+            return .failed("unexpected response")
+        }
+        return isVersion(latest, newerThan: current) ? .newer(latest) : .upToDate
     }
 
     /// Rate limiter for the automatic check on launch.

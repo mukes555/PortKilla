@@ -159,12 +159,14 @@ struct HistoryView: View {
         var csv = "Timestamp,Port,Process,Action\n"
 
         for item in historyItems {
+            // Every column goes through CSV.field so a future column can't
+            // silently bypass the formula-injection defence.
             let fields = [
                 Self.exportFormatter.string(from: item.timestamp),
                 "\(item.port)",
-                CSV.field(item.processName),
+                item.processName,
                 item.action.rawValue
-            ]
+            ].map(CSV.field)
             csv.append(fields.joined(separator: ",") + "\n")
         }
         return csv

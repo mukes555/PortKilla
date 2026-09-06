@@ -21,3 +21,12 @@ we'll work on a fix and disclosure timeline with you.
 - Kills verify process identity before signalling to avoid PID-reuse mistakes.
 - The app is ad-hoc signed and not notarized (no Apple Developer account); this
   is a distribution property, documented in the README, not a code vulnerability.
+
+## Process environment access
+
+To attribute a port to the AI agent that started it, PortKilla reads a fixed
+allowlist of environment variables from listening processes it owns (via the
+same `KERN_PROCARGS2` buffer it already uses for command lines). The allowlist
+is `AgentAttribution.markerKeys`; nothing else in a process environment is
+read, stored, logged, or displayed. Environments of other users' processes are
+not readable by the kernel to begin with.

@@ -47,6 +47,11 @@ per port:
    an unexpected OS), it **falls back to `/usr/sbin/lsof`** and parses its text
    output. Both paths converge on the same `[PortInfo]`.
 4. **`DockerService`** decorates ports that map to running containers.
+5. **`AgentAttribution`** ([Services/AgentAttribution.swift](PortKilla/Sources/PortKilla/Services/AgentAttribution.swift))
+   names the AI agent that spawned each listener: process ancestry first, then
+   the allowlisted environment markers agents leave on children (read from the
+   same `KERN_PROCARGS2` buffer as the command line). The CLI's friendly-fire
+   guard compares that owner with the caller's own.
 
 > The native-fast-path-with-lsof-fallback is the single most surprising design
 > decision. If you touch scanning, keep both paths producing equivalent results

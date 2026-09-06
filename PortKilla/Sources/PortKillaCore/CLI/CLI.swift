@@ -1,7 +1,7 @@
 import Foundation
 
 /// The command-line commands, shared by the standalone `portkilla`
-/// executable (bundled as Contents/MacOS/portkilla, which Homebrew links
+/// executable (bundled as Contents/Helpers/portkilla, which Homebrew links
 /// onto PATH) and by the app binary when it is invoked with a subcommand.
 public enum PortKillaCLI {
 

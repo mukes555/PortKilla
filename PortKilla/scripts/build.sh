@@ -67,12 +67,14 @@ else
 fi
 cp "$BINARY_SOURCE" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
-# The standalone CLI (no AppKit) ships beside the app binary; the Homebrew
-# cask links it as `portkilla`. The app binary still answers CLI arguments
-# for anyone who symlinked it before.
-CLI_SOURCE="$(dirname "$BINARY_SOURCE")/portkilla"
+# The standalone CLI (no AppKit) ships in Contents/Helpers, because a
+# Contents/MacOS/portkilla would be the same file as Contents/MacOS/PortKilla
+# on a case-insensitive volume. The Homebrew cask links it as `portkilla`;
+# the app binary still answers CLI arguments for anyone who symlinked it.
+CLI_SOURCE="$(dirname "$BINARY_SOURCE")/portkilla-cli"
 if [ -f "$CLI_SOURCE" ]; then
-    cp "$CLI_SOURCE" "$APP_BUNDLE/Contents/MacOS/portkilla"
+    mkdir -p "$APP_BUNDLE/Contents/Helpers"
+    cp "$CLI_SOURCE" "$APP_BUNDLE/Contents/Helpers/portkilla"
 else
     echo "warning: standalone CLI not found at $CLI_SOURCE" >&2
 fi
@@ -137,8 +139,8 @@ EOF
 echo "🔏 Signing App (ad-hoc)..."
 # Nested executables are not covered by the bundle signature; an unsigned
 # Mach-O is refused outright on Apple Silicon.
-if [ -f "$APP_BUNDLE/Contents/MacOS/portkilla" ]; then
-    codesign --force --sign - "$APP_BUNDLE/Contents/MacOS/portkilla"
+if [ -f "$APP_BUNDLE/Contents/Helpers/portkilla" ]; then
+    codesign --force --sign - "$APP_BUNDLE/Contents/Helpers/portkilla"
 fi
 codesign --force --sign - "$APP_BUNDLE"
 

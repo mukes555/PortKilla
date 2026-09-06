@@ -79,6 +79,6 @@ public enum Diagnostics {
             let same = resolved == URL(fileURLWithPath: executable).resolvingSymlinksInPath().path
             return same ? "\(candidate) (this build)" : "\(candidate) (a different build: \(resolved))"
         }
-        return "not found (Homebrew links it; otherwise symlink Contents/MacOS/portkilla)"
+        return "not found (Homebrew links it; otherwise symlink Contents/Helpers/portkilla)"
     }
 }

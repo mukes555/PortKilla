@@ -7,11 +7,11 @@ import XCTest
 /// CLI as a separate process, exit codes and JSON included.
 final class ScenarioTests: XCTestCase {
 
-    /// The `portkilla` executable built next to the test bundle.
+    /// The `portkilla-cli` executable built next to the test bundle.
     private static var cli: URL {
         URL(fileURLWithPath: Bundle(for: ScenarioTests.self).bundlePath)
             .deletingLastPathComponent()
-            .appendingPathComponent("portkilla")
+            .appendingPathComponent("portkilla-cli")
     }
 
     private var servers: [Process] = []

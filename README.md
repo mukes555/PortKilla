@@ -131,7 +131,7 @@ milliseconds), and the app binary answers the same commands:
 
 ```bash
 # Homebrew installs already have `portkilla` on PATH; otherwise:
-ln -s /Applications/PortKilla.app/Contents/MacOS/portkilla /usr/local/bin/portkilla
+ln -s /Applications/PortKilla.app/Contents/Helpers/portkilla /usr/local/bin/portkilla
 ```
 
 ```bash

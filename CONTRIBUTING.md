@@ -40,9 +40,9 @@ The package also builds the standalone CLI, and the app binary answers the
 same subcommands:
 
 ```bash
-swift run portkilla list          # table of listening ports
-swift run portkilla list --json   # JSON, for scripting
-swift run portkilla kill 3000     # graceful kill; add --force for SIGKILL
+swift run portkilla-cli list          # table of listening ports
+swift run portkilla-cli list --json   # JSON, for scripting
+swift run portkilla-cli kill 3000     # graceful kill; add --force for SIGKILL
 swift run PortKilla list          # the app binary in CLI mode
 ```
 
@@ -52,7 +52,7 @@ swift run PortKilla list          # the app binary in CLI mode
 swift build && swift test --disable-sandbox
 ```
 
-`swift build` first: the scenario tests spawn the debug `portkilla`
+`swift build` first: the scenario tests spawn the debug `portkilla-cli`
 executable next to the test bundle, and `swift test` alone does not build
 it. `--disable-sandbox` is required: several tests exercise the native
 scanner, which makes raw `libproc` syscalls the SwiftPM sandbox blocks.

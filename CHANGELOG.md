@@ -72,7 +72,7 @@ release, rename it to the version and date.
 
 ### Distribution
 - `scripts/build.sh` bundles the standalone CLI as
-  `PortKilla.app/Contents/MacOS/portkilla`, and the cask's `binary` stanza
+  `PortKilla.app/Contents/Helpers/portkilla`, and the cask's `binary` stanza
   links that instead of the app binary. CI builds before testing so the
   scenario tests find the debug `portkilla`.
 - The release workflow can pin the Homebrew cask to each release with its

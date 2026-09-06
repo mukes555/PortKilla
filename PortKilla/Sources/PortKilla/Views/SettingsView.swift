@@ -183,7 +183,7 @@ private struct DisplaySettings: View {
         Form {
             Section("Row density") {
                 Picker("Density", selection: $portManager.viewDensity) {
-                    Text("Simple").tag(PortManager.ViewDensity.clean)
+                    Text("Simple").tag(PortManager.ViewDensity.simple)
                     Text("Advanced").tag(PortManager.ViewDensity.advanced)
                 }
                 .pickerStyle(.segmented)
@@ -246,7 +246,7 @@ private struct ShortcutsSettings: View {
                 shortcutRow("Kill the whole process tree", "⇧ click ✕")
                 shortcutRow("Watch, guard, open project, copy…", "right-click a row")
                 Button("Show the tips banner again") {
-                    UserDefaults.standard.set(false, forKey: "PortKilla.didDismissHotkeyTip")
+                    UserDefaults.standard.set(false, forKey: DefaultsKey.didDismissHotkeyTip)
                 }
                 .controlSize(.small)
             }

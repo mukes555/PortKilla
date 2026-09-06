@@ -55,7 +55,7 @@ struct HotKeyRecorderView: View {
     }
 
     private func handle(_ event: NSEvent) -> Bool {
-        if event.keyCode == 53 { // Esc
+        if event.keyCode == KeyCode.escape {
             dismiss()
             return true
         }

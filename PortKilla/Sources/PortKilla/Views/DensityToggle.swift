@@ -9,7 +9,7 @@ struct DensityToggle: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            segment("Simple", icon: "list.bullet", value: .clean)
+            segment("Simple", icon: "list.bullet", value: .simple)
             segment("Advanced", icon: "list.bullet.rectangle", value: .advanced)
         }
         .padding(2)

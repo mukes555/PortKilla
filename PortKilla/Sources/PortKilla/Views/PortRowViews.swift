@@ -216,7 +216,7 @@ struct PortRowView: View {
 
                             // Clean mode: surface the project/container inline
                             // since the second detail line is hidden.
-                            if manager.viewDensity == .clean, let label = cleanSubtitle {
+                            if manager.viewDensity == .simple, let label = cleanSubtitle {
                                 Text(label)
                                     .font(.system(size: 11))
                                     .foregroundColor(.secondary)
@@ -311,64 +311,7 @@ struct PortRowView: View {
             }
             .opacity(isTerminating ? 0.5 : 1)
             .contextMenu {
-                Button("Open in Browser") {
-                    Browser.openLocalhost(port: port.port)
-                }
-                Button(manager.isWatched(port.port) ? "Unwatch :\(String(port.port))" : "Watch :\(String(port.port))") {
-                    manager.toggleWatch(port.port)
-                }
-                Button(manager.isGuarded(port.port) ? "Remove Guard on :\(String(port.port))" : "Guard :\(String(port.port))") {
-                    GuardConfirm.toggle(port.port, in: manager)
-                }
-                Button("Show Details") {
-                    onSelect()
-                }
-                if let projectPath = port.projectPath {
-                    Divider()
-                    ForEach(EditorLauncher.installed, id: \.name) { editor in
-                        Button("Open Project in \(editor.name)") {
-                            EditorLauncher.open(path: projectPath, with: editor)
-                        }
-                    }
-                    Button("Reveal Project in Finder") {
-                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: projectPath)])
-                    }
-                    Button("Open Project in Terminal") {
-                        NSWorkspace.shared.open(
-                            [URL(fileURLWithPath: projectPath)],
-                            withApplicationAt: URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"),
-                            configuration: NSWorkspace.OpenConfiguration()
-                        )
-                    }
-                    Button("Copy Project Path") {
-                        Pasteboard.copy(projectPath)
-                    }
-                }
-                Divider()
-                // Through the same request path as the button, so the
-                // confirm-before-kill setting applies to the menu too.
-                Button("Kill Process Tree") {
-                    onKillRequest(false, true)
-                }
-                Button("Force Kill (SIGKILL)") {
-                    onKillRequest(true, false)
-                }
-                Divider()
-                if let container = port.containerName {
-                    Button("Stop Docker Container") {
-                        manager.stopDockerContainer(container)
-                    }
-                    Divider()
-                }
-                Button("Copy Port") {
-                    Pasteboard.copy(":\(port.port)")
-                }
-                Button("Copy PID") {
-                    Pasteboard.copy("\(port.pid)")
-                }
-                Button("Copy Command") {
-                    Pasteboard.copy(port.command)
-                }
+                PortRowContextMenu(port: port, manager: manager, onSelect: onSelect, onKillRequest: onKillRequest)
             }
 
             // Expanded Children View

@@ -1,6 +1,17 @@
 import SwiftUI
 import Foundation
 import AppKit
+import Carbon.HIToolbox
+
+/// Virtual key codes by name (Carbon's constants are Int32; NSEvent's are UInt16).
+enum KeyCode {
+    static let escape = UInt16(kVK_Escape)
+    static let `return` = UInt16(kVK_Return)
+    static let upArrow = UInt16(kVK_UpArrow)
+    static let downArrow = UInt16(kVK_DownArrow)
+    static let leftArrow = UInt16(kVK_LeftArrow)
+    static let rightArrow = UInt16(kVK_RightArrow)
+}
 
 // MARK: - Keyboard handling and kill flows
 extension PortListView {
@@ -26,32 +37,32 @@ extension PortListView {
         let hasCommand = event.modifierFlags.contains(.command)
 
         switch event.keyCode {
-        case 53: // Esc: clear the search first, then close
+        case KeyCode.escape: // clear the search first, then close
             if !searchText.isEmpty {
                 searchText = ""
             } else {
                 appDelegate.closePopover()
             }
             return true
-        case 125: // ↓
+        case KeyCode.downArrow:
             moveSelection(by: 1)
             return true
-        case 126: // ↑
+        case KeyCode.upArrow:
             moveSelection(by: -1)
             return true
-        case 124: // → expands the tree — but only when not editing search text
+        case KeyCode.rightArrow: // expands the tree, but only when not editing search text
             if searchText.isEmpty, let port = selectedPort, port.children?.isEmpty == false {
                 expandedIds.insert(port.id)
                 return true
             }
             return false
-        case 123: // ←
+        case KeyCode.leftArrow:
             if searchText.isEmpty, let port = selectedPort {
                 expandedIds.remove(port.id)
                 return true
             }
             return false
-        case 36: // ⏎ kills the selection; ⌘⏎ force kills
+        case KeyCode.return: // kills the selection; ⌘⏎ force kills
             if filter == .tests, let test = selectedTest {
                 requestKillTest(test, force: hasCommand)
                 return true

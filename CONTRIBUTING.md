@@ -93,7 +93,7 @@ PORTKILLA_DEMO_GIF=../assets/demo.gif .build/debug/PortKilla
 
 The project favors code written **for human brains**: early returns over nested
 `if`s, complex conditions extracted into named booleans, deep modules with
-simple interfaces, and files small enough to hold in your head (aim ~300 lines,
+simple interfaces, and files small enough to hold in your head (aim ~300 lines, split at ~500,
 split by responsibility well before 1000). Comments explain **why**, not what.
 Match the surrounding style.
 

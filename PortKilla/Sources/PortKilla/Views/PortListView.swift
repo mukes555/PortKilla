@@ -57,8 +57,7 @@ struct PortListView: View {
     @State var selectedId: String?
     @State var expandedIds: Set<String> = []
     @State var isOnScreen = false
-    @State var launchAtLogin = LoginItem.isEnabled
-    @AppStorage("PortKilla.didDismissHotkeyTip") var didDismissHotkeyTip = false
+    @AppStorage(DefaultsKey.didDismissHotkeyTip) var didDismissHotkeyTip = false
     @FocusState var isSearchFocused: Bool
 
     /// The pinned panel hosts a second copy of this view; each copy handles
@@ -192,7 +191,6 @@ struct PortListView: View {
         .onAppear {
             isOnScreen = true
             installKeyMonitorIfNeeded()
-            launchAtLogin = LoginItem.isEnabled
             DispatchQueue.main.async {
                 isSearchFocused = true
             }

@@ -28,6 +28,24 @@ struct PortHistoryItem: Identifiable, Codable {
 }
 
 enum CSV {
+    /// The History export, one row per entry. Every column goes through
+    /// `field` so a future column can't silently bypass the defence.
+    static func historyDocument(_ items: [PortHistoryItem], formatter: DateFormatter) -> String {
+        var csv = "Timestamp,Port,Process,Action,Owner,Killed By\n"
+        for item in items {
+            let fields = [
+                formatter.string(from: item.timestamp),
+                "\(item.port)",
+                item.processName,
+                item.action.rawValue,
+                item.owner ?? "",
+                item.killedBy ?? ""
+            ].map(field)
+            csv.append(fields.joined(separator: ",") + "\n")
+        }
+        return csv
+    }
+
     /// Escapes a value for a CSV cell, defusing spreadsheet formula injection
     /// (process names are attacker-influenced: a name like "=cmd|..." would
     /// otherwise execute when the export is opened in Excel).
@@ -47,21 +65,25 @@ enum CSV {
     }
 }
 
-class HistoryManager {
+/// Kill history, newest first, capped by the History preference. Observable
+/// so the History window updates while it is open; `defaults` is injectable
+/// so tests never touch the user's real history.
+final class HistoryManager: ObservableObject {
     static let shared = HistoryManager()
-    
-    private let kHistoryKey = "portHistory"
+
+    @Published private(set) var history: [PortHistoryItem] = []
+    private let defaults: UserDefaults
+
     /// Set from the History preference; trimming applies immediately.
     var maxHistoryItems = 50 {
         didSet { trimAndSave() }
     }
-    
-    private(set) var history: [PortHistoryItem] = []
-    
-    private init() {
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         loadHistory()
     }
-    
+
     func addEntry(port: Int, processName: String, action: PortHistoryItem.HistoryAction,
                   owner: String? = nil, killedBy: String? = nil) {
         let item = PortHistoryItem(port: port, processName: processName, action: action, owner: owner, killedBy: killedBy)
@@ -73,24 +95,20 @@ class HistoryManager {
         if history.count > maxHistoryItems {
             history = Array(history.prefix(maxHistoryItems))
         }
-        saveHistory()
-    }
-    
-    private func saveHistory() {
         if let data = try? JSONEncoder().encode(history) {
-            UserDefaults.standard.set(data, forKey: kHistoryKey)
+            defaults.set(data, forKey: DefaultsKey.history)
         }
     }
-    
+
     private func loadHistory() {
-        if let data = UserDefaults.standard.data(forKey: kHistoryKey),
+        if let data = defaults.data(forKey: DefaultsKey.history),
            let items = try? JSONDecoder().decode([PortHistoryItem].self, from: data) {
             history = items
         }
     }
-    
+
     func clearHistory() {
         history.removeAll()
-        UserDefaults.standard.removeObject(forKey: kHistoryKey)
+        defaults.removeObject(forKey: DefaultsKey.history)
     }
 }

@@ -19,10 +19,12 @@ enum UpdateChecker {
     }
 
     /// When the CLI runs through a symlink (`/opt/homebrew/bin/portkilla`),
-    /// Bundle.main does not resolve the .app around it. Follow the link to the
-    /// real executable and read the bundle's Info.plist from there.
+    /// Bundle.main does not resolve the .app around it. Ask the kernel for the
+    /// real executable path (argv[0] is just "portkilla" when found via PATH)
+    /// and read the bundle's Info.plist from there.
     private static var versionViaSymlinkedExecutable: String? {
-        let executable = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+        guard let path = NativeScanner.executablePath(getpid()) else { return nil }
+        let executable = URL(fileURLWithPath: path)
         // <App>.app/Contents/MacOS/<exe> -> <App>.app/Contents/Info.plist
         let plist = executable.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Info.plist")

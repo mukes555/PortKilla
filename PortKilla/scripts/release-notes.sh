@@ -31,7 +31,7 @@ if [ -z "$SECTION" ]; then
 fi
 
 cat <<EOF
-## ⚡ What's new in v${VERSION}
+## What's new in v${VERSION}
 ${SECTION}
 
 ---

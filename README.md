@@ -26,8 +26,6 @@
   </picture>
 </p>
 
-> The pictures show the 2.0 line on `main`. The current release is 1.16; 2.0 betas are next.
-
 ## In twenty seconds
 
 <p align="center"><img src="assets/demo.gif" width="580" alt="Press the hotkey, type 3000, press Return: the port is free"></p>

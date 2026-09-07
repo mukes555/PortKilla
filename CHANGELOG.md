@@ -13,22 +13,11 @@ release, rename it to the version and date.
 
 <!-- next -->
 
-### Changed
-- **The quokka is the brand.** The menu bar shows the quokka traced in
-  black and white from the artwork (lighter while nothing is listening)
-  or, from Settings > Display, the app icon in colour; the bolt is gone.
-  The popover header carries the artwork's head with a live summary line,
-  About shows the app icon, and the Workbench sidebar and empty inspector
-  wear it too.
-- **A bigger popover.** Regular is now 580 by 720 points; Settings >
-  Display offers Compact (the old 500 by 600) and Large (660 by 840). The
-  pinned window follows.
-- **Richer rows.** Type tiles, section headers with counts and accents,
-  port and process names a size up, memory with CPU and its trend in
-  Advanced, and the browser and watch verbs on hover so the list stays
-  calm. Guard buttons use a shield.
-- Debug snapshot renders keep their density and watch list in the
-  throwaway suite instead of the developer's own preferences.
+## 2.0.0 (2026-09-07)
+
+The quokka release: a new look, a Workbench window, port leases, a setup
+wizard for AI tools, and a guard that knows whose server it is. Everything
+since 1.16, reviewed twice.
 
 ### Added
 - **Settings > Agents.** The AI tools this Mac has and how each is
@@ -164,14 +153,28 @@ release, rename it to the version and date.
   builds only) and drive the guard through the CLI as a separate process:
   attribution by declaration and by environment after reparenting,
   refusals, overrides, real kills, `free-port`, `whoami`.
-
-### Security
-- Command lines are redacted before they are shown, exported, written to
-  History, or handed to an agent: `--token=...`, `--api-key ...`,
-  `DATABASE_PASSWORD=...`, passwords inside URLs, and bearer tokens become
-  `[redacted]`. Classification and project detection still see the original.
+- `portkilla mcp` announces itself on stderr when run from a terminal
+  (it used to wait in silence), and `portkilla mcp --setup [claude|cursor|
+  codex]` prints the registration for each agent. There is no background
+  mode by design: each agent starts its own copy over stdin/stdout when it
+  needs one and stops it afterwards.
 
 ### Changed
+- **The quokka is the brand.** The menu bar shows the quokka traced in
+  black and white from the artwork (lighter while nothing is listening)
+  or, from Settings > Display, the app icon in colour; the bolt is gone.
+  The popover header carries the artwork's head with a live summary line,
+  About shows the app icon, and the Workbench sidebar and empty inspector
+  wear it too.
+- **A bigger popover.** Regular is now 580 by 720 points; Settings >
+  Display offers Compact (the old 500 by 600) and Large (660 by 840). The
+  pinned window follows.
+- **Richer rows.** Type tiles, section headers with counts and accents,
+  port and process names a size up, memory with CPU and its trend in
+  Advanced, and the browser and watch verbs on hover so the list stays
+  calm. Guard buttons use a shield.
+- Debug snapshot renders keep their density and watch list in the
+  throwaway suite instead of the developer's own preferences.
 - **The core is a library.** `PortKillaCore` (models, scanners, guard, CLI,
   MCP; Foundation only) sits under three targets: the menu-bar app, the new
   standalone `portkilla` executable, and the tests. The CLI no longer
@@ -193,12 +196,48 @@ release, rename it to the version and date.
 - The demo-GIF hook renders against a throwaway preference suite instead
   of the real one.
 
-### Added
-- `portkilla mcp` announces itself on stderr when run from a terminal
-  (it used to wait in silence), and `portkilla mcp --setup [claude|cursor|
-  codex]` prints the registration for each agent. There is no background
-  mode by design: each agent starts its own copy over stdin/stdout when it
-  needs one and stops it afterwards.
+### Fixed
+- **The watchlist no longer disarms guards by looking at them.** Rendering
+  the Workbench's watchlist counted as a guard strike, so a guard stood
+  down on its next intrusion after a few seconds on screen.
+- **Bulk kills leave supervised servers alone.** Kill All and the bulk
+  sheet used to send a plain kill to pm2, launchd, and reloader servers,
+  which came straight back; they are skipped with a note, and each row's
+  own stop verb applies.
+- **Every kill dialog carries the owner, client, and lease warnings**,
+  including the supervised ones, which showed none.
+- **A reloader kill names what goes with it.** Stopping nodemon (or another
+  reloader) takes every server under it; those are now judged by the
+  guard, listed in the dry run, and recorded in History.
+- **Leases survive two agents at once.** The lease store takes an advisory
+  lock around every read-modify-write, so two `exec --free-port` calls at
+  the same instant cannot both win a port.
+- **Client counts refresh the row.** A change in connected clients
+  republishes the row and its warnings.
+- Smaller: `--help` after `--` belongs to the command `exec` runs;
+  `history` shows kills by default and refusals with `--all`, so its first
+  entry always names the killer; the docs installer refuses garbled
+  markers; the MCP kill tool flags every outcome that leaves the port
+  busy; the inspector's peek reports a redirect without following it and
+  stops at 64 KB; debug snapshot renders keep their density and watch
+  list out of real preferences.
+
+### Security
+- **A name alone claims nothing.** A declared `PORTKILLA_OWNER` without a
+  session could stop another agent's server, or release its lease, by
+  matching the name. A known session now has to be shown, with
+  `PORTKILLA_SESSION` or by running from the agent's own shell.
+- **Refusal notifications are believed only when the CLI recorded them.**
+  Any local process could post one, and its "Stop it anyway" killed the
+  port with no confirmation. Labels are cleaned and the kill goes through
+  the usual confirmation.
+- **Leases are held by a session, not a name.**
+- **pm2 app names are validated** before they become arguments; `pm2 stop
+  all` was reachable from a process name.
+- Command lines are redacted before they are shown, exported, written to
+  History, or handed to an agent: `--token=...`, `--api-key ...`,
+  `DATABASE_PASSWORD=...`, passwords inside URLs, and bearer tokens become
+  `[redacted]`. Classification and project detection still see the original.
 
 ### Distribution
 - `scripts/build.sh` bundles the standalone CLI as
@@ -211,7 +250,6 @@ release, rename it to the version and date.
   exists; see RELEASING.md.
 - README leads with a current screenshot and shows the Workbench; the demo
   GIF is regenerated.
-
 ## 1.16.0 — 2026-09-06
 
 ### The agent tools batch

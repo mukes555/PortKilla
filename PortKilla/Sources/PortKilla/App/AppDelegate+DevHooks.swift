@@ -153,7 +153,7 @@ struct MenuBarGlyphSheet: View {
         VStack(spacing: 0) {
             ForEach([false, true], id: \.self) { dark in
                 HStack(spacing: 28) {
-                    ForEach([PortManager.MenuBarIcon.quokka, .bolt], id: \.self) { icon in
+                    ForEach(PortManager.MenuBarIcon.allCases, id: \.self) { icon in
                         ForEach([true, false], id: \.self) { active in
                             HStack(spacing: 10) {
                                 glyph(icon, active: active, dark: dark, scale: 4)
@@ -169,8 +169,9 @@ struct MenuBarGlyphSheet: View {
     }
 
     private func glyph(_ icon: PortManager.MenuBarIcon, active: Bool, dark: Bool, scale: CGFloat) -> some View {
-        Image(nsImage: MenuBarGlyph.image(icon, active: active))
-            .renderingMode(.template)
+        let image = MenuBarGlyph.image(icon, active: active)
+        return Image(nsImage: image)
+            .renderingMode(image.isTemplate ? .template : .original)
             .resizable()
             .interpolation(.high)
             .foregroundColor(dark ? .white : .black)

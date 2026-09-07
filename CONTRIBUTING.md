@@ -101,12 +101,13 @@ Regenerate the README assets:
 
 ```bash
 # main-view screenshot
-PORTKILLA_SNAPSHOT=../assets/screenshot.png PORTKILLA_SNAPSHOT_DENSITY=advanced PORTKILLA_SNAPSHOT_WATCH=3000 .build/debug/PortKilla
+PORTKILLA_DEFAULTS_SUITE=com.mukes555.PortKilla.readme PORTKILLA_MASCOT_DIR=assets/mascot PORTKILLA_SNAPSHOT=../assets/screenshot-dark.png PORTKILLA_SNAPSHOT_APPEARANCE=dark PORTKILLA_SNAPSHOT_DENSITY=advanced PORTKILLA_SNAPSHOT_WATCH=3000 .build/debug/PortKilla
+# (the same with APPEARANCE=light for screenshot-light.png; PORTKILLA_SNAPSHOT_SEARCH="kill 4400" for palette.png)
 # the Workbench: a real window, photographed (needs Screen Recording permission
 # for the debug binary; the offscreen render leaves the sidebar column blank)
-PORTKILLA_SNAPSHOT=../assets/workbench.png PORTKILLA_SNAPSHOT_VIEW=workbench-live PORTKILLA_SNAPSHOT_SELECT=3000 .build/debug/PortKilla
+PORTKILLA_DEFAULTS_SUITE=com.mukes555.PortKilla.readme PORTKILLA_MASCOT_DIR=assets/mascot PORTKILLA_SNAPSHOT=../assets/workbench.png PORTKILLA_SNAPSHOT_VIEW=workbench-live PORTKILLA_SNAPSHOT_SELECT=3000 .build/debug/PortKilla
 # animated demo
-PORTKILLA_DEMO_GIF=../assets/demo.gif .build/debug/PortKilla
+PORTKILLA_DEFAULTS_SUITE=com.mukes555.PortKilla.readme PORTKILLA_MASCOT_DIR=assets/mascot PORTKILLA_DEMO_GIF=../assets/demo.gif .build/debug/PortKilla
 ```
 
 ## The Claude Code plugin

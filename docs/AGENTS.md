@@ -45,6 +45,25 @@ matrix checked against your machine.
 Codex were checked against the installed binaries; the others come from the
 tools' documentation or source and are marked as such.
 
+## Setting the tools up
+
+`portkilla setup` finds the tools on this Mac and offers each step: register
+the MCP server with Claude Code, write the rule file each tool reads into
+the project, and print what has to be pasted by hand. Nothing is written or
+run without a yes (`--yes` says yes to everything).
+
+| Tool | Rules | MCP |
+|---|---|---|
+| Claude Code | `portkilla agent-docs --claude` (CLAUDE.md), or the plugin: `claude plugin marketplace add mukes555/PortKilla && claude plugin install portkilla@portkilla` | `claude mcp add portkilla -- portkilla mcp`, or the plugin |
+| Codex CLI | `portkilla agent-docs --codex` (AGENTS.md) | `[mcp_servers.portkilla]` in `~/.codex/config.toml` (`portkilla mcp --setup codex`) |
+| Cursor | `portkilla agent-docs --cursor` (`.cursor/rules/portkilla.mdc`) | `.cursor/mcp.json` (`portkilla mcp --setup cursor`) |
+| Windsurf | `portkilla agent-docs --windsurf` (`.windsurf/rules/portkilla.md`) | its MCP settings, same command and args |
+| Gemini CLI, Copilot CLI, OpenCode, Aider | `portkilla agent-docs --write --file <their rules file>` | where they read MCP servers from, same command and args |
+
+The plugin's hook turns `kill -9 $(lsof -ti:PORT)` into a nudge toward
+`portkilla free`; `portkilla agent-docs --claude-hook` prints the same hook
+for a settings.json.
+
 ## Declare yourself: PORTKILLA_OWNER and PORTKILLA_SESSION
 
 Any tool, wrapper, or person can label what it starts:

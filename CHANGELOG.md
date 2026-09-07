@@ -11,6 +11,17 @@ release, rename it to the version and date.
 
 ## [Unreleased]
 
+<!-- next -->
+
+## 2.2.0 (2026-09-08)
+
+A face for every state, and an audit behind it. The quokka was one image
+wearing three names; she now has four, and a search that finds nothing
+says so in her own voice. Behind that, six passes over the code found
+thirty things worth fixing, including a guard that could miss a
+supervisor's respawn and secrets reaching agents through a listener's
+child processes.
+
 ### Changed
 - **New artwork, and three moods that are actually different.** The mascot
   shipped as one file under three names, so "All quiet: nothing is
@@ -27,10 +38,19 @@ release, rename it to the version and date.
   `scripts/make_logo.swift` and the two generated logo files are gone.
 - The README opens with the problem it solves and carries a nav row;
   `docs/ARTWORK.md` holds the prompts that draw the character.
-
-A full audit: six passes over the code (correctness, security,
-performance, UX and conventions, docs, test coverage), every confirmed
-finding fixed, and a test for each defect.
+- **Destructive buttons ask first.** Clear History, both Release buttons,
+  and Reset Defaults went straight through while every kill confirms.
+- **Empty states tell the truth.** A filtered list said "nothing is
+  listening" while the header counted every port; the Workbench table had
+  no empty or scanning state at all.
+- **The detail sheets close properly**: a real button with a name for
+  VoiceOver, on Escape, instead of a fake traffic light. Ten icon-only
+  buttons gained accessibility labels.
+- One vocabulary (Stop watching, Remove guard, Option-click), ":3000" in
+  notification titles, and "free" readable in light mode.
+- Fewer wakeups: a successful scan no longer republishes to every view,
+  the hidden scan runs at a background priority, and Settings stopped
+  asking launchd for its login-item status on every redraw.
 
 ### Fixed
 - **The guard could miss a supervisor's respawn.** Watched occupancy
@@ -75,23 +95,6 @@ finding fixed, and a test for each defect.
   to the job that publishes, and the Homebrew cask is pinned to the
   checksum the build wrote rather than to a fresh download that could
   hash an error page.
-
-### Changed
-- **Destructive buttons ask first.** Clear History, both Release buttons,
-  and Reset Defaults went straight through while every kill confirms.
-- **Empty states tell the truth.** A filtered list said "nothing is
-  listening" while the header counted every port; the Workbench table had
-  no empty or scanning state at all.
-- **The detail sheets close properly**: a real button with a name for
-  VoiceOver, on Escape, instead of a fake traffic light. Ten icon-only
-  buttons gained accessibility labels.
-- One vocabulary (Stop watching, Remove guard, Option-click), ":3000" in
-  notification titles, and "free" readable in light mode.
-- Fewer wakeups: a successful scan no longer republishes to every view,
-  the hidden scan runs at a background priority, and Settings stopped
-  asking launchd for its login-item status on every redraw.
-
-<!-- next -->
 
 ## 2.1.1 (2026-09-07)
 

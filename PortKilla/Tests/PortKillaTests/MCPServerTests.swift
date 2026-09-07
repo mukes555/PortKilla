@@ -17,10 +17,11 @@ final class MCPServerTests: XCTestCase {
         XCTAssertNil(server.handle(line: #"{"jsonrpc":"2.0","method":"notifications/initialized"}"#), "notifications get no reply")
     }
 
-    func testToolsListNamesTheFiveTools() throws {
+    func testToolsListNamesEveryTool() throws {
         let reply = try json(server.handle(line: #"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#))
         let tools = try XCTUnwrap((reply["result"] as? [String: Any])?["tools"] as? [[String: Any]])
-        XCTAssertEqual(Set(tools.compactMap { $0["name"] as? String }), ["list_ports", "kill_port", "whois_port", "whoami", "wait_for_port_free"])
+        XCTAssertEqual(Set(tools.compactMap { $0["name"] as? String }),
+                       ["list_ports", "kill_port", "whois_port", "whoami", "wait_for_port_free", "free_port", "reserve_port", "release_port"])
         for tool in tools {
             XCTAssertNotNil(tool["inputSchema"], "\(tool["name"] ?? "") needs a schema")
         }

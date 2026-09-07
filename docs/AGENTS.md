@@ -72,6 +72,23 @@ What to export, by tool:
   `PORTKILLA_OWNER` in the terminal they run in, or they count as the
   editor's terminal (a person).
 
+## Leases: reserve a port before you use it
+
+Two agents about to start servers can race for the same free port. A lease
+settles it:
+
+```bash
+portkilla exec --free-port --prefer 3000 -- npm run dev   # port, PORT, lease, identity, in one go
+portkilla reserve 3000 --for 10m --reason "e2e run"       # by hand; release with portkilla release 3000
+portkilla reservations                                     # who holds what, until when
+```
+
+`free-port` and `exec` skip ports others have leased; `kill` refuses other
+agents on a leased port (exit 3) until the lease expires (a day at most)
+or is released. `exec` also exports `PORTKILLA_OWNER` and
+`PORTKILLA_SESSION`, so a server started through it is attributed to you
+even when your tool leaves no marker.
+
 ## What agents should run
 
 - `portkilla free <port>` to stop what is on a port (exit 0 if already

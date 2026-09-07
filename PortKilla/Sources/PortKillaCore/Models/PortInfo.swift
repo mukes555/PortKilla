@@ -34,6 +34,8 @@ public struct PortInfo: Identifiable, Codable, Equatable {
     /// A supervisor that would undo a plain kill (pm2, launchd, Docker, a
     /// reloader), with the verb that stops it for real.
     public let managedBy: ManagedRuntime?
+    /// A live lease on this port, when someone reserved it.
+    public let reservation: Reservation?
 
     /// A host bound to all interfaces (reachable from the local network, not
     /// just this machine). One source of truth for the "exposed" check —
@@ -48,7 +50,7 @@ public struct PortInfo: Identifiable, Codable, Equatable {
         return Self.isWildcardHost(bindAddress)
     }
 
-    public init(port: Int, pid: Int, processName: String, command: String, user: String, memoryUsage: String, memorySizeKB: Int, type: PortType, projectName: String? = nil, projectPath: String? = nil, containerName: String? = nil, children: [ProcessInfo]? = nil, bindAddress: String? = nil, proto: String = "tcp", cpuPercent: Double = 0, age: String? = nil, agentOwner: AgentOwner? = nil, connections: Int = 0, managedBy: ManagedRuntime? = nil) {
+    public init(port: Int, pid: Int, processName: String, command: String, user: String, memoryUsage: String, memorySizeKB: Int, type: PortType, projectName: String? = nil, projectPath: String? = nil, containerName: String? = nil, children: [ProcessInfo]? = nil, bindAddress: String? = nil, proto: String = "tcp", cpuPercent: Double = 0, age: String? = nil, agentOwner: AgentOwner? = nil, connections: Int = 0, managedBy: ManagedRuntime? = nil, reservation: Reservation? = nil) {
         self.port = port
         self.pid = pid
         self.processName = processName
@@ -68,6 +70,7 @@ public struct PortInfo: Identifiable, Codable, Equatable {
         self.agentOwner = agentOwner
         self.connections = connections
         self.managedBy = managedBy
+        self.reservation = reservation
     }
 
     public struct ProcessInfo: Identifiable, Codable, Equatable {

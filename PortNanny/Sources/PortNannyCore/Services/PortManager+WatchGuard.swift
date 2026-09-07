@@ -161,7 +161,7 @@ extension PortManager {
             for event in Self.watchEvents(watched: watchedPorts, previous: watchedOccupancy, current: current) {
                 switch event.kind {
                 case .freed:
-                    notify(.portFreed, title: "Port \(event.port) is free", body: "Nothing is listening on :\(event.port) anymore.")
+                    notify(.portFreed, title: ":\(event.port) is free", body: "Nothing is listening on :\(event.port) anymore.")
                 case .occupied(let name):
                     if let intruder = guardKillTarget(for: event.port, in: ports) {
                         let owner = intruder.agentOwner ?? guardOwners[intruder.pid]
@@ -191,7 +191,7 @@ extension PortManager {
                             killPort(intruder, initiator: .portGuard)
                         }
                     } else {
-                        notify(.portTaken, title: "Port \(event.port) in use", body: "'\(name)' started listening on :\(event.port).")
+                        notify(.portTaken, title: ":\(event.port) is in use", body: "'\(name)' started listening on :\(event.port).")
                     }
                 }
             }

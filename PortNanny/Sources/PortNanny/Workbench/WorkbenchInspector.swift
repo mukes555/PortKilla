@@ -84,7 +84,7 @@ struct WorkbenchInspector: View {
         HStack(spacing: 6) {
             Button { flow.requestKill(port, force: false, killTree: false) } label: { Label("Kill", systemImage: "xmark.circle") }
                 .help("Kill (SIGTERM, verified)")
-            Button { flow.requestKill(port, force: true, killTree: false) } label: { Image(systemName: "bolt") }
+            Button { flow.requestKill(port, force: true, killTree: false) } label: { Image(systemName: "exclamationmark.octagon") }
                 .help("Force kill (SIGKILL)")
                 .accessibilityLabel("Force kill")
             Button { flow.requestKill(port, force: false, killTree: true) } label: { Image(systemName: "arrow.triangle.branch") }
@@ -95,10 +95,10 @@ struct WorkbenchInspector: View {
                 .accessibilityLabel("Open in browser")
             Button { portManager.toggleWatch(port.port) } label: { Image(systemName: portManager.isWatched(port.port) ? "star.fill" : "star") }
                 .help(portManager.isWatched(port.port) ? "Stop watching" : "Watch: be told when it frees up or gets taken")
-                .accessibilityLabel(portManager.isWatched(port.port) ? "Unwatch" : "Watch")
+                .accessibilityLabel(portManager.isWatched(port.port) ? "Stop watching port \(port.port)" : "Watch port \(port.port)")
             Button { GuardConfirm.toggle(port.port, in: portManager) } label: { Image(systemName: portManager.isGuarded(port.port) ? "shield.fill" : "shield") }
                 .help(portManager.isGuarded(port.port) ? "Remove guard" : "Guard: auto-kill whatever takes it")
-                .accessibilityLabel(portManager.isGuarded(port.port) ? "Unguard" : "Guard")
+                .accessibilityLabel(portManager.isGuarded(port.port) ? "Remove guard on port \(port.port)" : "Guard port \(port.port)")
             Spacer()
         }
         .buttonStyle(.bordered)

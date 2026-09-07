@@ -171,36 +171,22 @@ enum EditorLauncher {
     }
 }
 
+/// A sheet is not a window: the traffic lights that used to sit here were
+/// decoration, and the only real one had no name and no keyboard path.
 struct DetailTitleBar: View {
     let onClose: () -> Void
-    @State private var isHoveringClose = false
 
     var body: some View {
         HStack(spacing: 8) {
             Button(action: onClose) {
-                ZStack {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 12, height: 12)
-                    if isHoveringClose {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 7, weight: .bold))
-                            .foregroundColor(.black.opacity(0.7))
-                    }
-                }
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 15))
+                    .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .onHover { isHoveringClose = $0 }
-
-            Circle()
-                .fill(Color.yellow)
-                .frame(width: 12, height: 12)
-                .opacity(0.7)
-
-            Circle()
-                .fill(Color.green)
-                .frame(width: 12, height: 12)
-                .opacity(0.7)
+            .keyboardShortcut(.cancelAction)
+            .accessibilityLabel("Close")
+            .help("Close (Esc)")
 
             Spacer()
         }

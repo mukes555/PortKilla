@@ -83,6 +83,7 @@ extension WorkbenchInspector {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Refresh connections")
                 .help("Refresh")
             }
             if port.proto != "tcp" {

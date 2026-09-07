@@ -1,4 +1,6 @@
 import XCTest
+import SwiftUI
+import AppKit
 @testable import PortNannyCore
 @testable import PortNanny
 
@@ -94,6 +96,30 @@ final class AuditFixesTests: XCTestCase {
             return XCTFail("expected exec options")
         }
         XCTAssertEqual(shifted.range, 5000...5999, "prefer alone still shifts the default window")
+    }
+
+    // MARK: - The detail sheet's way out
+
+    @MainActor
+    func testTheDetailSheetDrawsItsCloseButton() throws {
+        // The bar used to be three fake traffic lights; the only real one had
+        // no name and no keyboard path. It must still draw something.
+        let view = NSHostingView(rootView: DetailTitleBar(onClose: {}))
+        view.frame = NSRect(x: 0, y: 0, width: 120, height: 30)
+        view.layoutSubtreeIfNeeded()
+        let bitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+
+        var drawnPixels = 0
+        for x in 0..<bitmap.pixelsWide where drawnPixels == 0 {
+            for y in 0..<bitmap.pixelsHigh {
+                if let colour = bitmap.colorAt(x: x, y: y), colour.alphaComponent > 0.1 {
+                    drawnPixels += 1
+                    break
+                }
+            }
+        }
+        XCTAssertGreaterThan(drawnPixels, 0, "the close button drew nothing")
     }
 
     // MARK: - Security

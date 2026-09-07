@@ -22,7 +22,15 @@ struct WorkbenchPortsTable: View {
         VStack(spacing: 0) {
             toolbar(rows: rows)
             Divider()
-            table(rows: rows)
+            if !portManager.hasCompletedFirstScan {
+                WorkbenchEmpty(icon: "magnifyingglass", text: "Scanning ports…")
+            } else if rows.isEmpty {
+                let searched = searchText.trimmingCharacters(in: .whitespaces)
+                WorkbenchEmpty(icon: searched.isEmpty ? "powersleep" : "magnifyingglass",
+                               text: searched.isEmpty ? "Nothing is listening" : "No ports match \"\(searched)\"")
+            } else {
+                table(rows: rows)
+            }
         }
     }
 

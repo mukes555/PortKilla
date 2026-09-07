@@ -173,7 +173,7 @@ private struct GeneralSettings: View {
                             ))
                             .toggleStyle(.switch)
                             .controlSize(.small)
-                            Button("Unwatch") { portManager.toggleWatch(port) }
+                            Button("Stop Watching") { portManager.toggleWatch(port) }
                                 .controlSize(.small)
                         }
                     }

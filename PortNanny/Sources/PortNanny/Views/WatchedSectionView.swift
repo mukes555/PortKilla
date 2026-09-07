@@ -10,6 +10,7 @@ struct WatchedSectionView: View {
     let onKillRequest: (PortInfo) -> Void
 
     @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
+    @Environment(\.colorScheme) private var colorScheme
     private var gutterWidth: CGFloat { metrics.gutter * scale }
     private var portColumnWidth: CGFloat { metrics.port * scale }
     private var nameCapWidth: CGFloat { metrics.nameCap * scale }
@@ -73,7 +74,7 @@ struct WatchedSectionView: View {
                         .frame(width: 7, height: 7)
                     Text("free")
                         .font(.title3.weight(.medium))
-                        .foregroundColor(.green)
+                        .foregroundColor(Color.green.legible(in: colorScheme))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -100,7 +101,7 @@ struct WatchedSectionView: View {
                         .foregroundColor(guarded ? .orange : .secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(guarded ? "Disable guard on port \(port)" : "Guard port \(port)")
+                .accessibilityLabel(guarded ? "Remove guard on port \(port)" : "Guard port \(port)")
                 .help(guarded
                       ? "Guard active: anything that takes :\(port) gets auto-killed"
                       : "Guard :\(port): auto-kill anything that takes it")

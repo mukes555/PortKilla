@@ -66,7 +66,8 @@ struct WorkbenchAgents: View {
             PortChipRow(ports: session.ports, selection: $selection)
             HStack(spacing: 8) {
                 Button(session.kind == .ended ? "Clean up (\(session.ports.count))" : "Stop all (\(session.ports.count))") {
-                    KillFlow(portManager: portManager).requestKillAll(session.ports, label: "Stop \(session.title)")
+                    KillFlow(portManager: portManager).requestKillAll(session.ports, label: "Stop \(session.title)",
+                                                                     confirmTitle: session.kind == .ended ? "Clean Up" : "Stop All")
                 }
             }
             .buttonStyle(.bordered)

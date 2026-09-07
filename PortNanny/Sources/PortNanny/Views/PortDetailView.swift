@@ -34,6 +34,7 @@ struct PortDetailView: View {
                     Image(systemName: "safari")
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Open in browser")
                 .help("Open http://localhost:\(port.port)")
 
                 Menu {
@@ -44,6 +45,7 @@ struct PortDetailView: View {
                     Image(systemName: "doc.on.doc")
                 }
                 .menuStyle(BorderlessButtonMenuStyle())
+                .accessibilityLabel("Copy")
             }
 
             Divider()

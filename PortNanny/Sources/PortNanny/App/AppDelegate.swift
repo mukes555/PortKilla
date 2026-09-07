@@ -59,7 +59,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Create status item
         statusItem = NSStatusBar.system.statusItem(
             withLength: NSStatusItem.variableLength
         )
@@ -76,7 +75,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         // run-loop hop; a callback from didSet needs none.)
         portManager.onPortsChanged = { [weak self] in self?.updateMenuBar() }
 
-        // Create popover
         popover = NSPopover()
         let contentView = PortListView(portManager: portManager)
             .environmentObject(self)
@@ -95,7 +93,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         NSApp.setActivationPolicy(.accessory)
 
         // Global hotkey from anywhere toggles the popover (permission-free
-        // Carbon API); the shortcut is user-configurable via the gear menu.
+        // Carbon API); the shortcut is set in Settings > Shortcuts.
         registerStoredHotKey()
 
         // A refusal the CLI issues to an agent becomes a notification here.
@@ -286,7 +284,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
                 popover.performClose(nil)
             } else {
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-                // Bring app to front when popover is shown (optional)
                 NSApp.activate(ignoringOtherApps: true)
             }
         }

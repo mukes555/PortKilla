@@ -130,7 +130,7 @@ public struct PortInfo: Identifiable, Codable, Equatable {
             case .nodejs: return "hexagon.fill"
             case .database: return "cylinder.split.1x2.fill"
             case .webserver: return "globe"
-            case .python: return "ladybug.fill" // Or custom
+            case .python: return "ladybug.fill"
             case .java: return "cup.and.saucer.fill"
             case .ruby: return "diamond.fill"
             case .php: return "p.circle.fill"

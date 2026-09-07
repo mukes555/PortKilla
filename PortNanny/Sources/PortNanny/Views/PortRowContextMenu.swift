@@ -14,7 +14,7 @@ struct PortRowContextMenu: View {
         Button("Open in Browser") {
             Browser.openLocalhost(port: port.port)
         }
-        Button(manager.isWatched(port.port) ? "Unwatch :\(String(port.port))" : "Watch :\(String(port.port))") {
+        Button(manager.isWatched(port.port) ? "Stop Watching :\(String(port.port))" : "Watch :\(String(port.port))") {
             manager.toggleWatch(port.port)
         }
         Button(manager.isGuarded(port.port) ? "Remove Guard on :\(String(port.port))" : "Guard :\(String(port.port))") {

@@ -21,7 +21,6 @@ struct HistoryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 Text("Time")
                     .frame(width: 60, alignment: .leading)
@@ -107,6 +106,9 @@ struct HistoryView: View {
                 Spacer()
 
                 Button("Clear History") {
+                    guard KillConfirm.run(title: "Clear the history?",
+                                          message: "Every kill and refusal PortNanny has recorded goes away. This cannot be undone.",
+                                          confirmTitle: "Clear") else { return }
                     HistoryManager.shared.clearHistory()
                 }
                 .buttonStyle(.bordered)

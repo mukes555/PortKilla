@@ -97,7 +97,7 @@ extension PortManager {
                     } else {
                         // Not a failure yet: the signal was delivered and the
                         // process may still be shutting down.
-                        let hint = force ? "" : " Option+click to force kill (SIGKILL)."
+                        let hint = force ? "" : " Option-click to force kill (SIGKILL)."
                         self.lastErrorMessage = "\(subject) is still shutting down.\(hint)"
                         onNotTerminated?()
                     }

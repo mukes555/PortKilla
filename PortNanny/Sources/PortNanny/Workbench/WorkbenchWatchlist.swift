@@ -7,6 +7,7 @@ struct WorkbenchWatchlist: View {
     @Binding var selection: String?
     @State private var newPortText = ""
     @State private var leases: [Reservation] = []
+    @Environment(\.colorScheme) private var colorScheme
 
     private var ports: [Int] {
         portManager.watchedPorts.union(portManager.guardedPorts).sorted()
@@ -108,6 +109,9 @@ struct WorkbenchWatchlist: View {
             }
             Spacer()
             Button("Release") {
+                guard KillConfirm.run(title: "Release :\(lease.port)?",
+                                      message: "\(lease.describedHolder) is holding it \(lease.expiryDescription()). Releasing lets anything else take the port.",
+                                      confirmTitle: "Release") else { return }
                 _ = ReservationStore.shared.release(port: lease.port, by: nil, force: true)
                 loadLeases()
             }
@@ -131,6 +135,7 @@ struct WorkbenchWatchlist: View {
                     .foregroundColor(portManager.isWatched(port) ? .yellow : .secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(portManager.isWatched(port) ? "Stop watching port \(port)" : "Watch port \(port)")
             .help(portManager.isWatched(port) ? "Stop watching" : "Watch")
 
             Button {
@@ -140,6 +145,7 @@ struct WorkbenchWatchlist: View {
                     .foregroundColor(portManager.isGuarded(port) ? .orange : .secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(portManager.isGuarded(port) ? "Remove guard on port \(port)" : "Guard port \(port)")
             .help(portManager.isGuarded(port) ? "Remove guard" : "Guard: auto-kill whatever takes it")
 
             Text(":\(String(port))")
@@ -169,7 +175,7 @@ struct WorkbenchWatchlist: View {
                 .controlSize(.small)
             } else {
                 Text("free")
-                    .foregroundColor(.green)
+                    .foregroundColor(Color.green.legible(in: colorScheme))
                 Spacer()
             }
         }

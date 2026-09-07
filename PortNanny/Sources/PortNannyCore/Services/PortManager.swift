@@ -63,6 +63,12 @@ public class PortManager: ObservableObject {
     public let processScanner = ProcessScanner()
     public let killer = ProcessKiller()
     public var refreshTimer: Timer?
+    /// Set by the debug render hooks: the ports come from scripted data and
+    /// a refresh must not replace them with real ones.
+    public private(set) var usesDemoData = false
+    /// Whose processes count as "mine" (the rest hide as system ones); the
+    /// demo hooks point it at their made-up user.
+    public var currentUser = NSUserName()
     private var toastWorkItem: DispatchWorkItem?
     public var shouldRestartTimerOnIntervalChange = false
 
@@ -359,12 +365,13 @@ public class PortManager: ObservableObject {
         shouldRestartTimerOnIntervalChange = true
         isRestoringPreferences = false
 
-        // In debug, the demo-GIF hook drives state manually — no live scanning.
-        var isDemoMode = false
+        // In debug, the demo hooks drive state by hand: no live scan, so a
+        // README image never shows this Mac's ports.
         #if DEBUG
-        isDemoMode = Foundation.ProcessInfo.processInfo.environment["PORTNANNY_DEMO_GIF"] != nil
+        let environment = Foundation.ProcessInfo.processInfo.environment
+        usesDemoData = environment["PORTNANNY_DEMO_GIF"] != nil || environment["PORTNANNY_SNAPSHOT_DATA"] == "demo"
         #endif
-        if !isDemoMode && autoStart {
+        if !usesDemoData && autoStart {
             startAutoRefresh()
 
             // Once a day, quietly see if a newer release exists. Deferred so

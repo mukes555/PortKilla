@@ -39,7 +39,7 @@ extension AppDelegate {
         // 1. The full picture
         addFrame(delay: 2.0)
 
-        // 2–4. Typing ":3000" into search
+        // 2 to 4. Typing ":3000" into search
         addFrame(search: "3", delay: 0.45)
         addFrame(search: "300", delay: 0.4)
         addFrame(search: "3000", selected: selectedNodeId, delay: 1.6)
@@ -49,7 +49,7 @@ extension AppDelegate {
         manager.toastMessage = "Killed :3000"
         addFrame(search: "3000", delay: 2.0)
 
-        // 6. Back to the list — watched section confirms :3000 is free
+        // 6. Back to the list: the watched section confirms :3000 is free
         manager.toastMessage = nil
         addFrame(delay: 2.4)
 

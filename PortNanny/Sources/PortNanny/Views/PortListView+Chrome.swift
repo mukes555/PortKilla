@@ -57,7 +57,7 @@ extension PortListView {
         DensityToggle(density: $portManager.viewDensity)
     }
 
-    /// Overflow menu: actions only (never settings — those live in ⚙︎).
+    /// Overflow menu: actions only (never settings, those live in ⚙︎).
     var overflowMenu: some View {
         Menu {
             Button("Refresh") { portManager.refresh(showToast: true) }
@@ -97,7 +97,7 @@ extension PortListView {
         .help("Actions")
     }
 
-    /// Gear opens the dedicated Settings window — settings only, no actions.
+    /// Gear opens the dedicated Settings window: settings only, no actions.
     var settingsButton: some View {
         Button {
             appDelegate.openSettings()

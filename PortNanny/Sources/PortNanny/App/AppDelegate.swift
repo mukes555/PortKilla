@@ -116,7 +116,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         }
 
         // Developer-only rendering hooks (screenshots, README GIF, CI smoke
-        // test). Compiled only in debug builds — never in the shipped app.
+        // test). Compiled only in debug builds, never in the shipped app.
         #if DEBUG
         installDevHooks()
         #endif
@@ -201,7 +201,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
 
         pinnedPanel = panel
         isPinned = true
-        // The pinned window replaces the popover — close it so there aren't
+        // The pinned window replaces the popover: close it so there aren't
         // two identical copies on screen.
         popover.performClose(nil)
         portManager.setUIVisible(true)
@@ -273,7 +273,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     }
 
     @objc func togglePopover() {
-        // While pinned, there's a floating window already — don't open a second
+        // While pinned, there's a floating window already: don't open a second
         // identical popover; just bring the pinned window forward.
         if let panel = pinnedPanel {
             panel.makeKeyAndOrderFront(nil)

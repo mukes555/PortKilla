@@ -156,7 +156,7 @@ enum EditorLauncher {
         ("Trae", "com.trae.app"),
     ]
 
-    /// Probed once per launch — installing an editor mid-session is rare.
+    /// Probed once per launch: installing an editor mid-session is rare.
     static let installed: [Editor] = candidates.compactMap { candidate in
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: candidate.bundleId)
             .map { Editor(name: candidate.name, appURL: $0) }

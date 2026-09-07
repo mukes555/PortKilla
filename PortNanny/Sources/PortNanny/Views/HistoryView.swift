@@ -77,7 +77,7 @@ struct HistoryView: View {
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundColor(item.action == .refused ? .orange : .red)
 
-                                // The same server tends to come back — offer a re-kill
+                                // The same server tends to come back, so offer a re-kill
                                 if isPortActiveAgain(item.port) {
                                     Button("Kill again") {
                                         killAgain(item)

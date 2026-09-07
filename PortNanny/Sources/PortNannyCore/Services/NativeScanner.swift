@@ -1,7 +1,7 @@
 import Foundation
 import CLibProc
 
-/// Raw-syscall process and socket enumeration via libproc — what lsof and ps
+/// Raw-syscall process and socket enumeration via libproc: what lsof and ps
 /// do internally, without spawning a single subprocess. A full scan takes
 /// microseconds instead of ~100ms of fork/exec/parse.
 public enum NativeScanner {
@@ -101,7 +101,7 @@ public enum NativeScanner {
                 newCPUSamples[pid] = (now, cpuNS)
 
                 // cpuNS < previous means the PID was recycled (the old process's
-                // counter is higher than the new one's) — a wrapping subtraction
+                // counter is higher than the new one's): a wrapping subtraction
                 // would show billions of %. Fall back to the lifetime average.
                 if let previous = previousSamples[pid], now > previous.time, cpuNS >= previous.cpuNS {
                     let deltaNS = Double(cpuNS - previous.cpuNS)

@@ -14,7 +14,7 @@ extension PortManager {
         guardedPorts.contains(port)
     }
 
-    /// Confirmation happens in the UI — this just flips the state.
+    /// Confirmation happens in the UI: this just flips the state.
     public func toggleGuard(_ port: Int) {
         if guardedPorts.contains(port) {
             guardedPorts.remove(port)
@@ -76,7 +76,7 @@ extension PortManager {
         let freed = pendingFreeNotifications.subtracting(stillBusy)
         for port in freed.sorted() {
             // Watched ports already got a "free" notification from the watch
-            // diff this cycle — don't send a second one for the same event.
+            // diff this cycle: don't send a second one for the same event.
             if !watchedPorts.contains(port) {
                 notify(.portFreed, title: "Port \(port) is free", body: "The process finally exited: :\(port) is available now.")
             }

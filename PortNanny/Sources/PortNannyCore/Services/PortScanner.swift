@@ -237,8 +237,8 @@ public class PortScanner {
 
     // MARK: - Working directories
 
-    /// Resolves working directories for PIDs not yet cached — native syscall
-    /// first, one lsof batch as fallback — and drops entries for dead PIDs.
+    /// Resolves working directories for PIDs not yet cached (native syscall
+    /// first, one lsof batch as fallback) and drops entries for dead PIDs.
     private func refreshWorkingDirectories(for pids: [Int], processes: ProcessTable) {
         cwdLock.lock()
         let live = Set(pids)
@@ -300,7 +300,7 @@ public class PortScanner {
     }
 
     /// A cwd only counts as a "project" when it's a real directory the user
-    /// would recognize — not /, not the bare home folder.
+    /// would recognize: not /, not the bare home folder.
     private func projectWorthyPath(_ path: String?) -> String? {
         guard let path, !path.isEmpty else { return nil }
         if path == "/" || path == NSHomeDirectory() {

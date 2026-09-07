@@ -20,10 +20,10 @@ Changed / Fixed / Security / Distribution**. Accumulate them under
 
 ## Cutting a release
 
-1. Move the `[Unreleased]` notes into a new `## <version> — <YYYY-MM-DD>` section.
+1. Move the `[Unreleased]` notes into a new `## <version> (<YYYY-MM-DD>)` section.
 2. Bump `VERSION=` in `PortNanny/scripts/build.sh` and the DMG reference in
    `README.md`.
-3. Merge to `main` (via PR — never push to `main` directly).
+3. Merge to `main` (via PR, never push to `main` directly).
 4. Tag and push:
    ```bash
    git tag v<version> && git push origin v<version>

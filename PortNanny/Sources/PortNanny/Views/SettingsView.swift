@@ -4,7 +4,7 @@ import AppKit
 
 /// The dedicated Settings window (⌘,), styled like macOS System Settings:
 /// a sidebar of categories on the left, the selected pane on the right.
-/// Everything here is a preference — never an action.
+/// Everything here is a preference, never an action.
 struct SettingsView: View {
     @ObservedObject var portManager: PortManager
     @EnvironmentObject var appDelegate: AppDelegate
@@ -282,7 +282,7 @@ private struct ShortcutsSettings: View {
                     Button("Change…") { recording = true }
                     Button("Reset") { appDelegate.resetHotKey() }
                 }
-                Text("Works from any app — no Accessibility permission required.")
+                Text("Works from any app, no Accessibility permission required.")
                     .settingsCaption()
             }
 

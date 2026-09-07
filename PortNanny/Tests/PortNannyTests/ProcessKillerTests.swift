@@ -13,7 +13,7 @@ final class ProcessKillerTests: XCTestCase {
         XCTAssertTrue(ProcessKiller.namesMatch(expected: "node", actual: "node"))
         XCTAssertTrue(ProcessKiller.namesMatch(expected: "Node", actual: "node")) // case-insensitive
         XCTAssertFalse(ProcessKiller.namesMatch(expected: "node", actual: "python"))
-        // Empty means "can't verify" — must NOT match (was: hasPrefix("") always true)
+        // Empty means "can't verify" and must NOT match (was: hasPrefix("") always true)
         XCTAssertFalse(ProcessKiller.namesMatch(expected: "", actual: "anything"))
         XCTAssertFalse(ProcessKiller.namesMatch(expected: "anything", actual: ""))
         XCTAssertFalse(ProcessKiller.namesMatch(expected: "", actual: ""))

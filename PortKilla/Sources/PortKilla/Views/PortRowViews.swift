@@ -243,11 +243,7 @@ struct PortRowView: View {
                             // signal. Live sessions are teal; an ended session
                             // or a plain editor terminal is grey (safe to kill).
                             if let agent = port.agentOwner {
-                                // Grey plus the moon says "ended"; the suffix
-                                // lives in the tooltip and the CLI.
-                                Chip(icon: agent.sessionEnded ? "moon.zzz" : "sparkles", text: agent.name,
-                                     tint: agent.isLiveAgentSession ? .chipTeal : .secondary)
-                                    .help(agent.detail)
+                                AgentChip(agent: agent)
                             }
 
                             // Clean mode: surface the project/container inline

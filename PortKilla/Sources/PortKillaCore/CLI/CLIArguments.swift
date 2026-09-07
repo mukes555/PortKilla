@@ -80,8 +80,10 @@ public enum CLIArguments {
             return nil
         }
         let rest = Array(arguments.dropFirst())
-        // `portkilla kill --help` is the first thing people (and agents) try.
-        if rest.contains("--help") || rest.contains("-h") {
+        // `portkilla kill --help` is the first thing people (and agents) try;
+        // after `--` the flags belong to the command exec runs.
+        let ours = rest.prefix { $0 != "--" }
+        if ours.contains("--help") || ours.contains("-h") {
             return .success(.help(topic: command))
         }
 
@@ -309,6 +311,8 @@ public enum CLIArguments {
             let arg = args[index]
             if arg == "--json" {
                 options.json = true
+            } else if arg == "--all" {
+                options.all = true
             } else if arg == "--port" || arg == "--limit" {
                 guard index + 1 < args.count else { return .failure(.missingValue(arg)) }
                 index += 1

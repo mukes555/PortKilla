@@ -17,60 +17,50 @@ extension CLIKill {
         let commandText: String?
         /// "stop nodemon (PID 700) instead of node (PID 812) on :3000, because ..."
         let substitution: String?
+        /// Other listeners a supervisor would take down with the target; the
+        /// guard judges them too, and they are named in the plan.
+        let alsoStops: [PortInfo]
         /// Why nothing can be done here.
         let blocked: String?
 
-        static func plain(_ target: PortInfo) -> Plan {
+        static func plain(_ target: PortInfo, blocked: String? = nil) -> Plan {
             Plan(target: target, signalPid: target.pid, signalName: target.processName, killTree: false,
-                 command: nil, commandText: nil, substitution: nil, blocked: nil)
-        }
-
-        static func blocked(_ target: PortInfo, _ reason: String) -> Plan {
-            Plan(target: target, signalPid: target.pid, signalName: target.processName, killTree: false,
-                 command: nil, commandText: nil, substitution: nil, blocked: reason)
+                 command: nil, commandText: nil, substitution: nil, alsoStops: [], blocked: blocked)
         }
     }
 
-    static func plan(for target: PortInfo, force: Bool, table: ProcessTable,
+    static func plan(for target: PortInfo, force: Bool, table: ProcessTable, ports: [PortInfo] = [],
                      resolve: (String) -> String? = { ToolLocator.resolve($0) }) -> Plan {
         guard let managed = target.managedBy else { return .plain(target) }
         let subject = "\(target.processName) (PID \(target.pid)) on :\(target.port)"
 
-        // Docker's backend process is never the thing to kill; --force means
-        // SIGKILL for the container, not for Docker Desktop.
-        if managed.kind == .docker {
-            guard var argv = managed.stopArguments, let name = argv.last else {
-                return .blocked(target, "\(subject) is published by Docker Desktop for a container `docker ps` can name; PortKilla does not kill Docker itself.")
-            }
-            if force { argv = ["docker", "kill", "--", name] }
-            let text = argv.map(ManagedRuntime.shellQuoted).joined(separator: " ")
-            guard let tool = resolve(argv[0]) else {
-                return .blocked(target, "\(subject) is \(managed.label). Run `\(text)` (docker is not on PATH here).")
-            }
-            argv[0] = tool
-            return Plan(target: target, signalPid: target.pid, signalName: target.processName, killTree: false, command: argv, commandText: text,
-                        substitution: "run `\(text)` instead of killing \(subject), because \(managed.consequence)", blocked: nil)
-        }
-        guard !force else { return .plain(target) }
-
-        switch managed.kind {
-        case .docker:
-            return .plain(target)
-        case .reloader:
+        // A reloader is stopped with everything under it, so everything under
+        // it is part of the plan.
+        if managed.kind == .reloader, !force {
             guard let supervisor = managed.supervisorPid, let name = managed.supervisorName ?? table.name(for: supervisor) else { return .plain(target) }
+            let descendants = table.descendants(of: supervisor)
+            var seen: Set<Int> = [target.pid]
+            let also = ports.filter { descendants.contains($0.pid) && seen.insert($0.pid).inserted }
             return Plan(target: target, signalPid: supervisor, signalName: name, killTree: true, command: nil, commandText: nil,
-                        substitution: "stop \(managed.label) instead of \(subject), because \(managed.consequence)", blocked: nil)
-        case .pm2, .launchd:
-            guard var argv = managed.stopArguments, let text = managed.stopCommand else {
-                return .blocked(target, "\(subject) is managed by \(managed.label) and \(managed.consequence). Pass --force to kill it anyway.")
-            }
-            guard let tool = resolve(argv[0]) else {
-                return .blocked(target, "\(subject) is managed by \(managed.label) and \(managed.consequence). Run `\(text)` (\(argv[0]) is not on PATH here), or pass --force to kill it anyway.")
-            }
-            argv[0] = tool
-            return Plan(target: target, signalPid: target.pid, signalName: target.processName, killTree: false, command: argv, commandText: text,
-                        substitution: "run `\(text)` instead of killing \(subject), because \(managed.consequence)", blocked: nil)
+                        substitution: "stop \(managed.label) instead of \(subject), because \(managed.consequence)", alsoStops: also, blocked: nil)
         }
+        // --force kills the listener itself; only Docker's backend is never
+        // the thing to kill, so --force there means `docker kill`.
+        if force, managed.kind != .docker { return .plain(target) }
+
+        guard var argv = managed.stopArguments(force: force), let text = managed.stopCommand(force: force) else {
+            if managed.kind == .docker {
+                return .plain(target, blocked: "\(subject) is published by Docker Desktop for a container `docker ps` can name; PortKilla does not kill Docker itself.")
+            }
+            return .plain(target, blocked: "\(subject) is managed by \(managed.label) and \(managed.consequence). Pass --force to kill it anyway.")
+        }
+        guard let tool = resolve(argv[0]) else {
+            let hint = managed.kind == .docker ? "" : ", or pass --force to kill it anyway"
+            return .plain(target, blocked: "\(subject) is managed by \(managed.label) and \(managed.consequence). Run `\(text)` (\(argv[0]) is not on PATH here)\(hint).")
+        }
+        argv[0] = tool
+        return Plan(target: target, signalPid: target.pid, signalName: target.processName, killTree: false, command: argv, commandText: text,
+                    substitution: "run `\(text)` instead of killing \(subject), because \(managed.consequence)", alsoStops: [], blocked: nil)
     }
 
     static func execute(_ plans: [Plan], options: CLICommand.KillOptions, report: inout Report) -> Outcome {
@@ -106,8 +96,8 @@ extension CLIKill {
             }
         }
 
-        // A supervisor's child may take a moment longer than the supervisor.
-        let awaited = signalled.flatMap { [$0.signalPid, $0.target.pid] }
+        // A supervisor's children may take a moment longer than the supervisor.
+        let awaited = signalled.flatMap { [$0.signalPid, $0.target.pid] + $0.alsoStops.map(\.pid) }
         let stillRunning = waitForExit(awaited, timeout: PortManager.exitTimeout(force: options.force) + 1, killer: killer)
         // `docker stop` alone waits up to ten seconds for a graceful exit.
         let stillListening = ManagedRuntime.waitForPortsFree(commanded.map(\.target.port), timeout: 12)
@@ -120,7 +110,8 @@ extension CLIKill {
             let target = plan.target
             let leftover = options.orphaned ? " (\(target.agentOwner?.label ?? "orphaned"))" : ""
             if plan.signalPid != target.pid {
-                return "Stopped \(plan.signalName) (PID \(plan.signalPid)), and with it \(target.processName) (PID \(target.pid)) on :\(target.port)."
+                let also = plan.alsoStops.isEmpty ? "" : " and " + plan.alsoStops.map { ":\($0.port)" }.joined(separator: ", ")
+                return "Stopped \(plan.signalName) (PID \(plan.signalPid)), and with it \(target.processName) (PID \(target.pid)) on :\(target.port)\(also)."
             }
             return "Killed \(target.processName) (PID \(target.pid)) on :\(target.port)\(leftover)."
         }
@@ -150,6 +141,10 @@ extension CLIKill {
             let how = plan.commandText.map { " (\($0))" } ?? ""
             store.addEntry(port: plan.target.port, processName: plan.target.processName, action: .killed,
                            owner: plan.target.agentOwner?.name, killedBy: actor + how)
+            for taken in plan.alsoStops {
+                store.addEntry(port: taken.port, processName: taken.processName, action: .killed,
+                               owner: taken.agentOwner?.name, killedBy: actor + " (with \(plan.signalName), PID \(plan.signalPid))")
+            }
         }
     }
 }

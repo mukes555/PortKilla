@@ -68,7 +68,7 @@ struct WorkbenchInspector: View {
                 if port.isExposed { Chip(icon: "wifi.exclamationmark", text: "exposed", tint: .chipOrange) }
                 if port.connections > 0 { Chip(icon: "person.2", text: "\(port.connections) clients", tint: .chipBlue) }
                 if let agent = port.agentOwner {
-                    Chip(icon: agent.sessionEnded ? "moon.zzz" : "sparkles", text: agent.label, tint: agent.isLiveAgentSession ? .chipTeal : .secondary)
+                    AgentChip(agent: agent)
                 }
                 if let managed = port.managedBy {
                     Chip(icon: managed.kind == .docker ? "shippingbox" : "arrow.triangle.2.circlepath", text: managed.short,

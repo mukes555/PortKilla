@@ -75,9 +75,11 @@ struct WorkbenchWatchlist: View {
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.9))
     }
 
-    /// Leases live in the shared store; re-read when the list refreshes.
+    /// Leases live in the shared store; the cached read is cheap enough per
+    /// scan, and the state only changes when the leases did.
     private func loadLeases() {
-        leases = ReservationStore.appStore().all()
+        let fresh = ReservationStore.shared.recent()
+        if fresh != leases { leases = fresh }
     }
 
     /// "Reserved by Claude Code (session 56034) until 12:30 (8m left), for e2e tests"
@@ -106,7 +108,7 @@ struct WorkbenchWatchlist: View {
             }
             Spacer()
             Button("Release") {
-                _ = ReservationStore.appStore().release(port: lease.port, by: nil, force: true)
+                _ = ReservationStore.shared.release(port: lease.port, by: nil, force: true)
                 loadLeases()
             }
             .controlSize(.small)
@@ -151,13 +153,12 @@ struct WorkbenchWatchlist: View {
                     HStack(spacing: 6) {
                         Text(occupant.processName).fontWeight(.medium)
                         if let agent = occupant.agentOwner {
-                            Chip(icon: agent.sessionEnded ? "moon.zzz" : "sparkles", text: agent.label,
-                                 tint: agent.isLiveAgentSession ? .chipTeal : .secondary)
+                            AgentChip(agent: agent)
                         }
                     }
                 }
                 .buttonStyle(.plain)
-                if portManager.isGuarded(port), portManager.guardHasStruckOut(on: port) {
+                if portManager.isGuarded(port), portManager.guardIsStruckOut(on: port) {
                     Chip(icon: "pause", text: "guard paused", tint: .chipOrange)
                         .help("The guard gave up on this port after repeated respawns")
                 }

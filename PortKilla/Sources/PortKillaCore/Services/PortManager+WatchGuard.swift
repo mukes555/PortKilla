@@ -97,11 +97,20 @@ extension PortManager {
     private static let guardStrikeLimit = 3
     private static let guardStrikeWindow: TimeInterval = 60
 
-    public func guardHasStruckOut(on port: Int) -> Bool {
+    /// Records one guard kill and says whether that was one too many. Only
+    /// the guard itself calls this; views ask `guardIsStruckOut`.
+    public func registerGuardStrike(on port: Int) -> Bool {
         let now = Date()
         var recent = (guardStrikes[port] ?? []).filter { now.timeIntervalSince($0) < Self.guardStrikeWindow }
         recent.append(now)
         guardStrikes[port] = recent
+        return recent.count > Self.guardStrikeLimit
+    }
+
+    /// Whether the guard on `port` has stood down, without touching the count.
+    public func guardIsStruckOut(on port: Int) -> Bool {
+        let now = Date()
+        let recent = (guardStrikes[port] ?? []).filter { now.timeIntervalSince($0) < Self.guardStrikeWindow }
         return recent.count > Self.guardStrikeLimit
     }
 
@@ -154,7 +163,7 @@ extension PortManager {
                                 title: "Guard on :\(event.port)",
                                 body: "'\(name)' took the port but was not auto-killed. \(reason)"
                             )
-                        } else if guardHasStruckOut(on: event.port) {
+                        } else if registerGuardStrike(on: event.port) {
                             guardedPorts.remove(event.port)
                             guardStrikes[event.port] = nil
                             notify(

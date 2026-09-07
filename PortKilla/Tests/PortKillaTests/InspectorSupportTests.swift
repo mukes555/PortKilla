@@ -53,7 +53,7 @@ final class InspectorSupportTests: XCTestCase {
         XCTAssertNil(HTTPPeek.title(in: "<html><body>no title</body></html>"))
         XCTAssertNil(HTTPPeek.title(in: "<title></title>"))
         XCTAssertEqual(HTTPPeek.title(in: "<title>" + String(repeating: "x", count: 200) + "</title>")?.count, 80)
-        let result = HTTPPeek.Result(status: 200, server: "Vite", contentType: "text/html; charset=utf-8", title: "Vite App", finalURL: nil)
+        let result = HTTPPeek.Result(status: 200, server: "Vite", contentType: "text/html; charset=utf-8", title: "Vite App", redirect: nil)
         XCTAssertEqual(result.summary, "200 · text/html · Vite App")
     }
 

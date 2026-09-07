@@ -50,7 +50,7 @@ public enum CLICompletions {
       wait) _arguments '--json' '--timeout[seconds]:seconds' ;;
       free-port) _arguments '--json' '--prefer[port]:port' '--range[A-B]:range' ;;
       schema) _values 'command' list kill whois whoami wait history version doctor agents free-port reserve release reservations drift ;;
-      history) _arguments '--json' '--port[port]:port' '--limit[count]:count' ;;
+      history) _arguments '--json' '--all' '--port[port]:port' '--limit[count]:count' ;;
       whois) _arguments '--json' '--pid[process id]:pid' ;;
       reserve) _arguments '--json' '--for[duration, e.g. 10m]:duration' '--reason[why]:reason' ;;
       release) _arguments '--json' '--force' ;;
@@ -78,7 +78,7 @@ public enum CLICompletions {
         wait) COMPREPLY=( $(compgen -W "--json --timeout" -- "$cur") ) ;;
         free-port) COMPREPLY=( $(compgen -W "--json --prefer --range" -- "$cur") ) ;;
         schema) COMPREPLY=( $(compgen -W "list kill whois whoami wait history version doctor agents free-port reserve release reservations drift" -- "$cur") ) ;;
-        history) COMPREPLY=( $(compgen -W "--json --port --limit" -- "$cur") ) ;;
+        history) COMPREPLY=( $(compgen -W "--json --all --port --limit" -- "$cur") ) ;;
         whois) COMPREPLY=( $(compgen -W "--json --pid" -- "$cur") ) ;;
         reserve) COMPREPLY=( $(compgen -W "--json --for --reason" -- "$cur") ) ;;
         release) COMPREPLY=( $(compgen -W "--json --force" -- "$cur") ) ;;
@@ -103,7 +103,7 @@ public enum CLICompletions {
     complete -c portkilla -n '__fish_seen_subcommand_from wait' -l json -l timeout
     complete -c portkilla -n '__fish_seen_subcommand_from free-port' -l json -l prefer -l range
     complete -c portkilla -n '__fish_seen_subcommand_from schema' -a 'list kill whois whoami wait history version doctor agents free-port reserve release reservations drift'
-    complete -c portkilla -n '__fish_seen_subcommand_from history' -l json -l port -l limit
+    complete -c portkilla -n '__fish_seen_subcommand_from history' -l json -l all -l port -l limit
     complete -c portkilla -n '__fish_seen_subcommand_from whois' -l json -l pid
     complete -c portkilla -n '__fish_seen_subcommand_from reserve' -l json -l for -l reason
     complete -c portkilla -n '__fish_seen_subcommand_from release' -l json -l force

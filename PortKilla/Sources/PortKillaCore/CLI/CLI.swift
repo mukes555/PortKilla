@@ -147,9 +147,10 @@ public enum PortKillaCLI {
     /// The first port nothing listens on that can be bound right now. A bind
     /// probe catches what the listener table can't see (another user's
     /// socket, a port in TIME_WAIT with SO_REUSEADDR off).
-    public static func firstFreePort(prefer: Int, range: ClosedRange<Int>, listening: Set<Int>) -> Int? {
-        let ordered = [prefer] + range.filter { $0 != prefer }
-        return ordered.first { !listening.contains($0) && PortProbe.canBind($0) }
+    public static func firstFreePort(prefer: Int, range: ClosedRange<Int>, listening: Set<Int>, probe: Bool = true) -> Int? {
+        func isFree(_ port: Int) -> Bool { !listening.contains(port) && (!probe || PortProbe.canBind(port)) }
+        if isFree(prefer) { return prefer }
+        return range.lazy.filter { $0 != prefer }.first(where: isFree)
     }
 
     private static func freePort(prefer: Int, range: ClosedRange<Int>, json: Bool) -> Int32 {
@@ -229,7 +230,7 @@ public enum PortKillaCLI {
                 "\(port.pid)".padding(toLength: 8, withPad: " ", startingAt: 0),
                 port.processName.padding(toLength: 22, withPad: " ", startingAt: 0),
                 port.memoryUsage.padding(toLength: 10, withPad: " ", startingAt: 0),
-                (port.agentOwner?.label ?? "—").padding(toLength: 22, withPad: " ", startingAt: 0),
+                (port.agentOwner?.label ?? "-").padding(toLength: 22, withPad: " ", startingAt: 0),
                 port.bindAddress ?? ""
             ].joined()
             print(line)
@@ -310,13 +311,7 @@ public enum PortKillaCLI {
     /// The CLI half of the app's "notify me when this frees up".
     public static func waitUntilFree(port: Int, timeout: TimeInterval) -> WaitReport {
         let start = Date()
-        var isFree = false
-        while true {
-            let listeners = NativeScanner.allListeners() ?? []
-            isFree = !listeners.contains { $0.port == port }
-            if isFree || Date().timeIntervalSince(start) >= timeout { break }
-            Thread.sleep(forTimeInterval: 0.25)
-        }
+        let isFree = ManagedRuntime.waitForPortsFree([port], timeout: timeout).isEmpty
         let waited = Date().timeIntervalSince(start)
         return WaitReport(port: port, free: isFree, waitedSeconds: (waited * 100).rounded() / 100,
                           exitCode: isFree ? CLIExit.ok : CLIExit.stillRunning)
@@ -340,7 +335,7 @@ public enum PortKillaCLI {
     /// agent finds out what happened to a server that vanished.
     private static func history(_ options: CLICommand.HistoryOptions) -> Int32 {
         let store = HistoryManager.appStore()
-        var items = store.events
+        var items = options.all ? store.events : store.history
         if let port = options.port {
             items = items.filter { $0.port == port }
         }
@@ -363,8 +358,8 @@ public enum PortKillaCLI {
                 formatter.string(from: item.timestamp).padding(toLength: 21, withPad: " ", startingAt: 0),
                 ":\(item.port)".padding(toLength: 7, withPad: " ", startingAt: 0),
                 item.processName.padding(toLength: 22, withPad: " ", startingAt: 0),
-                (item.owner ?? "—").padding(toLength: 22, withPad: " ", startingAt: 0),
-                (item.action == .refused ? "refused: " : "") + (item.killedBy ?? "—")
+                (item.owner ?? "-").padding(toLength: 22, withPad: " ", startingAt: 0),
+                (item.action == .refused ? "refused: " : "") + (item.killedBy ?? "-")
             ].joined()
             print(line)
         }

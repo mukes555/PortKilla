@@ -172,6 +172,7 @@ extension PortManager {
                 String(port.memorySizeKB),
                 port.type.rawValue,
                 port.bindAddress ?? "",
+                String(port.connections),
             ]
             if depth == .full {
                 fields.append(port.containerName ?? "")

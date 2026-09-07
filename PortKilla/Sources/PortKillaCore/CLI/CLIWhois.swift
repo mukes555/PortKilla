@@ -33,6 +33,8 @@ public enum CLIWhois {
         let children: [PortInfo.ProcessInfo]?
         let agentOwner: AgentOwner?
         let managedBy: ManagedRuntime?
+        let expectedPort: ExpectedPort?
+        let expectedHeldBy: String?
         let evidence: AttributionEvidence
         /// What `kill` would do for the calling process, and why.
         let verdict: String
@@ -61,15 +63,17 @@ public enum CLIWhois {
         selection.port = options.port
         selection.pid = options.pid
         let targets = CLIKill.select(from: scan.ports, options: selection)
-        let dossiers = targets.map { dossier(for: $0, caller: scan.caller, table: scan.table, cwd: cwd) }
+        let dossiers = targets.map { dossier(for: $0, caller: scan.caller, table: scan.table, cwd: cwd, ports: scan.ports) }
         return Report(port: options.port, pid: options.pid, caller: scan.caller, targets: dossiers,
                       exitCode: dossiers.isEmpty ? CLIExit.notFound : CLIExit.ok)
     }
 
-    static func dossier(for port: PortInfo, caller: AgentOwner?, table: ProcessTable, cwd: String) -> Dossier {
+    static func dossier(for port: PortInfo, caller: AgentOwner?, table: ProcessTable, cwd: String, ports: [PortInfo] = []) -> Dossier {
         let decision = KillDecision.forAgent(caller: caller, target: port.agentOwner)
         var reason: String?
         if case .refuse(let why) = decision { reason = why }
+        let holder = port.expectedPort.flatMap { expected in ports.first { $0.port == expected.port } }
+            .map { "\($0.processName) (PID \($0.pid)\($0.agentOwner.map { ", \($0.label)" } ?? ""))" }
         return Dossier(
             port: port.port, proto: port.proto, bindAddress: port.bindAddress, pid: port.pid,
             processName: port.processName, command: port.command, user: port.user, type: port.type,
@@ -79,6 +83,8 @@ public enum CLIWhois {
             children: port.children,
             agentOwner: port.agentOwner,
             managedBy: port.managedBy,
+            expectedPort: port.expectedPort,
+            expectedHeldBy: holder,
             evidence: evidence(for: port, table: table),
             verdict: KillDecision.verdict(caller: caller, target: port.agentOwner, forced: false),
             reason: reason,
@@ -132,6 +138,10 @@ public enum CLIWhois {
         if let managed = dossier.managedBy {
             let verb = managed.stopCommand.map { "; stop it with `\($0)`" } ?? ""
             lines.append(row("managed by", "\(managed.label): \(managed.consequence)\(verb)"))
+        }
+        if let expected = dossier.expectedPort {
+            let holder = dossier.expectedHeldBy.map { ", held by \($0)" } ?? ", which is free now"
+            lines.append(row("expected", ":\(expected.port) (\(expected.source)); running here instead\(holder)"))
         }
         let why = dossier.reason.map { ": \($0)" } ?? ""
         lines.append(row("kill", "\(dossier.verdict)\(why)"))

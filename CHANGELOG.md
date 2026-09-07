@@ -22,6 +22,11 @@ release, rename it to the version and date.
   Workbench watchlist shows them with a Release button, and a listener on
   a leased port wears a "reserved" chip. MCP: `reserve_port`,
   `release_port`, and a `free_port` tool.
+- **Drift.** PortKilla reads the port a project meant to use (PORT in
+  `.env` files, `--port`/`PORT=` in package.json scripts, `port:` in
+  vite.config) and marks a web server that ended up elsewhere with an
+  "expected :3000" chip; the inspector and `whois` say who holds the port
+  it wanted. `portkilla drift` lists every such server.
 - **`portkilla exec`.** `portkilla exec --free-port --prefer 3000 -- npm
   run dev` picks a free port nobody has leased, exports `PORT`, leases the
   port for the run, exports `PORTKILLA_OWNER` and `PORTKILLA_SESSION`

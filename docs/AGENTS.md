@@ -101,6 +101,9 @@ even when your tool leaves no marker.
   reports `action: "stopped"`.
 - `portkilla free-port --prefer 3000` to pick a port instead of fighting
   for one.
+- `portkilla drift` when "the app is not where I expect": servers that
+  ended up off the port their project's .env, package.json, or vite.config
+  names, and who holds that port.
 - `portkilla kill --orphaned` to clean up servers left behind by sessions
   that have ended.
 - `portkilla list --mine` for the servers you may stop without `--force`.

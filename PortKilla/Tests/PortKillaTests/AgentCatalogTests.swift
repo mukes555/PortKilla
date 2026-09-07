@@ -93,7 +93,8 @@ final class AgentCatalogTests: XCTestCase {
         let anonymous = AgentOwner(name: "my-bot", source: .declared)
         XCTAssertTrue(KillDecision.forAgent(caller: one, target: two).isRefusal)
         XCTAssertEqual(KillDecision.forAgent(caller: one, target: one), .allow)
-        XCTAssertEqual(KillDecision.forAgent(caller: anonymous, target: two), .allow, "no key on one side means unknown, not different")
+        XCTAssertTrue(KillDecision.forAgent(caller: anonymous, target: two).isRefusal, "a bot that cannot show its session may not claim one that has a key")
+        XCTAssertEqual(KillDecision.forAgent(caller: one, target: anonymous), .allow, "no key on the target means nothing to compare")
     }
 
     func testTreeCallerPicksUpItsDeclaredSession() {

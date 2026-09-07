@@ -56,6 +56,8 @@ public enum DoctorAgents {
         table.entries.filter { AgentAttribution.match(command: $0.command, executableName: $0.name)?.name == entry.name }.count
     }
 
+    /// Only PATH counts: the doctor says what the agent's own shell would
+    /// find, not where a binary might be hiding.
     static func installed(_ entry: AgentCatalogEntry, path: String) -> String? {
         for executable in entry.executables {
             for directory in path.split(separator: ":") {

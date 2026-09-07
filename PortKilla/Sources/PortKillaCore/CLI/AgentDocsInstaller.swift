@@ -51,12 +51,30 @@ public enum AgentDocsInstaller {
 
     /// Appends the block, or replaces an existing one in place. Creates the
     /// file (and its folders) with the tool's frontmatter when it is new.
+    public enum InstallError: LocalizedError {
+        case unreadable(String)
+        case markersOutOfOrder(String)
+
+        public var errorDescription: String? {
+            switch self {
+            case .unreadable(let path): return "\(path) exists but is not readable as UTF-8 text; nothing was written"
+            case .markersOutOfOrder(let path): return "\(path) has a portkilla:end marker before its portkilla:begin marker; fix the markers by hand"
+            }
+        }
+    }
+
     public static func install(into file: URL) throws -> Result {
-        let existing = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+        // A file that exists but cannot be read must not be replaced by the block alone.
+        var existing = ""
+        if FileManager.default.fileExists(atPath: file.path) {
+            guard let text = try? String(contentsOf: file, encoding: .utf8) else { throw InstallError.unreadable(file.path) }
+            existing = text
+        }
         let fresh = block()
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
 
         if let start = existing.range(of: beginMarker), let end = existing.range(of: endMarker) {
+            guard start.lowerBound < end.upperBound else { throw InstallError.markersOutOfOrder(file.path) }
             let current = String(existing[start.lowerBound..<end.upperBound]) + "\n"
             if current == fresh { return .unchanged }
             let replaced = existing.replacingCharacters(in: start.lowerBound..<end.upperBound, with: fresh.trimmingCharacters(in: .newlines))

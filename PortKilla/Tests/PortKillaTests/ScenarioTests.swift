@@ -274,12 +274,17 @@ final class ScenarioTests: XCTestCase {
         let evidence = try XCTUnwrap(target["evidence"] as? [String: Any])
         XCTAssertEqual(evidence["decidedBy"] as? String, "declared")
         XCTAssertEqual(evidence["declaredOwner"] as? String, "scenario-bot")
-        XCTAssertEqual(target["verdict"] as? String, "allowed", "a caller without a session key is not known to be another session")
+        // Under an agent (a developer's Claude Code running the suite) both the
+        // caller and the server borrow that session, so they are the same one;
+        // on CI nothing attaches, and a name alone cannot claim a known session.
+        let callerHasSession = (report["caller"] as? [String: Any])?["sessionPid"] != nil
+        XCTAssertEqual(target["verdict"] as? String, callerHasSession ? "allowed" : "refused", same.stdout)
 
         let other = try portkilla(["whois", "\(port)"], owner: "scenario-bot", session: "session-two")
         XCTAssertEqual(other.exitCode, 0, other.stderr)
         XCTAssertTrue(other.stdout.contains("kill       refused: owned by another scenario-bot session (scenario-bot@session-one)"), other.stdout)
-        XCTAssertTrue(other.stdout.contains("owner      scenario-bot, declared via PORTKILLA_OWNER"), other.stdout)
+        XCTAssertTrue(other.stdout.contains("owner      scenario-bot"), other.stdout)
+        XCTAssertTrue(other.stdout.contains("declared via PORTKILLA_OWNER"), other.stdout)
     }
 
     func testOrphanedServersAreListedAndCleanedUp() throws {
@@ -346,13 +351,20 @@ final class ScenarioTests: XCTestCase {
         XCTAssertEqual(refused.exitCode, CLIExit.refused, refused.stdout)
         wait(for: [signalled], timeout: 5)
 
-        let history = try portkilla(["history", "--json", "--port", "\(port)"], owner: nil)
+        // Kills only by default, so `.[0].killedBy` never names an agent that
+        // was refused; --all adds the refusals.
+        let kills = try portkilla(["history", "--json", "--port", "\(port)"], owner: nil)
+        XCTAssertFalse(kills.stdout.contains("Refused"), kills.stdout)
+        let history = try portkilla(["history", "--json", "--port", "\(port)", "--all"], owner: nil)
         let items = try XCTUnwrap(try json(history.stdout) as? [[String: Any]])
         let refusal = try XCTUnwrap(items.first { $0["action"] as? String == "Refused" }, history.stdout)
-        XCTAssertEqual(refusal["killedBy"] as? String, "other-bot via CLI")
+        // Under a developer's agent the caller borrows that session ("other-bot
+        // (session N)"); on CI it has none.
+        let refusedCaller = try XCTUnwrap(refusal["killedBy"] as? String)
+        XCTAssertTrue(refusedCaller.hasPrefix("other-bot") && refusedCaller.hasSuffix(" via CLI"), refusedCaller)
         XCTAssertEqual(refusal["owner"] as? String, "scenario-bot")
-        let text = try portkilla(["history", "--port", "\(port)"], owner: nil)
-        XCTAssertTrue(text.stdout.contains("refused: other-bot via CLI"), text.stdout)
+        let text = try portkilla(["history", "--port", "\(port)", "--all"], owner: nil)
+        XCTAssertTrue(text.stdout.contains("refused: other-bot"), text.stdout)
     }
 
     func testLeasesKeepFreePortAndKillHonest() throws {

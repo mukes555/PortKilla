@@ -70,6 +70,15 @@ enum WorkbenchModel {
         }
     }
 
+    /// The badge counts, without building the groups.
+    static func projectCount(of ports: [PortInfo]) -> Int {
+        Set(ports.map { $0.projectPath ?? "" }).count
+    }
+
+    static func sessionCount(of ports: [PortInfo]) -> Int {
+        Set(ports.map { $0.agentOwner.map(sessionKey) ?? "(unattributed)" }).count
+    }
+
     private static func sessionKey(_ owner: AgentOwner) -> String {
         if owner.sessionEnded { return "\(owner.name) (ended)" }
         if owner.confidence == .editorTerminal { return "\(owner.name) terminal" }
@@ -88,7 +97,7 @@ enum WorkbenchModel {
         if owner.sessionEnded { return "session ended; anyone may stop these" }
         var parts: [String] = []
         if let pid = owner.sessionPid { parts.append("session \(pid)") }
-        if let key = owner.sessionKey { parts.append("id \(key.count <= 16 ? key : String(key.prefix(8)))") }
+        if let key = owner.shortSessionKey { parts.append("id \(key)") }
         parts.append(owner.source == .declared ? "declared" : "from \(owner.source.rawValue)")
         return parts.joined(separator: " · ")
     }

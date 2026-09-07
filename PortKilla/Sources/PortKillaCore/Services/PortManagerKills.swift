@@ -167,6 +167,14 @@ extension PortManager {
                 }
                 return
             }
+            // A plain kill would be undone; without a confirm step to offer
+            // the right verb, say so instead of pretending.
+            if let managed = target.managedBy, !force, confirm == nil {
+                DispatchQueue.main.async {
+                    self.showToast(":\(portNumber) is \(managed.label); stop it from the list")
+                }
+                return
+            }
             DispatchQueue.main.async {
                 if let confirm, !confirm(target) { return }
                 self.killPort(target, force: force, initiator: initiator)

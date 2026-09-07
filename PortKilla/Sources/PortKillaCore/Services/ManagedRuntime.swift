@@ -54,6 +54,18 @@ public struct ManagedRuntime: Codable, Equatable {
         }
     }
 
+    /// The verb for a graceful stop, or for --force: Docker's backend is never
+    /// the thing to kill, so force means `docker kill` for the container.
+    public func stopArguments(force: Bool) -> [String]? {
+        guard let stopArguments else { return nil }
+        if force, kind == .docker, let name = stopArguments.last { return ["docker", "kill", "--", name] }
+        return stopArguments
+    }
+
+    public func stopCommand(force: Bool) -> String? {
+        stopArguments(force: force).map { $0.map(ManagedRuntime.shellQuoted).joined(separator: " ") }
+    }
+
     /// Why a plain kill is the wrong verb.
     public var consequence: String {
         switch kind {
@@ -121,7 +133,8 @@ extension ManagedRuntime {
             return ManagedRuntime(kind: .launchd, name: label, supervisorPid: jobRoot, supervisorName: processes.name(for: jobRoot), stop: launchdStop(label: label))
         }
         for ancestor in chain {
-            if let signature = reloaders.first(where: { $0.matches(ancestor.command.lowercased(), ancestor.name) }) {
+            let lower = ancestor.command.lowercased()
+            if let signature = reloaders.first(where: { $0.matches(lower, ancestor.name) }) {
                 return ManagedRuntime(kind: .reloader, name: signature.name, supervisorPid: ancestor.pid, supervisorName: ancestor.name)
             }
         }
@@ -149,7 +162,8 @@ extension ManagedRuntime {
             let name = processes.name(for: next) ?? "?"
             let command = processes.command(for: next) ?? ""
             let ppid = processes.ppid(for: next) ?? 0
-            let plainShell = shells.contains(name) && !reloaders.contains { $0.matches(command.lowercased(), name) }
+            let lower = command.lowercased()
+            let plainShell = shells.contains(name) && !reloaders.contains { $0.matches(lower, name) }
             if !plainShell {
                 chain.append(Ancestor(pid: next, ppid: ppid, name: name, command: command))
             }
@@ -177,12 +191,24 @@ extension ManagedRuntime {
         NativeScanner.environmentMarkers(Int32(pid), keys: ["name", "pm_id"])
     }
 
+    /// The app id or name comes out of the target's own environment, so it
+    /// is only ever handed to pm2 when it can be nothing but an app: a number,
+    /// or a plain name that is not a flag and not pm2's "all".
     static func pm2(for pid: Int, facts: [String: String]) -> ManagedRuntime {
-        let name = facts["name"].flatMap { $0.isEmpty ? nil : $0 } ?? facts["pm_id"]
-        guard let name else {
-            return ManagedRuntime(kind: .pm2, name: "an app `pm2 list` can name")
+        if let name = facts["name"].flatMap(pm2SafeName) {
+            return ManagedRuntime(kind: .pm2, name: name, stop: ["pm2", "stop", name])
         }
-        return ManagedRuntime(kind: .pm2, name: name, stop: ["pm2", "stop", name])
+        if let id = facts["pm_id"], !id.isEmpty, id.allSatisfy(\.isNumber) {
+            return ManagedRuntime(kind: .pm2, name: "app \(id)", stop: ["pm2", "stop", id])
+        }
+        return ManagedRuntime(kind: .pm2, name: "an app `pm2 list` can name")
+    }
+
+    static func pm2SafeName(_ raw: String) -> String? {
+        let name = raw.prefix(64)
+        let safe = !name.isEmpty && name.first != "-" && name.lowercased() != "all"
+            && name.allSatisfy { $0.isLetter || $0.isNumber || "._@:-".contains($0) }
+        return safe ? String(name) : nil
     }
 
     /// Homebrew services are launchd jobs too; `brew services` is the verb
@@ -195,7 +221,8 @@ extension ManagedRuntime {
         return ["launchctl", "bootout", "gui/\(getuid())/\(label)"]
     }
 
-    /// Ports still listening after `timeout`, polled through the native scanner.
+    /// Ports still listening after `timeout`, polled through the native
+    /// scanner; the CLI's `wait` and the stop verbs share it.
     public static func waitForPortsFree(_ ports: [Int], timeout: TimeInterval) -> Set<Int> {
         var busy = Set(ports)
         let deadline = Date().addingTimeInterval(timeout)
@@ -224,13 +251,20 @@ public final class LaunchdJobs {
 
     public func label(forPid pid: Int) -> String? {
         lock.lock()
-        defer { lock.unlock() }
-        if Date().timeIntervalSince(fetchedAt) > 15 {
-            let output = (try? CommandRunner.run("/bin/launchctl", ["list"], timeout: 3.0)) ?? ""
-            labelsByPid = Self.parse(output)
-            fetchedAt = Date()
-        }
-        return labelsByPid[pid]
+        let stale = Date().timeIntervalSince(fetchedAt) > 15
+        if stale { fetchedAt = Date() } // one refresher at a time; others use the old table
+        let table = labelsByPid
+        lock.unlock()
+        guard stale else { return table[pid] }
+
+        // The subprocess runs outside the lock, so a concurrent scan is not
+        // held for up to three seconds behind it.
+        let output = (try? CommandRunner.run("/bin/launchctl", ["list"], timeout: 3.0)) ?? ""
+        let fresh = Self.parse(output)
+        lock.lock()
+        labelsByPid = fresh
+        lock.unlock()
+        return fresh[pid]
     }
 
     /// "PID\tStatus\tLabel" per line; a dash for jobs not running.

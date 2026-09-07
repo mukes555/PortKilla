@@ -136,4 +136,14 @@ public struct ProcessTable {
     public func cpuPercent(for pid: Int) -> Double? { entriesByPid[pid]?.cpuPercent }
     public func ageSeconds(for pid: Int) -> Int? { entriesByPid[pid]?.ageSeconds }
     public func children(of pid: Int) -> [Entry] { childrenByPpid[pid] ?? [] }
+
+    /// Every process under `pid`, the set a tree kill takes down.
+    public func descendants(of pid: Int) -> Set<Int> {
+        var found: Set<Int> = []
+        var queue = children(of: pid).map(\.pid)
+        while let next = queue.popLast(), found.insert(next).inserted {
+            queue += children(of: next).map(\.pid)
+        }
+        return found
+    }
 }

@@ -43,8 +43,14 @@ public enum KillDecision: Equatable {
             let fromTerminal = caller.confidence == .editorTerminal ? "; commands from an editor terminal may come from its agent, add --force if you are the person" : ""
             return .refuse("owned by \(target.described), not \(caller.described)\(fromTerminal)")
         }
-        if caller.isSameSession(as: target) == false {
+        let sameSession = caller.isSameSession(as: target)
+        if sameSession == false {
             return .refuse("owned by another \(target.name) session (\(target.sessionId)), not yours (\(caller.sessionId))")
+        }
+        // The target's session is known and the caller's is not: a name alone
+        // is not enough to claim it (anyone can export a name).
+        if sameSession == nil && target.hasKnownSession {
+            return .refuse("owned by \(target.described) and your \(caller.name) session is unknown; export PORTKILLA_SESSION (or run from the agent's own shell) so PortKilla can tell it is you")
         }
         return .allow
     }

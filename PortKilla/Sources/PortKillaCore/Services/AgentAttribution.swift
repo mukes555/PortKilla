@@ -43,11 +43,14 @@ public struct AgentOwner: Codable, Equatable {
     /// or "Claude Code". A long key (a UUID) is shortened; a short one (a
     /// declared PORTKILLA_SESSION) is shown whole so two do not look alike.
     public var sessionId: String {
-        if let sessionKey {
-            let shown = sessionKey.count <= 16 ? sessionKey : String(sessionKey.prefix(8))
-            return "\(name)@\(shown)"
-        }
+        if let shortSessionKey { return "\(name)@\(shortSessionKey)" }
         return sessionPid.map { "\(name)#\($0)" } ?? name
+    }
+
+    /// The key as shown: a UUID is cut to eight characters, a declared
+    /// PORTKILLA_SESSION is shown whole so two do not look alike.
+    public var shortSessionKey: String? {
+        sessionKey.map { $0.count <= 16 ? $0 : String($0.prefix(8)) }
     }
 
     /// Same session as `other` when both know their session and it matches;
@@ -61,6 +64,12 @@ public struct AgentOwner: Codable, Equatable {
     /// An agent session that is still running: the case the guard protects.
     public var isLiveAgentSession: Bool {
         confidence == .agent && !sessionEnded
+    }
+
+    /// Whether this owner can be told apart from another session of the
+    /// same tool at all.
+    public var hasKnownSession: Bool {
+        sessionPid != nil || sessionKey != nil
     }
 
     /// Short form for tables and chips: "Claude Code", "Claude Code (ended)".
@@ -118,7 +127,10 @@ public enum AgentAttribution {
         let environment = environmentOf(pid)
         // An explicit PORTKILLA_OWNER is the documented way to label what you
         // start; it beats whatever the tree says, for targets as for callers.
-        if let declared = declaredOwner(in: environment) {
+        // The session still comes from the tree (or Claude's own markers), so
+        // two sessions that export the same name stay two sessions.
+        if var declared = declaredOwner(in: environment) {
+            attachSession(to: &declared, ofPid: pid, environment: environment, in: processes)
             return declared
         }
         let fromTree = ownerFromAncestry(ofPid: pid, in: processes)
@@ -144,7 +156,8 @@ public enum AgentAttribution {
     /// from the caller's own ancestry, else from the caller's own environment.
     public static func callerOwner(callerPid: Int, in processes: ProcessTable,
                             environment: [String: String] = ProcessInfo.processInfo.environment) -> AgentOwner? {
-        if let declared = declaredOwner(in: environment) {
+        if var declared = declaredOwner(in: environment) {
+            attachSession(to: &declared, ofPid: callerPid, environment: environment, in: processes)
             return declared
         }
         if var fromTree = ownerFromAncestry(ofPid: callerPid, in: processes), fromTree.confidence == .agent {
@@ -252,6 +265,23 @@ public enum AgentAttribution {
         let name = AgentSignatures.canonicalName(raw)
         guard !name.isEmpty else { return nil }
         return AgentOwner(name: name, sessionKey: declaredSession(in: environment), source: .declared)
+    }
+
+    /// A declared owner without a PORTKILLA_SESSION borrows the session the
+    /// scanner can see: the nearest agent in the ancestry (not through a
+    /// multiplexer), or Claude Code's own session markers.
+    static func attachSession(to owner: inout AgentOwner, ofPid pid: Int, environment: [String: String], in processes: ProcessTable) {
+        if owner.sessionKey == nil {
+            owner.sessionKey = environment[AgentSignatures.claudeSessionIdKey]
+        }
+        guard owner.sessionPid == nil else { return }
+        if let fromTree = ownerFromAncestry(ofPid: pid, in: processes), fromTree.confidence == .agent, !ancestryCrossesBarrier(ofPid: pid, in: processes) {
+            owner.sessionPid = fromTree.sessionPid
+            return
+        }
+        if let session = environment[AgentSignatures.claudeSessionKey].flatMap(Int.init), isAgentProcess(session, named: "Claude Code", in: processes) {
+            owner.sessionPid = session
+        }
     }
 
     /// PORTKILLA_SESSION, cleaned; nil when unset or blank.

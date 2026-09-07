@@ -96,7 +96,7 @@ public class PortScanner {
         return (tcp + udp).sorted { $0.port < $1.port }
     }
 
-    private struct RawListener {
+    struct RawListener {
         let processName: String
         let pid: Int
         let user: String
@@ -113,14 +113,15 @@ public class PortScanner {
     /// IPv4/IPv6 duplicates of the same (pid, port, proto) merge into one row;
     /// when one of them binds all interfaces, the merged row keeps that host
     /// so the "exposed" badge can't be masked.
-    private func mergeListener(_ raw: RawListener, into listeners: inout [RawListener]) {
+    func mergeListener(_ raw: RawListener, into listeners: inout [RawListener]) {
         if let existing = listeners.firstIndex(where: {
             $0.port == raw.port && $0.pid == raw.pid && $0.proto == raw.proto
         }) {
             if raw.isExposedHost && !listeners[existing].isExposedHost {
                 listeners[existing].host = raw.host
             }
-            listeners[existing].connections += raw.connections
+            // Each address family's row already carries the per-port total.
+            listeners[existing].connections = max(listeners[existing].connections, raw.connections)
             return
         }
         listeners.append(raw)
@@ -175,7 +176,7 @@ public class PortScanner {
         }
 
         // One read of the leases per scan; a listener on a leased port shows it.
-        let leases = isFull ? Dictionary(ReservationStore.appStore().all().map { ($0.port, $0) }, uniquingKeysWith: { a, _ in a }) : [:]
+        let leases = isFull ? Dictionary(ReservationStore.shared.recent().map { ($0.port, $0) }, uniquingKeysWith: { a, _ in a }) : [:]
         let ports = listeners.map { raw -> PortInfo in
             let rawCommand = processes.command(for: raw.pid) ?? ""
             // Classification sees the raw arguments; everything downstream

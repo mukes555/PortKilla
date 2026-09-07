@@ -48,9 +48,10 @@ public enum Notifier {
     public static func sendRefusal(_ payload: RefusalSignal.Payload, sound: Bool = true) {
         guard isAvailable else { return }
         let content = UNMutableNotificationContent()
-        content.title = "\(payload.caller.components(separatedBy: " via ").first ?? payload.caller) was refused :\(payload.port)"
-        let owner = payload.owner.map { " owned by \($0)" } ?? " that nobody claims"
-        content.body = "It asked to stop \(payload.processName)\(owner). Stop it yourself, or leave it running."
+        let caller = AgentSignatures.cleanedLabel(payload.caller.components(separatedBy: " via ").first ?? payload.caller)
+        content.title = "\(caller) was refused :\(payload.port)"
+        let owner = payload.owner.map { " owned by \(AgentSignatures.cleanedLabel($0))" } ?? " that nobody claims"
+        content.body = "It asked to stop \(AgentSignatures.cleanedLabel(payload.processName))\(owner). Stop it yourself, or leave it running."
         content.sound = sound ? .default : nil
         content.categoryIdentifier = refusalCategory
         content.userInfo = payload.userInfo

@@ -78,8 +78,10 @@ final class FoundationTests: XCTestCase {
                 if let caller, let target, caller.confidence == .agent, target.isLiveAgentSession, caller.name != target.name {
                     XCTAssertTrue(decision.isRefusal, "a different agent's live session is refused")
                 }
-                if let caller, let target, caller.confidence == .agent, target.isLiveAgentSession, caller.name == target.name, caller.isSameSession(as: target) != false {
-                    XCTAssertEqual(decision, .allow, "the same (or unknown) session of the same tool is allowed")
+                if let caller, let target, caller.confidence == .agent, target.isLiveAgentSession, caller.name == target.name {
+                    let same = caller.isSameSession(as: target)
+                    let claimable = same == true || (same == nil && !target.hasKnownSession)
+                    XCTAssertEqual(decision.isRefusal, !claimable, "the same session, or two unknown ones, of one tool is allowed; a known session needs the caller to show it")
                 }
             }
         }

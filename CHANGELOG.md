@@ -29,6 +29,20 @@ release, rename it to the version and date.
   whether a supervisor is involved. `>` lists app commands (Refresh, Bulk
   Kill, Pin, Workbench, History, Find a Free Port, Settings, Quit).
 - Rows slide in and fade out as ports come and go.
+- **Sparklines.** The Workbench keeps the last sixty scans of CPU and
+  memory per process: a trend column in the table, and CPU and memory
+  charts in the inspector.
+- **Who is connected.** The inspector's Connections tab lists the remote
+  end of every established connection, marked local, from the local
+  network, or from elsewhere; `portkilla whois` prints the same.
+- **Peek at a web server.** A Peek button in the inspector sends one GET to
+  the local server and shows its status, content type, and page title. A
+  Settings toggle (off by default) does it automatically for web ports.
+- **A welcome tour** on first launch: what the app shows, how agents are
+  kept from killing each other, and how to set the agents up (with the
+  commands to copy). Later from the menu or `> tour`.
+- The quokka has a place: empty states and the tour show the artwork when
+  it is in the bundle, and a friendly stand-in until then.
 - **Supervisors understood.** PortKilla recognises what would undo a plain
   kill: pm2 apps, launchd jobs (Homebrew services and your own
   LaunchAgents), Docker containers, and reloaders (nodemon, `next dev`,

@@ -214,6 +214,12 @@ private struct DisplaySettings: View {
                     .settingsCaption()
             }
 
+            Section("Inspector") {
+                Toggle("Peek at local web servers automatically", isOn: $portManager.probeLocalServers)
+                Text("Sends one GET to http://127.0.0.1:<port>/ when a web server is selected in the Workbench, to show its status and page title. Off, the Peek button does it on request.")
+                    .settingsCaption()
+            }
+
             Section("Menu bar") {
                 Toggle("Show active port count", isOn: $portManager.showMenuBarCount)
                 Text("Displays the number of dev ports next to the ⚡ icon.")

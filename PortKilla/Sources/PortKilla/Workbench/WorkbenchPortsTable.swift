@@ -72,7 +72,7 @@ struct WorkbenchPortsTable: View {
                         .font(.system(.body, design: .monospaced))
                 }
             }
-            .width(min: 76, ideal: 84)
+            .width(min: 74, ideal: 80)
 
             TableColumn("Process", value: \.processName) { port in
                 HStack(spacing: 6) {
@@ -88,10 +88,10 @@ struct WorkbenchPortsTable: View {
                     }
                 }
             }
-            .width(min: 140, ideal: 148)
+            .width(min: 130, ideal: 140)
 
             TableColumn("Project", value: \.projectLabel)
-                .width(min: 90, ideal: 94)
+                .width(min: 84, ideal: 90)
 
             TableColumn("Agent", value: \.agentLabel) { port in
                 if let agent = port.agentOwner {
@@ -99,7 +99,7 @@ struct WorkbenchPortsTable: View {
                          tint: agent.isLiveAgentSession ? .chipTeal : .secondary)
                 }
             }
-            .width(min: 100, ideal: 116)
+            .width(min: 96, ideal: 104)
 
             TableColumn("Managed", value: \.managedLabel) { port in
                 if let managed = port.managedBy {
@@ -108,20 +108,27 @@ struct WorkbenchPortsTable: View {
                         .help("\(managed.label): \(managed.consequence)")
                 }
             }
-            .width(min: 80, ideal: 92)
+            .width(min: 80, ideal: 88)
 
             TableColumn("Memory", value: \.memorySizeKB) { port in
                 Text(port.memoryUsage).monospacedDigit()
             }
-            .width(min: 64, ideal: 66)
+            .width(min: 62, ideal: 64)
 
             TableColumn("CPU", value: \.cpuPercent) { port in
                 Text(String(format: "%.1f%%", port.cpuPercent)).monospacedDigit()
             }
-            .width(min: 50, ideal: 52)
+            .width(min: 48, ideal: 50)
+
+            TableColumn("Trend") { port in
+                SparklineView(metrics: portManager.metrics, pid: port.pid, series: .cpu, tint: .chipTeal)
+                    .frame(height: 14)
+                    .help("CPU over the last \(MetricsHistory.capacity) scans")
+            }
+            .width(min: 56, ideal: 70)
 
             TableColumn("Age", value: \.ageLabel)
-                .width(min: 54, ideal: 58)
+                .width(min: 52, ideal: 56)
         }
         .contextMenu(forSelectionType: String.self) { ids in
             if let id = ids.first, let port = rows.first(where: { $0.id == id }) {

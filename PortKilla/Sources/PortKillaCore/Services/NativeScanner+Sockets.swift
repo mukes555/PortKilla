@@ -31,10 +31,11 @@ extension NativeScanner {
         [proc_fdinfo](repeating: proc_fdinfo(), count: 256)
     }
 
-    public static func socketListeners(_ pid: Int32, fdBuffer: inout [proc_fdinfo]) -> [Listener] {
+    /// Fills `fdBuffer` with the process's descriptors and returns how many.
+    static func fillDescriptors(_ pid: Int32, fdBuffer: inout [proc_fdinfo]) -> Int {
         let stride = MemoryLayout<proc_fdinfo>.stride
         var filled = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, &fdBuffer, Int32(fdBuffer.count * stride))
-        guard filled > 0 else { return [] }
+        guard filled > 0 else { return 0 }
 
         if Int(filled) / stride >= fdBuffer.count {
             // Keep what the first fill returned if the re-probe fails (the
@@ -49,10 +50,16 @@ extension NativeScanner {
                 }
             }
         }
+        return Int(filled) / stride
+    }
+
+    public static func socketListeners(_ pid: Int32, fdBuffer: inout [proc_fdinfo]) -> [Listener] {
+        let count = fillDescriptors(pid, fdBuffer: &fdBuffer)
+        guard count > 0 else { return [] }
 
         var listeners: [Listener] = []
         var establishedByPort: [Int: Int] = [:]
-        for fd in fdBuffer.prefix(Int(filled) / stride)
+        for fd in fdBuffer.prefix(count)
         where fd.proc_fdtype == PROX_FDTYPE_SOCKET {
             var socketInfo = socket_fdinfo()
             let size = Int32(MemoryLayout<socket_fdinfo>.size)

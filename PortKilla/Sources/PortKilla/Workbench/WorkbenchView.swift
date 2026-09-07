@@ -32,6 +32,12 @@ struct WorkbenchView: View {
     @State var selectedPortId: String?
     @State var searchText = ""
 
+    init(portManager: PortManager, initialSection: Section = .ports, initialSelection: String? = nil) {
+        _portManager = ObservedObject(wrappedValue: portManager)
+        _section = State(initialValue: initialSection)
+        _selectedPortId = State(initialValue: initialSelection)
+    }
+
     var selectedPort: PortInfo? {
         guard let selectedPortId else { return nil }
         return portManager.activePorts.first { $0.id == selectedPortId }
@@ -49,7 +55,7 @@ struct WorkbenchView: View {
             .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
         } content: {
             content
-                .navigationSplitViewColumnWidth(min: 660, ideal: 760)
+                .navigationSplitViewColumnWidth(min: 700, ideal: 820)
         } detail: {
             if let port = selectedPort {
                 WorkbenchInspector(port: port, portManager: portManager)
@@ -58,7 +64,7 @@ struct WorkbenchView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
-        .frame(minWidth: 1180, minHeight: 600)
+        .frame(minWidth: 1220, minHeight: 600)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 

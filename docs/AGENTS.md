@@ -10,7 +10,9 @@ matrix checked against your machine.
   3) to stop a server owned by a different agent, by a different running
   session of the same agent, or by nobody it can name when the caller is an
   agent (the app's Settings > Agents can turn that last part off for this
-  Mac). A person in the app is warned and decides. `--force` overrides, and
+  Mac; it is a preference in the shared domain, a convenience for the
+  person, not a lock against an agent with a shell). A person in the app is
+  warned and decides. `--force` overrides, and
   the override is recorded.
 - **Sessions, not tools.** Two Claude Code windows are two sessions. A
   server belongs to the session that started it; another session of the same

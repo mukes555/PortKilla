@@ -73,7 +73,11 @@ public enum KillDecision: Equatable {
         case .warn: return "allowed"
         case .allow:
             if target?.isLiveAgentSession == true && caller == nil { return "not-evaluated: caller unknown" }
-            if target == nil { return caller == nil ? "not-evaluated: target unknown" : "allowed: caller is not an agent" }
+            if target == nil {
+                if caller == nil { return "not-evaluated: target unknown" }
+                if caller?.confidence != .agent { return "allowed: caller is not an agent" }
+                return Policy.refusesUnclaimedServers ? "allowed" : "allowed: unclaimed guard off"
+            }
             return "allowed"
         }
     }

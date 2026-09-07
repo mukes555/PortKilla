@@ -21,8 +21,8 @@ extension PortManager {
     }
 
     public func recomputeVisiblePorts() {
-        let userPorts = activePorts.filter { !isSystemPort($0) }
-        visiblePorts = (hideSystemProcesses ? userPorts : activePorts).filter(isShown)
+        let userPorts = activePorts.filter { !isSystemPort($0) && isShown($0) }
+        visiblePorts = hideSystemProcesses ? userPorts : activePorts.filter(isShown)
         menuBarBadgeCount = userPorts.filter { $0.type != .ide }.count
     }
 
@@ -33,8 +33,16 @@ extension PortManager {
         return true
     }
 
-    /// How many ports the hide-system filter is currently swallowing.
-    public var hiddenSystemPortsCount: Int {
-        hideSystemProcesses ? activePorts.filter(isSystemPort).count : 0
+    /// How many ports the filters are swallowing right now, all of them:
+    /// system processes, UDP, ephemeral.
+    public var hiddenPortsCount: Int {
+        activePorts.count - visiblePorts.count
+    }
+
+    /// Every filter off, for the "show hidden" hint and the empty state.
+    public func showEverything() {
+        hideSystemProcesses = false
+        showUDP = true
+        hideEphemeralPorts = false
     }
 }

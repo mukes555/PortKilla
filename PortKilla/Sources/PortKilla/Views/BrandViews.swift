@@ -86,6 +86,7 @@ struct IconTile: View {
     let icon: String
     let tint: Color
     var size: CGFloat = 26
+    @Environment(\.colorScheme) private var colorScheme
 
     init(icon: String, tint: Color, size: CGFloat = 26) {
         self.icon = icon
@@ -105,7 +106,7 @@ struct IconTile: View {
                 .stroke(tint.opacity(0.28), lineWidth: 0.5)
             Image(systemName: icon)
                 .font(.system(size: size * 0.5, weight: .semibold))
-                .foregroundColor(tint)
+                .foregroundColor(tint.legible(in: colorScheme))
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
@@ -119,6 +120,7 @@ struct SectionHeader<Accessory: View>: View {
     let count: Int
     let tint: Color
     let accessory: () -> Accessory
+    @Environment(\.colorScheme) private var colorScheme
 
     init(title: String, count: Int, tint: Color, @ViewBuilder accessory: @escaping () -> Accessory) {
         self.title = title
@@ -138,7 +140,7 @@ struct SectionHeader<Accessory: View>: View {
             Text(String(count))
                 .font(.caption2.weight(.semibold))
                 .monospacedDigit()
-                .foregroundColor(tint)
+                .foregroundColor(tint.legible(in: colorScheme))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 1)
                 .background(tint.opacity(0.15))
@@ -179,13 +181,23 @@ struct AppIconView: View {
 }
 
 /// Column widths shared by the list header, the rows, and the watched rows,
-/// so the three stay one table. Views scale them with the text size.
-enum RowMetrics {
-    static let gutter: CGFloat = 16
-    static let port: CGFloat = 96
-    static let nameCap: CGFloat = 170
-    static let memory: CGFloat = 74
-    static let action: CGFloat = 80
-    static let tile: CGFloat = 26
+/// so the three stay one table. Compact gives the process column back
+/// what the narrower popover takes; views scale every width with the
+/// text size.
+struct RowMetrics: Equatable {
+    let gutter: CGFloat
+    let port: CGFloat
+    let nameCap: CGFloat
+    let memory: CGFloat
+    let action: CGFloat
+    let tile: CGFloat
     static let spacing: CGFloat = 8
+
+    static let regular = RowMetrics(gutter: 16, port: 96, nameCap: 170, memory: 74, action: 80, tile: 26)
+    static let compact = RowMetrics(gutter: 14, port: 84, nameCap: 130, memory: 66, action: 76, tile: 22)
+
+    /// The pinned window is resizable, so it always gets the regular set.
+    static func forPopover(_ size: PortManager.PopoverSize, pinned: Bool) -> RowMetrics {
+        size == .compact && !pinned ? compact : regular
+    }
 }

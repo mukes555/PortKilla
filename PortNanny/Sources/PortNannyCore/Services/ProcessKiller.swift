@@ -79,28 +79,31 @@ public class ProcessKiller {
     private static let maxTreeDepth = 32
 
     /// Kills grandchildren before children before the caller signals the
-    /// parent. Each child's name is looked up at kill time so the PID-reuse
-    /// identity check still applies; a nil name means "can't verify", and the
-    /// child is killed anyway, as tree kills always did.
-    private func killDescendants(of pid: Int, force: Bool, children: (Int) -> [Int], seen: inout Set<Int>, depth: Int) {
+    /// parent. Each child is checked against the name it had when the tree
+    /// was captured, so a pid recycled during the walk fails the check
+    /// instead of being signalled.
+    private func killDescendants(of pid: Int, force: Bool, children: (Int) -> [(pid: Int, name: String)],
+                                 seen: inout Set<Int>, depth: Int) {
         guard depth < Self.maxTreeDepth else { return }
-        for child in children(pid) where !seen.contains(child) {
-            seen.insert(child)
-            killDescendants(of: child, force: force, children: children, seen: &seen, depth: depth + 1)
-            let name = NativeScanner.processName(Int32(child))
-            try? killProcess(pid: child, force: force, expectedName: name)
+        for child in children(pid) where !seen.contains(child.pid) {
+            seen.insert(child.pid)
+            killDescendants(of: child.pid, force: force, children: children, seen: &seen, depth: depth + 1)
+            try? killProcess(pid: child.pid, force: force, expectedName: child.name)
         }
     }
 
     /// Children lookup from one native snapshot; pgrep per node only when
     /// libproc gave nothing (sandboxed or unexpected OS).
-    private func childrenByParent() -> (Int) -> [Int] {
-        let parents = NativeScanner.parentMap()
-        guard !parents.isEmpty else { return Self.pgrepChildren }
+    private func childrenByParent() -> (Int) -> [(pid: Int, name: String)] {
+        let processes = NativeScanner.processMap()
+        guard !processes.isEmpty else {
+            // pgrep gives pids only; an unverifiable name kills as before.
+            return { Self.pgrepChildren(of: $0).map { (pid: $0, name: "") } }
+        }
 
-        var byParent: [Int: [Int]] = [:]
-        for (child, parent) in parents {
-            byParent[Int(parent), default: []].append(Int(child))
+        var byParent: [Int: [(pid: Int, name: String)]] = [:]
+        for (child, process) in processes {
+            byParent[Int(process.ppid), default: []].append((pid: Int(child), name: process.name))
         }
         return { byParent[$0] ?? [] }
     }

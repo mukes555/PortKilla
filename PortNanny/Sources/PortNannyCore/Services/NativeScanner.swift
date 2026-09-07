@@ -296,13 +296,20 @@ public enum NativeScanner {
     /// pid -> ppid for every process in one pass, so a tree walk never
     /// re-enumerates the table per node.
     public static func parentMap() -> [Int32: Int32] {
-        var parents: [Int32: Int32] = [:]
+        processMap().mapValues(\.ppid)
+    }
+
+    /// pid -> (ppid, name) in one pass. A tree kill needs the name as it was
+    /// when the tree was captured: reading it again at kill time compares a
+    /// recycled pid with itself and can never fail.
+    public static func processMap() -> [Int32: (ppid: Int32, name: String)] {
+        var processes: [Int32: (ppid: Int32, name: String)] = [:]
         for pid in listPids() {
             if let bsd = bsdInfo(pid) {
-                parents[pid] = Int32(bsd.pbi_ppid)
+                processes[pid] = (Int32(bsd.pbi_ppid), stringFromFixedCArray(bsd.pbi_name))
             }
         }
-        return parents
+        return processes
     }
 
     private static var usernameCache: [uid_t: String] = [:]

@@ -181,12 +181,15 @@ public class PortScanner {
             let rawCommand = processes.command(for: raw.pid) ?? ""
             // Classification sees the raw arguments; everything downstream
             // (rows, JSON, history) gets the redacted line.
-            let command = CommandRedaction.redact(rawCommand)
-            let processName = Self.bestProcessName(lsofName: raw.processName, entryName: processes.name(for: raw.pid))
+            // printable as well as redacted: a process can name itself with
+            // escape sequences that would spoof a terminal reading `list`.
+            let command = CommandRedaction.printable(CommandRedaction.redact(rawCommand))
+            let processName = CommandRedaction.printable(Self.bestProcessName(lsofName: raw.processName, entryName: processes.name(for: raw.pid)))
             let memoryKb = processes.rssKB(for: raw.pid) ?? 0
             let memory = memoryKb > 0 ? MemoryFormat.string(kilobytes: memoryKb) : "N/A"
             let children = isFull ? processes.children(of: raw.pid).map {
-                PortInfo.ProcessInfo(pid: $0.pid, name: $0.name, command: CommandRedaction.redact($0.command))
+                PortInfo.ProcessInfo(pid: $0.pid, name: CommandRedaction.printable($0.name),
+                                     command: CommandRedaction.printable(CommandRedaction.redact($0.command)))
             } : []
             let projectPath = isFull ? projectWorthyPath(cachedWorkingDirectory(raw.pid)) : nil
 

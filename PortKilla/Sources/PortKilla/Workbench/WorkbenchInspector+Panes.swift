@@ -27,6 +27,10 @@ extension WorkbenchInspector {
             if let lease = port.reservation {
                 DetailRow(label: "Reserved", value: "by \(lease.describedHolder) \(lease.expiryDescription())" + (lease.reason.map { ", for \($0)" } ?? ""))
             }
+            if let expected = port.expectedPort {
+                let holder = portManager.activePorts.first { $0.port == expected.port }.map { ", held by \($0.processName) (PID \($0.pid))" } ?? ", free now"
+                DetailRow(label: "Expected", value: ":\(expected.port) (\(expected.source))\(holder)")
+            }
             if port.type.category == .web {
                 webRow
             }

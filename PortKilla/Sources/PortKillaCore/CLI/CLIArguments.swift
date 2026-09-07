@@ -30,6 +30,7 @@ public enum CLICommand: Equatable {
     case release(port: Int, force: Bool, json: Bool)
     case reservations(json: Bool)
     case exec(ExecOptions)
+    case drift(json: Bool)
     case completions(shell: String)
     case mcp
     case freePort(prefer: Int, range: ClosedRange<Int>, json: Bool)
@@ -155,6 +156,9 @@ public enum CLIArguments {
             if rest.isEmpty { return .success(.reservations(json: false)) }
             return rest == ["--json"] ? .success(.reservations(json: true)) : .failure(.unknownOption(rest[0], command: "reservations"))
         case "exec": return parseExec(rest)
+        case "drift":
+            if rest.isEmpty { return .success(.drift(json: false)) }
+            return rest == ["--json"] ? .success(.drift(json: true)) : .failure(.unknownOption(rest[0], command: "drift"))
         case "version", "--version", "-v":
             if rest.isEmpty { return .success(.version(json: false)) }
             return rest == ["--json"] ? .success(.version(json: true)) : .failure(.unknownOption(rest[0], command: "version"))

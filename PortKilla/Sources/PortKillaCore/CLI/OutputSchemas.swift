@@ -4,7 +4,11 @@ import Foundation
 /// a test checks that what the encoders emit stays within it. Fields are only
 /// ever added within a schema version.
 public enum OutputSchemas {
-    public static let commands = ["list", "kill", "whois", "whoami", "wait", "history", "version", "doctor", "agents", "free-port", "reserve", "release", "reservations"]
+    public static let commands = ["list", "kill", "whois", "whoami", "wait", "history", "version", "doctor", "agents", "free-port", "reserve", "release", "reservations", "drift"]
+
+    public static let expectedPort: [String: String] = [
+        "port": "the port the project's files name", "source": "where: \".env PORT\", \"package.json dev\", \"vite.config.ts\"",
+    ]
 
     public static let reservation: [String: String] = [
         "port": "the leased port", "owner": "holder's display name: an agent, or the user name", "sessionKey": "holder's session id, when known",
@@ -30,6 +34,7 @@ public enum OutputSchemas {
         "age": "human-readable process age, when known", "agentOwner": "AgentOwner or absent", "connections": "established TCP connections on this port",
         "managedBy": "ManagedRuntime or absent: a supervisor that would undo a plain kill",
         "reservation": "Reservation or absent: a live lease on this port",
+        "expectedPort": "ExpectedPort or absent: the project configured a different port for this server",
     ]
 
     public static let managedRuntime: [String: String] = [
@@ -56,6 +61,7 @@ public enum OutputSchemas {
         "peers": "[{host, port, kind}] remote ends of the established connections; kind is local | lan | remote",
         "children": "child processes [{pid, name, command}]", "agentOwner": "AgentOwner or absent",
         "managedBy": "ManagedRuntime or absent",
+        "expectedPort": "ExpectedPort or absent", "expectedHeldBy": "who holds the expected port now, when someone does",
         "evidence": "AttributionEvidence (fields below)",
         "verdict": "what kill would do for this caller, same vocabulary as kill.guardVerdict",
         "reason": "the refusal reason, when refused",
@@ -98,11 +104,16 @@ public enum OutputSchemas {
         ],
         "release": ["schema": "1", "action": "released | refused | not-reserved", "port": "port", "reservation": "the lease released or refused", "exitCode": "0 released, 1 not reserved, 3 someone else holds it (use --force)"],
         "reservations": ["<array>": "Reservation objects, live ones only, by port"],
+        "drift": [
+            "schema": "1", "drifted": "[{port, pid, processName, projectName, projectPath, expected: ExpectedPort, heldBy: {pid, processName, agentOwner} or absent}]",
+            "exitCode": "always 0",
+        ],
     ]
 
     /// Sub-objects a command's output embeds, printed under it.
     static let nested: [String: [(String, [String: String])]] = [
-        "list": [("AgentOwner", agentOwner), ("ManagedRuntime", managedRuntime), ("Reservation", reservation)],
+        "list": [("AgentOwner", agentOwner), ("ManagedRuntime", managedRuntime), ("Reservation", reservation), ("ExpectedPort", expectedPort)],
+        "drift": [("ExpectedPort", expectedPort), ("AgentOwner", agentOwner)],
         "kill": [("AgentOwner", agentOwner), ("ManagedRuntime", managedRuntime)],
         "whoami": [("AgentOwner", agentOwner)],
         "whois": [("Dossier", whoisTarget), ("AttributionEvidence", evidence), ("AgentOwner", agentOwner), ("ManagedRuntime", managedRuntime)],

@@ -55,6 +55,8 @@ public enum PortKillaCLI {
             return CLIReserve.list(json: json)
         case .success(.exec(let options)):
             return CLIExec.run(options)
+        case .success(.drift(let json)):
+            return CLIDrift.run(json: json)
         case .success(.completions(let shell)):
             print(CLICompletions.script(for: shell) ?? "")
             return CLIExit.ok
@@ -399,6 +401,8 @@ public enum PortKillaCLI {
       `portkilla reserve <port> --for 10m` leases a port you are about to use by
       hand (exit 3 when someone else holds it); `portkilla release <port>` gives it
       back. `free-port` and `exec` skip ports others have leased.
+    - `portkilla drift` lists servers running somewhere other than where their
+      project's .env, package.json, or vite.config says, and who holds that port.
     - `portkilla kill --orphaned` stops every server left behind by an agent session
       that has ended; safe for anyone, exit 0 when there is nothing to clean up.
     - `portkilla history --port <port>` shows who started and who stopped a server

@@ -11,6 +11,23 @@ release, rename it to the version and date.
 
 ## [Unreleased]
 
+### Changed
+- **New artwork, and three moods that are actually different.** The mascot
+  shipped as one file under three names, so "All quiet: nothing is
+  listening" and the guard badge both showed the waving quokka. There is
+  now a sleeping one for the empty state, a bust bold enough to read at
+  badge size for the guard, and a new one for a search that matches
+  nothing. The app icon, the README banner, and every screenshot are
+  redrawn to match.
+- `scripts/make_artwork.swift` keeps an alpha channel the source already
+  has. It used to recompute one from whiteness whatever it was given,
+  which turned a transparent background opaque black and the white
+  pinafore see-through.
+- The banner is a drawn asset rather than one composed by a script, so
+  `scripts/make_logo.swift` and the two generated logo files are gone.
+- The README opens with the problem it solves and carries a nav row;
+  `docs/ARTWORK.md` holds the prompts that draw the character.
+
 A full audit: six passes over the code (correctness, security,
 performance, UX and conventions, docs, test coverage), every confirmed
 finding fixed, and a test for each defect.

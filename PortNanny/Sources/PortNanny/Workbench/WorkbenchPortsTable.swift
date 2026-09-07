@@ -27,7 +27,8 @@ struct WorkbenchPortsTable: View {
             } else if rows.isEmpty {
                 let searched = searchText.trimmingCharacters(in: .whitespaces)
                 WorkbenchEmpty(icon: searched.isEmpty ? "powersleep" : "magnifyingglass",
-                               text: searched.isEmpty ? "Nothing is listening" : "No ports match \"\(searched)\"")
+                               text: searched.isEmpty ? "Nothing is listening" : "No ports match \"\(searched)\"",
+                               mood: searched.isEmpty ? .sleepy : .searching)
             } else {
                 table(rows: rows)
             }

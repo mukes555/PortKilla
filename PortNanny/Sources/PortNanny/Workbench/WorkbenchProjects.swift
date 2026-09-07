@@ -99,12 +99,18 @@ struct PortChipRow: View {
 struct WorkbenchEmpty: View {
     let icon: String
     let text: String
+    /// The quokka instead of a symbol, where one of her states says it better.
+    var mood: MascotView.Mood?
 
     var body: some View {
         VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 28))
-                .foregroundColor(.secondary)
+            if let mood {
+                MascotView(mood: mood, size: 88)
+            } else {
+                Image(systemName: icon)
+                    .font(.system(size: 28))
+                    .foregroundColor(.secondary)
+            }
             Text(text)
                 .foregroundColor(.secondary)
         }

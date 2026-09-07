@@ -266,9 +266,7 @@ extension PortListView {
                     .font(.caption)
                     .foregroundColor(.secondary)
             } else {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 32))
-                    .foregroundColor(.secondary)
+                MascotView(mood: .searching, size: 96)
                     .padding(.bottom, 8)
                 Text("No results found")
                     .foregroundColor(.secondary)

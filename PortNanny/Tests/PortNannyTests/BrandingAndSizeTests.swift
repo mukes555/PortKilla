@@ -80,6 +80,22 @@ final class BrandingAndSizeTests: XCTestCase {
         XCTAssertTrue(MenuBarGlyph.image(.mono, active: false) === MenuBarGlyph.image(.mono, active: false), "drawn once, then cached")
     }
 
+    func testEveryMoodHasItsOwnArtwork() throws {
+        pointAtTheArtwork()
+        defer { unsetenv("PORTNANNY_MASCOT_DIR") }
+        let directory = try XCTUnwrap(ProcessInfo.processInfo.environment["PORTNANNY_MASCOT_DIR"])
+        var seen: [Data: MascotView.Mood] = [:]
+        for mood in [MascotView.Mood.happy, .sleepy, .onGuard, .searching] {
+            XCTAssertNotNil(MascotView.artwork(for: mood), "no artwork loads for \(mood.rawValue)")
+            let file = URL(fileURLWithPath: directory).appendingPathComponent("quokka-\(mood.rawValue).png")
+            let bytes = try Data(contentsOf: file)
+            // Three moods shipped as one file until this artwork landed, so
+            // the sleepy empty state and the guard badge both waved at you.
+            XCTAssertNil(seen[bytes], "\(mood.rawValue) is the same file as \(seen[bytes]?.rawValue ?? "")")
+            seen[bytes] = mood
+        }
+    }
+
     func testTheVectorFaceStandsInWithoutArtwork() throws {
         let filled = MenuBarGlyph.quokka(filled: true)
         let outline = MenuBarGlyph.quokka(filled: false)

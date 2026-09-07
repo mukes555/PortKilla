@@ -283,7 +283,7 @@ Settings → About → Copy debug info) gives the facts a bug report needs.
 
 ## 🖥 Usage
 
-1.  **Open PortKilla** from your menu bar (the quokka; Settings > Display can make it monochrome).
+1.  **Open PortKilla** from your menu bar (the quokka; Settings > Display can swap it for the color app icon).
 2.  **View Active Ports**: See a categorized list of Web, Database, and other processes.
 3.  **Process Tree**: In Advanced density, click a row with a chevron to expand its child processes; in Simple density a click opens the details sheet.
 4.  **Free a Port**: 

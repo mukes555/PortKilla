@@ -91,6 +91,7 @@ extension PortManager {
     // MARK: - Refresh
 
     public func refresh(showToast: Bool = false) {
+        if usesDemoData { return }
         if isRefreshing {
             // A press during a slow scan must not look like nothing happened.
             if showToast { self.showToast("Refreshing…") }

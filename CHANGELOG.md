@@ -17,6 +17,15 @@ release, rename it to the version and date.
   to the chin with room on both sides, so the face is whole and centred
   instead of ending at the mouth. The menu bar keeps its round glyph.
 
+### Fixed
+- **README images are scripted.** The popover screenshots, the palette
+  shot, the Workbench capture, and the menu bar strip were rendered from
+  the live scan of the Mac that built them, which put its project folders,
+  paths, and user name on the page. Every image now comes from the same
+  fabricated ports as the demo GIF (`PORTNANNY_SNAPSHOT_DATA=demo`), a
+  refresh in that mode is a no-op, and a test keeps the fixtures free of
+  anything from the rendering machine.
+
 <!-- next -->
 
 ## 2.1.0 (2026-09-07)

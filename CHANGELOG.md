@@ -11,11 +11,22 @@ release, rename it to the version and date.
 
 ## [Unreleased]
 
+<!-- next -->
+
+## 2.1.1 (2026-09-07)
+
+The polish after the rename: a bigger, whole quokka in the header and the
+Workbench, README images that never came from anyone's real Mac, and a
+cask that current Homebrew installs without a word.
+
 ### Changed
 - **A bigger quokka.** The avatar grows to 40 pt in the popover header and
   36 pt in the Workbench sidebar, and the head crop now runs from the cap
   to the chin with room on both sides, so the face is whole and centred
   instead of ending at the mouth. The menu bar keeps its round glyph.
+- The Raycast extension scaffold under `extensions/raycast` is gone (the
+  extension was dropped), and so is the unpinned pre-2.0 cask file; the
+  release workflow and the tap render the pinned template only.
 
 ### Fixed
 - **README images are scripted.** The popover screenshots, the palette
@@ -24,9 +35,14 @@ release, rename it to the version and date.
   paths, and user name on the page. Every image now comes from the same
   fabricated ports as the demo GIF (`PORTNANNY_SNAPSHOT_DATA=demo`), a
   refresh in that mode is a no-op, and a test keeps the fixtures free of
-  anything from the rendering machine.
+  anything from the rendering machine. The old images were also removed
+  from the repository's history.
 
-<!-- next -->
+### Distribution
+- The cask uses the stanzas current Homebrew asks for (`postflight_steps`
+  and `depends_on macos: :ventura`), so `brew upgrade` no longer prints
+  deprecation warnings. docs/FIRST-RUN.md notes the one-time
+  `brew trust mukes555/tap` that Homebrew may ask for after the rename.
 
 ## 2.1.0 (2026-09-07)
 

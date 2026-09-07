@@ -57,6 +57,8 @@ public enum PortKillaCLI {
             return CLIExec.run(options)
         case .success(.drift(let json)):
             return CLIDrift.run(json: json)
+        case .success(.setup(let options)):
+            return CLISetup.run(options)
         case .success(.completions(let shell)):
             print(CLICompletions.script(for: shell) ?? "")
             return CLIExit.ok

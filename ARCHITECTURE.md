@@ -129,8 +129,8 @@ PortKilla/Sources/
     Services/          Scanning, attribution, KillDecision, killing, Docker,
                        redaction, login item, notifications, update check
     CLI/               Argument parsing, commands (kill, whois, reserve, exec,
-                       ...), output schemas, MCP server, and the debug-only
-                       `__serve` test server
+                       setup, ...), output schemas, MCP server, the rule-file
+                       installer, and the debug-only `__serve` test server
   PortKilla/           The menu-bar app
     App/               AppDelegate (@main), RefusalWatcher (CLI refusals
                        become actionable notifications), DemoReel (dev-only)

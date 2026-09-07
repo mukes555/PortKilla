@@ -9,6 +9,7 @@ public enum PortKillaCLI {
     /// or nil to continue launching the GUI.
     public static func run(_ arguments: [String]) -> Int32? {
         guard let parsed = CLIArguments.parse(arguments) else { return nil }
+        Policy.loadFromSharedDomain()
 
         switch parsed {
         case .failure(let error):

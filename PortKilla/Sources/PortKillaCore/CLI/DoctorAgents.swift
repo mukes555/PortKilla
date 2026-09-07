@@ -8,21 +8,21 @@ public enum DoctorAgents {
 
     public struct Report: Encodable {
         let schema = 1
-        let caller: AgentOwner?
-        let agents: [Status]
+        public let caller: AgentOwner?
+        public let agents: [Status]
     }
 
     public struct Status: Encodable {
-        let name: String
-        let kind: String
-        let recognisedBy: [String]
-        let session: String
-        let provenance: String
-        let tip: String?
+        public let name: String
+        public let kind: String
+        public let recognisedBy: [String]
+        public let session: String
+        public let provenance: String
+        public let tip: String?
         /// Processes of this tool right now.
-        let running: Int
+        public let running: Int
         /// Where the executable was found on PATH, for CLI tools.
-        let installedAt: String?
+        public let installedAt: String?
     }
 
     public static func run(json: Bool) -> Int32 {

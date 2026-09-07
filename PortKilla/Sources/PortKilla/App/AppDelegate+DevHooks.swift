@@ -74,7 +74,12 @@ extension AppDelegate {
         case "protected":
             view = NSHostingView(rootView: ProtectedProcessListView(portManager: portManager))
         case "settings":
-            view = NSHostingView(rootView: SettingsView(portManager: portManager).environmentObject(self))
+            // PORTKILLA_SNAPSHOT_PANE=general|display|agents|shortcuts|protected|about picks the pane.
+            let router = SettingsView.Router()
+            if let pane = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_PANE"].flatMap({ SettingsView.Pane(rawValue: $0.capitalized) }) {
+                router.pane = pane
+            }
+            view = NSHostingView(rootView: SettingsView(portManager: portManager, router: router).environmentObject(self))
         case "workbench":
             // PORTKILLA_SNAPSHOT_SECTION=ports|projects|agents|watchlist|history and
             // PORTKILLA_SNAPSHOT_SELECT=<port> pick what the Workbench shows.

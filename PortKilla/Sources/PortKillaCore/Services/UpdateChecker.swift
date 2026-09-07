@@ -8,7 +8,10 @@ import Foundation
 public enum UpdateChecker {
 
     public static let releasesPageURL = URL(string: "https://github.com/mukes555/PortKilla/releases/latest")!
-    private static let apiURL = URL(string: "https://api.github.com/repos/mukes555/PortKilla/releases/latest")!
+    private static let latestURL = URL(string: "https://api.github.com/repos/mukes555/PortKilla/releases/latest")!
+    /// Betas never become "latest" on GitHub, so opting into them means
+    /// reading the recent releases and choosing.
+    private static let recentURL = URL(string: "https://api.github.com/repos/mukes555/PortKilla/releases?per_page=15")!
 
     public static var currentVersion: String? {
         if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String {
@@ -40,9 +43,9 @@ public enum UpdateChecker {
         case failed(String)
     }
 
-    /// Fetches the latest release tag and calls back on the main queue. A
+    /// Fetches the newest release tag and calls back on the main queue. A
     /// network or HTTP failure is reported as such, never as "up to date".
-    public static func fetchNewerVersion(completion: @escaping (CheckResult) -> Void) {
+    public static func fetchNewerVersion(includePrereleases: Bool = false, completion: @escaping (CheckResult) -> Void) {
         guard let current = currentVersion else {
             // Dev binary without a bundle: nothing meaningful to compare.
             DispatchQueue.main.async { completion(.failed("no version information")) }
@@ -50,16 +53,16 @@ public enum UpdateChecker {
         }
 
         // Ignore the URL cache: a stale cached body would hide a new release.
-        var request = URLRequest(url: apiURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
+        var request = URLRequest(url: includePrereleases ? recentURL : latestURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
 
         URLSession.shared.dataTask(with: request) { data, response, error in
-            let result = evaluate(data: data, response: response, error: error, current: current)
+            let result = evaluate(data: data, response: response, error: error, current: current, includePrereleases: includePrereleases)
             DispatchQueue.main.async { completion(result) }
         }.resume()
     }
 
-    public static func evaluate(data: Data?, response: URLResponse?, error: Error?, current: String) -> CheckResult {
+    public static func evaluate(data: Data?, response: URLResponse?, error: Error?, current: String, includePrereleases: Bool = false) -> CheckResult {
         if let error {
             return .failed(error.localizedDescription)
         }
@@ -70,10 +73,12 @@ public enum UpdateChecker {
             }
             return .failed("GitHub responded with \(http.statusCode)")
         }
-        guard let data, let latest = parseTagName(data) else {
-            return .failed("unexpected response")
-        }
-        return isVersion(latest, newerThan: current) ? .newer(latest) : .upToDate
+        guard let data else { return .failed("unexpected response") }
+        let candidates = parseTagNames(data)
+        guard !candidates.isEmpty else { return .failed("unexpected response") }
+        let newest = candidates.filter { isVersion($0, newerThan: current, includePrereleases: includePrereleases) }
+            .max { isVersion($1, newerThan: $0, includePrereleases: true) }
+        return newest.map { .newer($0) } ?? .upToDate
     }
 
     /// Rate limiter for the automatic check on launch.
@@ -88,26 +93,76 @@ public enum UpdateChecker {
     }
 
     public static func parseTagName(_ data: Data) -> String? {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let tag = json["tag_name"] as? String else { return nil }
-        return tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+        parseTagNames(data).first
+    }
+
+    /// One release object, or a list of them; drafts are nobody's update.
+    public static func parseTagNames(_ data: Data) -> [String] {
+        let object = try? JSONSerialization.jsonObject(with: data)
+        let releases: [[String: Any]]
+        if let one = object as? [String: Any] {
+            releases = [one]
+        } else if let many = object as? [[String: Any]] {
+            releases = many
+        } else {
+            return []
+        }
+        return releases.compactMap { release in
+            guard release["draft"] as? Bool != true, let tag = release["tag_name"] as? String else { return nil }
+            return tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+        }
     }
 
     /// Numeric semver comparison: "1.10.0" > "1.9.9". A tag with a
-    /// non-numeric component ("2.0.0-rc1") is never offered as an update.
-    public static func isVersion(_ candidate: String, newerThan current: String) -> Bool {
-        let parts = candidate.split(separator: ".").map { Int($0) }
-        guard !parts.contains(nil) else { return false }
-        let a = parts.compactMap { $0 }
-        let b = current.split(separator: ".").map { Int($0) ?? 0 }
+    /// prerelease suffix ("2.0.0-beta.1") is offered only when asked for,
+    /// and ranks below the release it precedes.
+    public static func isVersion(_ candidate: String, newerThan current: String, includePrereleases: Bool = false) -> Bool {
+        guard let a = Version(candidate), let b = Version(current) else { return false }
+        if a.prerelease != nil && !includePrereleases { return false }
+        return b < a
+    }
 
-        for index in 0..<max(a.count, b.count) {
-            let left = index < a.count ? a[index] : 0
-            let right = index < b.count ? b[index] : 0
-            if left != right {
-                return left > right
+    /// "2.0.0-beta.1": numbers, then an optional prerelease that sorts below
+    /// the release with the same numbers.
+    struct Version: Comparable {
+        let numbers: [Int]
+        let prerelease: [String]?
+
+        init?(_ text: String) {
+            let dash = text.firstIndex(of: "-")
+            let core = dash.map { String(text[..<$0]) } ?? text
+            let parts = core.split(separator: ".").map { Int($0) }
+            guard !parts.isEmpty, !parts.contains(nil) else { return nil }
+            numbers = parts.compactMap { $0 }
+            prerelease = dash.map { text[text.index(after: $0)...].split(separator: ".").map(String.init) }
+        }
+
+        static func < (lhs: Version, rhs: Version) -> Bool {
+            for index in 0..<max(lhs.numbers.count, rhs.numbers.count) {
+                let left = index < lhs.numbers.count ? lhs.numbers[index] : 0
+                let right = index < rhs.numbers.count ? rhs.numbers[index] : 0
+                if left != right { return left < right }
+            }
+            switch (lhs.prerelease, rhs.prerelease) {
+            case (nil, nil): return false
+            case (nil, _): return false
+            case (_, nil): return true
+            case (let left?, let right?): return identifiers(left, precede: right)
             }
         }
-        return false
+
+        /// Semver's rule: numeric identifiers compare as numbers and rank
+        /// below words; a shorter list that matches is the earlier one.
+        private static func identifiers(_ left: [String], precede right: [String]) -> Bool {
+            for (a, b) in zip(left, right) where a != b {
+                switch (Int(a), Int(b)) {
+                case (let x?, let y?): return x < y
+                case (_?, nil): return true
+                case (nil, _?): return false
+                case (nil, nil): return a < b
+                }
+            }
+            return left.count < right.count
+        }
     }
 }

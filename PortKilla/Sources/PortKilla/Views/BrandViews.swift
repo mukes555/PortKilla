@@ -22,9 +22,9 @@ extension PortManager.PopoverSize {
     }
 }
 
-/// The quokka's face in a circle: the brand mark wherever the app has room
-/// for colour (the popover header, the Workbench sidebar, About). Without
-/// the artwork (a bare debug binary) the menu bar glyph stands in.
+/// The quokka's head: the brand mark wherever the app has room for colour
+/// (the popover header, the Workbench sidebar, About). Without the artwork
+/// (a bare debug binary) the menu bar glyph stands in.
 struct BrandAvatar: View {
     var size: CGFloat = 30
 
@@ -32,10 +32,9 @@ struct BrandAvatar: View {
         if let face = MascotView.face(for: .happy) {
             Image(nsImage: face)
                 .resizable()
-                .scaledToFill()
+                .interpolation(.high)
+                .scaledToFit()
                 .frame(width: size, height: size)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(Color.primary.opacity(0.1), lineWidth: 0.5))
                 .accessibilityHidden(true)
         } else {
             ZStack {

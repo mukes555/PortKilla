@@ -45,14 +45,8 @@ struct WorkbenchView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(Section.allCases, selection: $section) { item in
-                NavigationLink(value: item) {
-                    Label(item.rawValue, systemImage: item.icon)
-                        .badge(badge(for: item))
-                }
-            }
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
+            sidebar
+                .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
         } content: {
             content
                 .navigationSplitViewColumnWidth(min: 700, ideal: 820)
@@ -66,6 +60,18 @@ struct WorkbenchView: View {
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 1220, minHeight: 600)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    /// Note for screenshots: this column is composited by the window server
+    /// and draws blank in offscreen renders; `workbench-live` captures it.
+    private var sidebar: some View {
+        List(Section.allCases, selection: $section) { item in
+            NavigationLink(value: item) {
+                Label(item.rawValue, systemImage: item.icon)
+                    .badge(badge(for: item))
+            }
+        }
+        .listStyle(.sidebar)
     }
 
     @ViewBuilder

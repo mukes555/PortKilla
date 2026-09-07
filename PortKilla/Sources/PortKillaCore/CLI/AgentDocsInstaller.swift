@@ -37,10 +37,24 @@ public enum AgentDocsInstaller {
         "\(beginMarker)\n\(PortKillaCLI.agentDocs)\n\(endMarker)\n"
     }
 
-    /// Appends the block, or replaces an existing one in place.
+    /// What a fresh rule file starts with, so the tool applies it always.
+    static func frontmatter(for file: URL) -> String {
+        let path = file.path
+        if path.hasSuffix(".mdc") {
+            return "---\ndescription: Free ports through PortKilla, which knows which AI agent owns each server\nalwaysApply: true\n---\n\n"
+        }
+        if path.contains("/.windsurf/rules/") {
+            return "---\ntrigger: always_on\n---\n\n"
+        }
+        return ""
+    }
+
+    /// Appends the block, or replaces an existing one in place. Creates the
+    /// file (and its folders) with the tool's frontmatter when it is new.
     public static func install(into file: URL) throws -> Result {
         let existing = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
         let fresh = block()
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
 
         if let start = existing.range(of: beginMarker), let end = existing.range(of: endMarker) {
             let current = String(existing[start.lowerBound..<end.upperBound]) + "\n"
@@ -51,7 +65,8 @@ public enum AgentDocsInstaller {
         }
 
         let separator = existing.isEmpty || existing.hasSuffix("\n\n") ? "" : (existing.hasSuffix("\n") ? "\n" : "\n\n")
-        try (existing + separator + fresh).write(to: file, atomically: true, encoding: .utf8)
+        let head = existing.isEmpty ? frontmatter(for: file) : ""
+        try (existing + separator + head + fresh).write(to: file, atomically: true, encoding: .utf8)
         return .added
     }
 

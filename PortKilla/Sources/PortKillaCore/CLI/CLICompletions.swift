@@ -3,7 +3,7 @@ import Foundation
 /// Static shell completions: the command set is small enough to spell out.
 /// `portkilla completions zsh > ~/.zfunc/_portkilla` (or let the cask do it).
 public enum CLICompletions {
-    public static let commands = ["list", "kill", "free", "wait", "open", "history", "whois", "whoami", "reserve", "release", "reservations", "exec", "drift", "free-port", "schema", "doctor", "agent-docs", "mcp", "completions", "version", "help"]
+    public static let commands = ["list", "kill", "free", "wait", "open", "history", "whois", "whoami", "reserve", "release", "reservations", "exec", "drift", "free-port", "schema", "doctor", "setup", "agent-docs", "mcp", "completions", "version", "help"]
 
     public static func script(for shell: String) -> String? {
         switch shell {
@@ -34,6 +34,7 @@ public enum CLICompletions {
       'free-port:first free port in a range'
       'schema:JSON output contracts'
       'doctor:environment and scanner diagnostics'
+      'setup:set the AI tools on this Mac up'
       'agent-docs:snippet for CLAUDE.md / AGENTS.md'
       'completions:shell completion script'
       'version:print version'
@@ -56,6 +57,8 @@ public enum CLICompletions {
       reservations|drift) _arguments '--json' ;;
       exec) _arguments '--port[port]:port' '--free-port' '--prefer[port]:port' '--range[A-B]:range' '--no-reserve' '--owner[name]:name' '--session[key]:key' ;;
       doctor) _arguments '--json' '--agents' ;;
+      setup) _arguments '--yes' '--project[directory]:directory:_files -/' ;;
+      agent-docs) _arguments '--write' '--file[path]:file:_files' '--claude' '--codex' '--cursor' '--windsurf' '--claude-hook' ;;
       whoami|version) _arguments '--json' ;;
       mcp) _arguments '--setup[registration for an agent]:agent:(claude cursor codex)' ;;
       completions) _values 'shell' zsh bash fish ;;
@@ -82,6 +85,8 @@ public enum CLICompletions {
         reservations|drift) COMPREPLY=( $(compgen -W "--json" -- "$cur") ) ;;
         exec) COMPREPLY=( $(compgen -W "--port --free-port --prefer --range --no-reserve --owner --session" -- "$cur") ) ;;
         doctor) COMPREPLY=( $(compgen -W "--json --agents" -- "$cur") ) ;;
+        setup) COMPREPLY=( $(compgen -W "--yes --project" -- "$cur") ) ;;
+        agent-docs) COMPREPLY=( $(compgen -W "--write --file --claude --codex --cursor --windsurf --claude-hook" -- "$cur") ) ;;
         whoami|version) COMPREPLY=( $(compgen -W "--json" -- "$cur") ) ;;
         mcp) COMPREPLY=( $(compgen -W "--setup claude cursor codex" -- "$cur") ) ;;
         completions) COMPREPLY=( $(compgen -W "zsh bash fish" -- "$cur") ) ;;
@@ -105,6 +110,8 @@ public enum CLICompletions {
     complete -c portkilla -n '__fish_seen_subcommand_from reservations drift' -l json
     complete -c portkilla -n '__fish_seen_subcommand_from exec' -l port -l free-port -l prefer -l range -l no-reserve -l owner -l session
     complete -c portkilla -n '__fish_seen_subcommand_from doctor' -l json -l agents
+    complete -c portkilla -n '__fish_seen_subcommand_from setup' -l yes -l project
+    complete -c portkilla -n '__fish_seen_subcommand_from agent-docs' -l write -l file -l claude -l codex -l cursor -l windsurf -l claude-hook
     complete -c portkilla -n '__fish_seen_subcommand_from whoami version' -l json
     complete -c portkilla -n '__fish_seen_subcommand_from mcp' -l setup -a 'claude cursor codex'
     complete -c portkilla -n '__fish_seen_subcommand_from completions' -a 'zsh bash fish'

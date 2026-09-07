@@ -72,12 +72,26 @@ extension CLIArguments {
             environment, or declared via PORTKILLA_OWNER (and PORTKILLA_SESSION).
             """
         case "agent-docs": return """
-            portkilla agent-docs [--write [--file <path>]] [--claude-hook]
+            portkilla agent-docs [--write [--file <path>]] [--claude|--codex|--cursor|--windsurf] [--claude-hook]
 
             Prints the snippet that tells AI agents to free ports through PortKilla.
             --write appends it to CLAUDE.md (or --file) between markers, once; run
-            again to update it. --claude-hook prints a Claude Code PreToolUse hook
-            for settings.json that turns `kill -9 $(lsof -ti:PORT)` into a nudge.
+            again to update it. --codex writes AGENTS.md, --cursor writes
+            .cursor/rules/portkilla.mdc, --windsurf .windsurf/rules/portkilla.md
+            (folders and frontmatter included). --claude-hook prints a Claude Code
+            PreToolUse hook for settings.json that turns `kill -9 $(lsof -ti:PORT)`
+            into a nudge.
+            """
+        case "setup": return """
+            portkilla setup [--yes] [--project <dir>]
+
+            Walks through setting PortKilla up for the AI tools on this Mac: checks
+            `portkilla` on PATH, and for each tool found offers to register the MCP
+            server (Claude Code, by running `claude mcp add`), write its rule file
+            into the project (CLAUDE.md, AGENTS.md, .cursor/rules, .windsurf/rules),
+            and shows the rest (Cursor's mcp.json, Codex's config.toml, shell
+            completions). Asks before every change; --yes applies all of them.
+            Without a terminal it prints the plan and changes nothing.
             """
         case "mcp": return """
             portkilla mcp
@@ -171,7 +185,8 @@ extension CLIArguments {
       portkilla free-port [--prefer 3000] [--range 3000-3999] [--json]
       portkilla schema [command]         JSON output contracts
       portkilla doctor [--json] [--agents]
-      portkilla agent-docs [--write [--file CLAUDE.md]] [--claude-hook]
+      portkilla setup [--yes] [--project <dir>]   set the AI tools on this Mac up
+      portkilla agent-docs [--write [--file CLAUDE.md]] [--claude|--codex|--cursor|--windsurf] [--claude-hook]
       portkilla mcp                      MCP server over stdio (for agents)
       portkilla mcp --setup [claude|cursor|codex]   how to register it
       portkilla completions <zsh|bash|fish>

@@ -13,6 +13,22 @@ release, rename it to the version and date.
 
 <!-- next -->
 
+### Changed
+- **The quokka is the brand.** The menu bar shows the app icon (dimmed
+  while nothing is listening) or, from Settings > Display, a monochrome
+  quokka cut from the artwork; the bolt is gone. The popover header
+  carries the artwork with a live summary line, About shows the app icon,
+  and the Workbench sidebar and empty inspector wear it too.
+- **A bigger popover.** Regular is now 580 by 720 points; Settings >
+  Display offers Compact (the old 500 by 600) and Large (660 by 840). The
+  pinned window follows.
+- **Richer rows.** Type tiles, section headers with counts and accents,
+  port and process names a size up, memory with CPU and its trend in
+  Advanced, and the browser, watch, and details verbs on hover so the
+  list stays calm. Guard buttons use a shield.
+- Debug snapshot renders keep their density and watch list in the
+  throwaway suite instead of the developer's own preferences.
+
 ### Added
 - **`portkilla setup`** walks through setting up the AI tools on this Mac:
   checks `portkilla` on PATH, and for each tool found offers to register

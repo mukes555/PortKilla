@@ -9,6 +9,8 @@ public enum DefaultsKey {
     public static let confirmBeforeKill = "PortKilla.confirmBeforeKill"
     public static let viewDensity = "PortKilla.viewDensity"
     public static let showMenuBarCount = "PortKilla.showMenuBarCount"
+    public static let menuBarIcon = "PortKilla.menuBarIcon"
+    public static let popoverSize = "PortKilla.popoverSize"
     public static let notificationsEnabled = "PortKilla.notificationsEnabled"
     public static let notificationSound = "PortKilla.notificationSound"
     public static let historyLimit = "PortKilla.historyLimit"

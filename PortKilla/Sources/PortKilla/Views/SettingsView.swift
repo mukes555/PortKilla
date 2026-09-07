@@ -198,6 +198,15 @@ private struct DisplaySettings: View {
 
     var body: some View {
         Form {
+            Section("Popover") {
+                Picker("Size", selection: $portManager.popoverSize) {
+                    ForEach(PortManager.PopoverSize.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                Text("Regular is 580 by 720 points. The pinned window can always be resized by hand.")
+                    .settingsCaption()
+            }
+
             Section("Row density") {
                 Picker("Density", selection: $portManager.viewDensity) {
                     Text("Simple").tag(PortManager.ViewDensity.simple)
@@ -221,8 +230,13 @@ private struct DisplaySettings: View {
             }
 
             Section("Menu bar") {
+                Picker("Icon", selection: $portManager.menuBarIcon) {
+                    Text("Color").tag(PortManager.MenuBarIcon.color)
+                    Text("Mono").tag(PortManager.MenuBarIcon.mono)
+                }
+                .pickerStyle(.segmented)
                 Toggle("Show active port count", isOn: $portManager.showMenuBarCount)
-                Text("Displays the number of dev ports next to the ⚡ icon.")
+                Text("Color is the app icon, dimmed while nothing is listening. Mono is a black-and-white quokka that follows the menu bar. The count is the number of dev ports.")
                     .settingsCaption()
             }
         }
@@ -305,7 +319,7 @@ private struct AboutSettings: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            Image(systemName: "bolt.fill").font(.system(size: 40)).foregroundColor(.yellow)
+            AppIconView(size: 72)
             Text("PortKilla").font(.title2).bold()
             Text(version).foregroundColor(.secondary)
 
@@ -342,7 +356,7 @@ private struct AboutSettings: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Restores refresh interval, density, protected list, hotkey, and toggles to their defaults. Watched/guarded ports are cleared.")
+            Text("Restores refresh interval, density, popover size, menu bar icon, protected list, hotkey, and toggles to their defaults. Watched/guarded ports are cleared.")
         }
     }
 }

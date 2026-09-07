@@ -16,7 +16,7 @@ cask "portnanny" do
     strategy :github_latest
   end
 
-  depends_on macos: ">= :ventura"
+  depends_on macos: :ventura
 
   app "PortNanny.app"
   # Puts `portnanny` on PATH: the standalone CLI bundled beside the app binary
@@ -25,25 +25,23 @@ cask "portnanny" do
   # The command PortNanny had until 2.1; scripts and rule files still call it.
   binary "#{appdir}/PortNanny.app/Contents/Helpers/portnanny", target: "portkilla"
 
+  # The app is ad-hoc signed (no Apple Developer account), so Gatekeeper
+  # quarantine must be stripped for it to launch without a scary dialog.
+  postflight_steps do
+    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/PortNanny.app"]
+  end
+
   # `brew upgrade` replaces the bundle; quit the running copy first so the
   # menu-bar icon isn't left running from a deleted bundle, and drop the
   # login-item registration that pointed at it.
   uninstall quit:       "com.mukes555.PortNanny",
             login_item: "PortNanny"
 
-  # The app is ad-hoc signed (no Apple Developer account), so Gatekeeper
-  # quarantine must be stripped for it to launch without a scary dialog.
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/PortNanny.app"],
-                   sudo: false
-  end
-
   zap trash: [
-    "~/Library/Preferences/com.mukes555.PortNanny.plist",
-    "~/Library/Preferences/com.mukes555.PortKilla.plist",
-    "~/Library/Saved Application State/com.mukes555.PortNanny.savedState",
     "~/Library/Caches/com.mukes555.PortNanny",
     "~/Library/HTTPStorages/com.mukes555.PortNanny",
+    "~/Library/Preferences/com.mukes555.PortKilla.plist",
+    "~/Library/Preferences/com.mukes555.PortNanny.plist",
+    "~/Library/Saved Application State/com.mukes555.PortNanny.savedState",
   ]
 end

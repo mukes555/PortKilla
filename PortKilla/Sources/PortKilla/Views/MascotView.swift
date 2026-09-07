@@ -22,7 +22,32 @@ struct MascotView: View {
     let mood: Mood
     var size: CGFloat = 96
 
+    private static var cache: [String: NSImage] = [:]
+
+    /// Loaded once per mood: the header draws it on every render.
     static func artwork(for mood: Mood) -> NSImage? {
+        if let cached = cache[mood.rawValue] { return cached }
+        let loaded = load(mood)
+        if let loaded { cache[mood.rawValue] = loaded }
+        return loaded
+    }
+
+    /// The head alone, ears to chin, for avatars: the artwork is a full
+    /// figure and would be a blob at 30 pt.
+    static func face(for mood: Mood) -> NSImage? {
+        let key = "\(mood.rawValue)-face"
+        if let cached = cache[key] { return cached }
+        guard let full = artwork(for: mood), let image = full.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let width = CGFloat(image.width)
+        let height = CGFloat(image.height)
+        let box = CGRect(x: width * 0.23, y: height * 0.09, width: width * 0.60, height: height * 0.38)
+        guard let cropped = image.cropping(to: box) else { return nil }
+        let face = NSImage(cgImage: cropped, size: NSSize(width: box.width, height: box.height))
+        cache[key] = face
+        return face
+    }
+
+    private static func load(_ mood: Mood) -> NSImage? {
         if let url = Bundle.main.url(forResource: "quokka-\(mood.rawValue)", withExtension: "png") {
             return NSImage(contentsOf: url)
         }

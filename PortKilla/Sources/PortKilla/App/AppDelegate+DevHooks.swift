@@ -37,6 +37,26 @@ extension AppDelegate {
         }
     }
 
+    /// By window id first; by screen region (the window's frame, flipped to
+    /// screencapture's top-left origin) when the window server declines.
+    private func captureWorkbench(to path: String) {
+        guard let window = workbenchWindow, let screen = window.screen ?? NSScreen.main else {
+            FileHandle.standardError.write(Data("no workbench window to capture\n".utf8))
+            return
+        }
+        if (try? CommandRunner.run("/usr/sbin/screencapture", ["-x", "-o", "-l", "\(window.windowNumber)", path], timeout: 10)) != nil {
+            return
+        }
+        let frame = window.frame
+        let top = screen.frame.maxY - frame.maxY
+        let region = "\(Int(frame.minX)),\(Int(top)),\(Int(frame.width)),\(Int(frame.height))"
+        do {
+            _ = try CommandRunner.run("/usr/sbin/screencapture", ["-x", "-R", region, path], timeout: 10)
+        } catch {
+            FileHandle.standardError.write(Data("screencapture failed by window and by region \(region): \(error)\n".utf8))
+        }
+    }
+
     func writeSnapshot(of viewName: String, to path: String) {
         // Seed watched ports so the watched section can be rendered in snapshots
         if let watchList = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_WATCH"] {
@@ -69,11 +89,12 @@ extension AppDelegate {
             // Sidebar material is composited by the window server, so an
             // offscreen render shows it blank: open the real window and let
             // screencapture photograph it (needs Screen Recording permission).
-            openWorkbench()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                if let number = self?.workbenchWindow?.windowNumber {
-                    _ = try? CommandRunner.run("/usr/sbin/screencapture", ["-x", "-o", "-l", "\(number)", path], timeout: 10)
-                }
+            let env = Foundation.ProcessInfo.processInfo.environment
+            let section = env["PORTKILLA_SNAPSHOT_SECTION"].flatMap { WorkbenchView.Section(rawValue: $0.capitalized) } ?? .ports
+            let selected = env["PORTKILLA_SNAPSHOT_SELECT"].flatMap(Int.init).flatMap { number in portManager.activePorts.first { $0.port == number }?.id }
+            openWorkbench(section: section, selection: selected)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                self?.captureWorkbench(to: path)
                 NSApp.terminate(nil)
             }
             return

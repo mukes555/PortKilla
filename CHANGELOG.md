@@ -177,7 +177,8 @@ release, rename it to the version and date.
   SHA-256 (`packaging/homebrew/portkilla.rb.tmpl`, `livecheck`,
   `brew upgrade` support). It runs only when a `HOMEBREW_TAP_TOKEN` secret
   exists; see RELEASING.md.
-- README leads with a current screenshot; the demo GIF is regenerated.
+- README leads with a current screenshot and shows the Workbench; the demo
+  GIF is regenerated.
 
 ## 1.16.0 — 2026-09-06
 

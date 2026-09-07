@@ -1,9 +1,9 @@
 import AppKit
 import PortKillaCore
 
-/// The menu bar's images: the app icon itself, dimmed while nothing is
-/// listening; a monochrome quokka cut from the artwork, a template that
-/// follows the bar's light or dark look; and a vector face for a bare debug
+/// The menu bar's images: a monochrome quokka traced from the artwork, a
+/// template that follows the bar's light or dark look; the app icon itself,
+/// dimmed while nothing is listening; and a vector face for a bare debug
 /// binary that has neither.
 enum MenuBarGlyph {
     static let pointSize: CGFloat = 18
@@ -25,7 +25,7 @@ enum MenuBarGlyph {
     /// The app icon as the bundle carries it, at menu bar size; the face
     /// from the artwork when there is no bundle.
     static func colorIcon(active: Bool) -> NSImage {
-        guard let source = appIcon() ?? faceInCircle() else { return quokka(filled: active) }
+        guard let source = appIcon() ?? MascotView.face(for: .happy) else { return quokka(filled: active) }
         let image = NSImage(size: NSSize(width: pointSize, height: pointSize), flipped: false) { rect in
             NSGraphicsContext.current?.imageInterpolation = .high
             source.draw(in: rect, from: .zero, operation: .sourceOver, fraction: active ? 1 : 0.45)
@@ -58,16 +58,6 @@ enum MenuBarGlyph {
         Bundle.main.url(forResource: "AppIcon", withExtension: "icns").flatMap { NSImage(contentsOf: $0) }
     }
 
-    private static func faceInCircle() -> NSImage? {
-        guard let face = MascotView.face(for: .happy) else { return nil }
-        let side: CGFloat = 64
-        return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
-            NSBezierPath(ovalIn: rect).addClip()
-            face.draw(in: rect)
-            return true
-        }
-    }
-
     /// Thresholded at 144 px and scaled from there, so the edges come out
     /// smooth instead of jagged. Cut once; only a hit is remembered, since
     /// a test may point at the artwork after the first ask.
@@ -79,10 +69,6 @@ enum MenuBarGlyph {
         guard let context = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
                                       space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
         context.interpolationQuality = .high
-        // An oval, like the avatar's circle but trimmed on the right: the
-        // crop's edges hold a waving hand and a mug, noise at 18 points.
-        context.addEllipse(in: CGRect(x: 2, y: 2, width: side - 14, height: side - 4))
-        context.clip()
         context.draw(source, in: fitted(source, in: CGFloat(side)))
         guard let data = context.data else { return nil }
         let pixels = data.bindMemory(to: UInt8.self, capacity: side * side * 4)

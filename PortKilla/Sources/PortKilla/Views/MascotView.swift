@@ -1,10 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// The quokka. Draws the artwork when it is in the bundle
-/// (Contents/Resources/quokka-<mood>.png, copied from assets/mascot by
-/// scripts/build.sh) and a friendly stand-in until then, so the layouts that
-/// host it are final before the art is.
+/// The quokka. Draws the artwork from the bundle (Contents/Resources/
+/// quokka-<mood>.png, copied from PortKilla/assets/mascot by scripts/build.sh)
+/// and a friendly stand-in when a file is missing.
 struct MascotView: View {
     enum Mood: String {
         case happy
@@ -24,8 +23,16 @@ struct MascotView: View {
     var size: CGFloat = 96
 
     static func artwork(for mood: Mood) -> NSImage? {
-        guard let url = Bundle.main.url(forResource: "quokka-\(mood.rawValue)", withExtension: "png") else { return nil }
-        return NSImage(contentsOf: url)
+        if let url = Bundle.main.url(forResource: "quokka-\(mood.rawValue)", withExtension: "png") {
+            return NSImage(contentsOf: url)
+        }
+        #if DEBUG
+        // A bare SwiftPM binary has no bundle; renders point at the folder.
+        if let directory = ProcessInfo.processInfo.environment["PORTKILLA_MASCOT_DIR"] {
+            return NSImage(contentsOfFile: "\(directory)/quokka-\(mood.rawValue).png")
+        }
+        #endif
+        return nil
     }
 
     var body: some View {

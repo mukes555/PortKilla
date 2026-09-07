@@ -84,7 +84,9 @@ extension AppDelegate {
             view = NSHostingView(rootView: WorkbenchView(portManager: portManager, initialSection: section, initialSelection: selected)
                 .environmentObject(self).frame(width: 1380, height: 740))
         case "tour":
-            view = NSHostingView(rootView: TourView(portManager: portManager, onFinish: {}).environmentObject(self))
+            // PORTKILLA_SNAPSHOT_TOUR_PAGE=0|1|2 picks the page.
+            let page = Int(Foundation.ProcessInfo.processInfo.environment["PORTKILLA_SNAPSHOT_TOUR_PAGE"] ?? "0") ?? 0
+            view = NSHostingView(rootView: TourView(portManager: portManager, initialPage: page, onFinish: {}).environmentObject(self))
         case "workbench-live":
             // Sidebar material is composited by the window server, so an
             // offscreen render shows it blank: open the real window and let

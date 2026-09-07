@@ -11,26 +11,26 @@ final class BrandingAndSizeTests: XCTestCase {
         let manager = PortManager.forTesting()
         defer { manager.discardTestDefaults() }
         XCTAssertEqual(manager.popoverSize, .regular, "bigger by default")
-        XCTAssertEqual(manager.menuBarIcon, .color, "the app icon by default")
+        XCTAssertEqual(manager.menuBarIcon, .mono, "the traced quokka by default")
 
         var sizeChanges = 0
         manager.onPopoverSizeChanged = { sizeChanges += 1 }
         var menuBarChanges = 0
         manager.onMenuBarPreferenceChanged = { menuBarChanges += 1 }
         manager.popoverSize = .large
-        manager.menuBarIcon = .mono
+        manager.menuBarIcon = .color
         XCTAssertEqual(sizeChanges, 1, "the open popover resizes at once")
         XCTAssertEqual(menuBarChanges, 1, "the status item redraws at once")
         XCTAssertEqual(manager.defaults.string(forKey: DefaultsKey.popoverSize), "large")
-        XCTAssertEqual(manager.defaults.string(forKey: DefaultsKey.menuBarIcon), "mono")
+        XCTAssertEqual(manager.defaults.string(forKey: DefaultsKey.menuBarIcon), "quokka")
 
         let restored = PortManager(defaults: manager.defaults, history: HistoryManager(defaults: manager.defaults), autoStart: false)
         XCTAssertEqual(restored.popoverSize, .large)
-        XCTAssertEqual(restored.menuBarIcon, .mono)
+        XCTAssertEqual(restored.menuBarIcon, .color)
 
         manager.resetAllSettings()
         XCTAssertEqual(manager.popoverSize, .regular)
-        XCTAssertEqual(manager.menuBarIcon, .color)
+        XCTAssertEqual(manager.menuBarIcon, .mono)
     }
 
     func testUnknownStoredChoicesFallBackToTheDefaults() {
@@ -41,7 +41,7 @@ final class BrandingAndSizeTests: XCTestCase {
         defaults.set("bolt", forKey: DefaultsKey.menuBarIcon)
         let manager = PortManager(defaults: defaults, history: HistoryManager(defaults: defaults), autoStart: false)
         XCTAssertEqual(manager.popoverSize, .regular)
-        XCTAssertEqual(manager.menuBarIcon, .color, "the bolt is gone; a stored choice for it means the default")
+        XCTAssertEqual(manager.menuBarIcon, .mono, "the bolt is gone; a stored choice for it means the default")
     }
 
     func testSizesGrowAndCompactIsTheOldPopover() {
@@ -145,7 +145,14 @@ final class BrandingAndSizeTests: XCTestCase {
         let happy = try XCTUnwrap(MascotView.artwork(for: .happy), "artwork under assets/mascot")
         let face = try XCTUnwrap(MascotView.face(for: .happy))
         XCTAssertLessThan(face.size.height, happy.size.height * 0.5, "the head, not the whole figure")
-        XCTAssertGreaterThan(face.size.width / face.size.height, 0.8, "roughly square, for a circle")
+        XCTAssertEqual(face.size.width, face.size.height, accuracy: 1, "a square around the head")
         XCTAssertTrue(MascotView.face(for: .happy) === face, "cut once, then cached")
+
+        // The box starts at the very first opaque row, so the ear tips are in.
+        let full = try XCTUnwrap(happy.cgImage(forProposedRect: nil, context: nil, hints: nil))
+        let box = try XCTUnwrap(MascotView.headBox(in: full))
+        XCTAssertLessThanOrEqual(box.minY, CGFloat(full.height) * 0.08, "the ears begin near 7% down this artwork")
+        XCTAssertGreaterThan(box.width, CGFloat(full.width) * 0.45, "ear to ear")
+        XCTAssertLessThan(box.maxY, CGFloat(full.height) * 0.5, "stops at the chin, above the mug and the hand")
     }
 }

@@ -144,13 +144,13 @@ public class PortManager: ObservableObject {
         }
     }
 
-    /// What the status item draws: the app icon in colour, or a monochrome
-    /// quokka that follows the menu bar's look.
+    /// What the status item draws: a monochrome quokka that follows the menu
+    /// bar's look, or the app icon in colour.
     public enum MenuBarIcon: String, CaseIterable {
-        case color = "quokka"
         case mono
+        case color = "quokka"
     }
-    @Published public var menuBarIcon: MenuBarIcon = .color {
+    @Published public var menuBarIcon: MenuBarIcon = .mono {
         didSet {
             guard !isRestoringPreferences else { return }
             defaults.set(menuBarIcon.rawValue, forKey: DefaultsKey.menuBarIcon)
@@ -371,7 +371,7 @@ public class PortManager: ObservableObject {
         confirmBeforeKill = true
         viewDensity = .simple
         showMenuBarCount = true
-        menuBarIcon = .color
+        menuBarIcon = .mono
         popoverSize = .regular
         notificationsEnabled = true
         notificationSound = true

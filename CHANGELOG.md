@@ -74,8 +74,10 @@ release, rename it to the version and date.
 - **A welcome tour** on first launch: what the app shows, how agents are
   kept from killing each other, and how to set the agents up (with the
   commands to copy). Later from the menu or `> tour`.
-- The quokka has a place: empty states and the tour show the artwork when
-  it is in the bundle, and a friendly stand-in until then.
+- **The quokka.** A new app icon, and the mascot in the welcome tour (waving
+  on the first page, on guard on the second) and in the empty state (asleep
+  on the tablet). `scripts/make_artwork.swift` turns the artwork into the
+  icon and the cut-outs.
 - **Supervisors understood.** PortKilla recognises what would undo a plain
   kill: pm2 apps, launchd jobs (Homebrew services and your own
   LaunchAgents), Docker containers, and reloaders (nodemon, `next dev`,

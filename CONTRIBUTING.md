@@ -85,6 +85,8 @@ screen-recording permission needed. CI uses the first one as a smoke test.
 | `PORTKILLA_SNAPSHOT_SEARCH="kill 3000"` | Seed the popover's search field, so the palette bar renders |
 | `PORTKILLA_SNAPSHOT_SECTION=ports\|projects\|agents\|watchlist\|history` | Which Workbench view to render |
 | `PORTKILLA_SNAPSHOT_SELECT=3000` | Select that port in the Workbench, so the inspector renders |
+| `PORTKILLA_SNAPSHOT_TOUR_PAGE=1` | Which page of the welcome tour to render |
+| `PORTKILLA_MASCOT_DIR=assets/mascot` | Where a bare binary finds the quokka art (an app bundle carries it) |
 | `PORTKILLA_SNAPSHOT_DENSITY=clean\|advanced` | Seed the row density |
 | `PORTKILLA_SNAPSHOT_WATCH=3000,9999` | Seed watched ports |
 | `PORTKILLA_SNAPSHOT_APPEARANCE=light\|dark` | Force appearance |
@@ -115,6 +117,18 @@ MCP registration in `.mcp.json`, the lsof hook in `hooks/`, the skill in
 marketplace file at the repository root. A test keeps the skill's command
 list in step with `portkilla agent-docs`. Try a working copy with
 `claude --plugin-dir plugins/portkilla`.
+
+## Artwork
+
+The app icon and the mascot come from the quokka artwork through one script:
+
+```bash
+swift scripts/make_artwork.swift icon path/to/quokka-1024.png assets/AppIcon.icns          # rounded-square mask, all sizes
+swift scripts/make_artwork.swift mascot path/to/waving.png assets/mascot/quokka-happy.png  # white background lifted, 512 px tall
+```
+
+Moods are `happy`, `sleepy`, and `guard`; `build.sh` copies them into the
+bundle and `MascotView` falls back to a symbol when one is missing.
 
 ## Coding style
 

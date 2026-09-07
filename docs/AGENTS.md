@@ -27,6 +27,11 @@ matrix checked against your machine.
 - **Unknown stays unknown.** PortNanny never guesses an owner. `portnanny
   whois <port>` shows the evidence it used: the ancestry it walked, the
   markers it found, and what was declared.
+- **Multiplexers are walls.** tmux, screen, zellij, and sshd hand every
+  pane the environment they started with, so PortNanny stops walking the
+  tree there and drops the session from inherited markers: a server
+  started inside one is unclaimed unless the pane exports
+  `PORTNANNY_OWNER` and `PORTNANNY_SESSION`.
 
 ## Compatibility matrix
 
@@ -57,7 +62,7 @@ run without a yes (`--yes` says yes to everything).
 
 | Tool | Rules | MCP |
 |---|---|---|
-| Claude Code | `portnanny agent-docs --claude` (CLAUDE.md), or the plugin: `claude plugin marketplace add mukes555/PortNanny && claude plugin install portnanny@portnanny` | `claude mcp add portnanny -- portnanny mcp`, or the plugin |
+| Claude Code | `portnanny agent-docs --claude` (CLAUDE.md), or the plugin: `claude plugin marketplace add mukes555/PortNanny && claude plugin install portnanny@portnanny` | `claude mcp add --scope user portnanny -- portnanny mcp` (what `portnanny setup` runs; drop `--scope user` for one project), or the plugin |
 | Codex CLI | `portnanny agent-docs --codex` (AGENTS.md) | `[mcp_servers.portnanny]` in `~/.codex/config.toml` (`portnanny mcp --setup codex`) |
 | Cursor | `portnanny agent-docs --cursor` (`.cursor/rules/portnanny.mdc`) | `.cursor/mcp.json` (`portnanny mcp --setup cursor`) |
 | Windsurf | `portnanny agent-docs --windsurf` (`.windsurf/rules/portnanny.md`) | its MCP settings, same command and args |
@@ -133,9 +138,10 @@ even when your tool leaves no marker.
 - `portnanny list --mine` for the servers you may stop without `--force`.
 - `portnanny doctor --agents` to see how this machine's tools are
   recognised and what to export.
-- `portnanny mcp` for the same through MCP: `list_ports`, `kill_port`,
-  `whois_port`, `whoami`, `wait_for_port_free`. `portnanny mcp --setup`
-  prints the registration for Claude Code, Cursor, and Codex.
+- `portnanny mcp` for the same through MCP: `list_ports`, `whois_port`,
+  `kill_port`, `free_port`, `reserve_port`, `release_port`, `whoami`, and
+  `wait_for_port_free`. `portnanny mcp --setup` prints the registration for
+  Claude Code, Cursor, and Codex.
 
 `portnanny agent-docs --write` puts a short version of this into CLAUDE.md
 or AGENTS.md; `portnanny schema <command>` documents every `--json` field.

@@ -33,7 +33,7 @@ Every `swift` command below is run from that package root.
 
 ```bash
 swift build
-swift run PortNanny            # launches the menu-bar app (look for the ⚡ icon)
+swift run PortNanny            # launches the menu-bar app (look for the quokka)
 ```
 
 The package also builds the standalone CLI, and the app binary answers the
@@ -88,6 +88,9 @@ screen-recording permission needed. CI uses the first one as a smoke test.
 | `PORTNANNY_SNAPSHOT_SELECT=3000` | Select that port in the Workbench, so the inspector renders |
 | `PORTNANNY_SNAPSHOT_TOUR_PAGE=1` | Which page of the welcome tour to render |
 | `PORTNANNY_MASCOT_DIR=assets/mascot` | Where a bare binary finds the quokka art (an app bundle carries it) |
+| `PORTNANNY_DEFAULTS_SUITE=<suite>` | Preferences and history go to that defaults domain, so renders and scenario runs never touch your own settings |
+| `PORTNANNY_SNAPSHOT_PANE=general\|display\|agents\|shortcuts\|protected\|about` | Which Settings pane to render |
+| `PORTNANNY_SNAPSHOT_TEXTSIZE=large` | Render at an accessibility text size to check that rows reflow |
 | `PORTNANNY_SNAPSHOT_DENSITY=clean\|advanced` | Seed the row density |
 | `PORTNANNY_SNAPSHOT_WATCH=3000,9999` | Seed watched ports |
 | `PORTNANNY_SNAPSHOT_APPEARANCE=light\|dark` | Force appearance |

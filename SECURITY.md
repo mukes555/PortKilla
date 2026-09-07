@@ -2,8 +2,10 @@
 
 PortNanny lists processes and sends signals to them (it kills processes), reads
 process metadata via `libproc` syscalls, and shells out to system tools
-(`lsof`, `ps`, `docker`). It requests no special privileges and opens no network
-listeners; its only outbound network call is a once-a-day GitHub Releases check.
+(`lsof`, `ps`, `pgrep`, `docker`, `pm2`, `launchctl`, `brew`, and `claude mcp
+add` when the setup wizard registers the MCP server). It requests no special
+privileges and opens no network listeners; its only outbound network call is a
+once-a-day GitHub Releases check.
 
 ## Reporting a vulnerability
 
@@ -16,8 +18,9 @@ we'll work on a fix and disclosure timeline with you.
 
 ## Scope worth noting
 
-- The `portnanny://` URL scheme can request a kill, but every scheme-initiated
-  kill requires an explicit in-app confirmation and refuses protected processes.
+- The `portnanny://` URL scheme can request a kill (`?force=1` asks for
+  SIGKILL), but every scheme-initiated kill requires an explicit in-app
+  confirmation that names the variant, and refuses protected processes.
 - Kills verify process identity before signalling to avoid PID-reuse mistakes.
 - The app is ad-hoc signed and not notarized (no Apple Developer account); this
   is a distribution property, documented in the README, not a code vulnerability.
@@ -41,8 +44,9 @@ environment only of processes you own, and only the handful of keys in the
 allowlist. It cannot signal root or other users' processes (the kill fails
 with EPERM). It never reads file contents, network traffic, or the
 clipboard. Nothing leaves the machine except one GET to
-`api.github.com/repos/mukes555/PortNanny/releases/latest` for the update
-check.
+`api.github.com/repos/mukes555/PortNanny/releases/latest` (or
+`.../releases?per_page=15` when beta releases are enabled) for the update
+check; the inspector's Peek is a GET to 127.0.0.1 only.
 
 ## The friendly-fire guard is a cooperation protocol
 

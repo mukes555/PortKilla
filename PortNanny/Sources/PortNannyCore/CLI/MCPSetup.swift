@@ -5,8 +5,8 @@ import Foundation
 public enum MCPSetup {
     public static let agents: [String: String] = [
         "claude": """
-        Claude Code (one command, per project or with --scope user):
-          claude mcp add portnanny -- portnanny mcp
+        Claude Code (once for every project; drop --scope user for this one only):
+          claude mcp add --scope user portnanny -- portnanny mcp
         or in .mcp.json / ~/.claude.json:
           { "mcpServers": { "portnanny": { "command": "portnanny", "args": ["mcp"] } } }
         """,

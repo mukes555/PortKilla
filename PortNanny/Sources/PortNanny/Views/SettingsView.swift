@@ -400,8 +400,8 @@ struct UpdateButton: View {
     var body: some View {
         if InstallSource.detect() == .homebrew {
             Button("Update to v\(version) with Homebrew") {
-                Pasteboard.copy("brew reinstall --cask portnanny")
-                portManager.showToast("Copied: brew reinstall --cask portnanny")
+                Pasteboard.copy("brew upgrade --cask portnanny")
+                portManager.showToast("Copied: brew upgrade --cask portnanny")
             }
             .buttonStyle(.borderedProminent)
             .help("Copies the Homebrew command; the cask replaces the app and quits the running copy")

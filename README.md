@@ -122,7 +122,7 @@ portnanny kill --orphaned                        # left behind by ended agent se
 portnanny doctor --agents                        # how every AI tool is recognised here
 ```
 
-Exit codes: `0` done, `1` nothing listening, `2` usage, `3` refused, `4` kill failed, `5` still running after the wait, `6` a supervisor would undo the kill and its tool is not on PATH (the command to run is printed). There is a URL scheme too: `open "portnanny://kill/3000"` or `portnanny://show`.
+Exit codes: `0` done, `1` nothing listening, `2` usage, `3` refused, `4` kill failed, `5` still running after the wait, `6` a supervisor would undo the kill and its tool is not on PATH (the command to run is printed), `70` PortNanny itself failed (for example, the JSON could not be encoded). There is a URL scheme too: `open "portnanny://kill/3000"` (add `?force=1` for SIGKILL; both ask first) or `portnanny://show`.
 
 ## Keyboard
 

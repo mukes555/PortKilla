@@ -100,8 +100,9 @@ extension CLIArguments {
             portnanny mcp --setup [claude|cursor|codex]
 
             Runs a Model Context Protocol server over stdin/stdout with the tools
-            list_ports, kill_port (dry-run by default), whois_port, whoami, and
-            wait_for_port_free. It is not a background service: each agent starts
+            list_ports, whois_port, kill_port (dry-run by default), free_port,
+            reserve_port, release_port, whoami, and wait_for_port_free. It is not
+            a background service: each agent starts
             its own copy when it needs one and stops it afterwards, so register it
             once and forget it. `--setup` prints the registration (the exact
             `claude mcp add` command, Cursor's mcp.json, Codex's config.toml).
@@ -116,7 +117,7 @@ extension CLIArguments {
             when the whole range is taken.
             """
         case "schema": return """
-            portnanny schema [list|kill|whois|whoami|wait|history|version|doctor|agents|free-port]
+            portnanny schema [list|kill|whois|whoami|wait|history|version|doctor|agents|free-port|reserve|release|reservations|drift]
 
             Prints the JSON contract for a command's --json output: every field and
             its meaning (`agents` is `doctor --agents`). Fields are only ever added,

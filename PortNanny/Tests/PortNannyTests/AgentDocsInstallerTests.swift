@@ -7,6 +7,20 @@ final class AgentDocsInstallerTests: XCTestCase {
         FileManager.default.temporaryDirectory.appendingPathComponent("portnanny-docs-\(UUID().uuidString).md")
     }
 
+    func testAFileWrittenByPortKillaIsUpdatedInPlace() throws {
+        let file = temporaryFile()
+        defer { try? FileManager.default.removeItem(at: file) }
+        let old = "# My project\n\n<!-- portkilla:begin -->\nRun `portkilla free 3000`.\n<!-- portkilla:end -->\n"
+        try old.write(to: file, atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(try AgentDocsInstaller.install(into: file), .updated, "the old block is replaced, not joined by a second one")
+        let text = try String(contentsOf: file, encoding: .utf8)
+        XCTAssertFalse(text.contains("portkilla:begin"), "the old markers go with the old block")
+        XCTAssertEqual(text.components(separatedBy: AgentDocsInstaller.beginMarker).count, 2, "exactly one section")
+        XCTAssertTrue(text.hasPrefix("# My project\n"), "the rest of the file is untouched")
+        XCTAssertEqual(try AgentDocsInstaller.install(into: file), .unchanged)
+    }
+
     func testInstallIsIdempotentAndUpdatesInPlace() throws {
         let file = temporaryFile()
         defer { try? FileManager.default.removeItem(at: file) }
@@ -47,7 +61,7 @@ final class AgentDocsInstallerTests: XCTestCase {
         XCTAssertEqual(CLIArguments.parse(["mcp", "--setup"]), .success(.mcpSetup(agent: nil)))
         XCTAssertEqual(CLIArguments.parse(["mcp", "--setup", "cursor"]), .success(.mcpSetup(agent: "cursor")))
         XCTAssertEqual(CLIArguments.parse(["mcp", "--setup", "emacs"]), .failure(.unknownOption("emacs", command: "mcp --setup")))
-        XCTAssertTrue(MCPSetup.instructions(for: "claude").contains("claude mcp add portnanny"))
+        XCTAssertTrue(MCPSetup.instructions(for: "claude").contains("claude mcp add --scope user portnanny -- portnanny mcp"), "the same command the setup wizard runs")
         for agent in ["claude", "cursor", "codex"] {
             XCTAssertTrue(MCPSetup.instructions(for: nil).contains(MCPSetup.agents[agent]!.split(separator: "\n").first!))
         }

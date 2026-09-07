@@ -29,7 +29,13 @@ public enum CLIExec {
             // Pinned to exec's own pid: if exec is killed outright, the lease goes with it.
             let lease = Reservation(port: port, owner: owner ?? Reservation.currentUser, sessionKey: session, sessionPid: Int(getpid()),
                                     reason: "exec: \(options.command.joined(separator: " ").prefix(60))", ttl: Reservation.maxTTL)
-            try? store.reserve(lease, by: caller)
+            do {
+                _ = try store.reserve(lease, by: caller)
+            } catch {
+                // Someone leased the port between the check and now; the
+                // command still runs, just without the lease.
+                PortNannyCLI.printError("portnanny: could not lease :\(port) (\(error)); running without a lease")
+            }
         }
         defer {
             if options.reserve { _ = store.release(port: port, by: caller, force: true) }

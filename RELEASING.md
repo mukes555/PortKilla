@@ -10,7 +10,7 @@ one source of truth. `.github/workflows/release.yml` runs
 `PortNanny/scripts/release-notes.sh <version>`, which:
 
 1. Extracts the `## <version>` section from `CHANGELOG.md`.
-2. Wraps it in a standard **"⚡ What's new in vX.Y.Z"** header + an **Install**
+2. Wraps it in a standard **"What's new in vX.Y.Z"** header + an **Install**
    block (download link, universal/macOS-13 note, quarantine tip).
 3. GitHub appends its auto-generated "Full Changelog" compare link below.
 
@@ -21,8 +21,8 @@ Changed / Fixed / Security / Distribution**. Accumulate them under
 ## Cutting a release
 
 1. Move the `[Unreleased]` notes into a new `## <version> (<YYYY-MM-DD>)` section.
-2. Bump `VERSION=` in `PortNanny/scripts/build.sh` and the DMG reference in
-   `README.md`.
+2. Bump `VERSION=` in `PortNanny/scripts/build.sh` (`scripts/check-version.sh`
+   fails CI when it disagrees with the changelog).
 3. Merge to `main` (via PR, never push to `main` directly).
 4. Tag and push:
    ```bash
@@ -42,9 +42,10 @@ token with *Contents: read and write* on `mukes555/homebrew-tap`), the release
 workflow renders `packaging/homebrew/portnanny.rb.tmpl` with the version and
 the zip's SHA-256 and pushes it to the tap, so `brew upgrade --cask portnanny`
 sees new releases and Homebrew verifies the download. Without the secret the
-job skips and the tap keeps its `version :latest` cask, which needs
-`brew reinstall` to update. Add the secret under Settings → Secrets and
-variables → Actions in the PortNanny repository.
+job skips and the pin is done by hand: render the template with the version
+and the zip's SHA-256 from the release's `SHA256SUMS`, and push it as
+`Casks/portnanny.rb` in `mukes555/homebrew-tap`. Add the secret under
+Settings → Secrets and variables → Actions in the PortNanny repository.
 
 ## Preview release notes locally
 

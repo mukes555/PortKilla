@@ -1,303 +1,164 @@
-<p align="center"><img src="assets/icon.png" width="128" alt="PortKilla's icon: a quokka in sunglasses with a coffee and a laptop"></p>
-<p align="center"><img src="assets/logo.png" width="680" alt="PortKilla — the macOS menu bar port manager"></p>
-
-# PortKilla - macOS Port Manager
-
 <p align="center">
-<a href="https://github.com/mukes555/PortKilla/actions/workflows/ci.yml"><img src="https://github.com/mukes555/PortKilla/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-<a href="https://github.com/mukes555/PortKilla/releases/latest"><img src="https://img.shields.io/github/v/release/mukes555/PortKilla?display_name=tag" alt="Latest release"></a>
-<img src="https://img.shields.io/badge/macOS-13%2B-blue" alt="macOS 13+">
-<img src="https://img.shields.io/badge/arch-universal-blue" alt="Universal binary">
-<a href="LICENSE"><img src="https://img.shields.io/github/license/mukes555/PortKilla" alt="License"></a>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.png">
+    <img src="assets/logo-light.png" width="820" alt="PortKilla: the macOS port manager that knows whose server it is">
+  </picture>
 </p>
 
-`lsof -ti:3000 | xargs kill -9` frees the port. PortKilla does the same, and
-tells you *whose* server you are about to kill.
+<p align="center">
+  <a href="https://github.com/mukes555/PortKilla/actions/workflows/ci.yml"><img src="https://github.com/mukes555/PortKilla/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/mukes555/PortKilla/releases/latest"><img src="https://img.shields.io/github/v/release/mukes555/PortKilla?display_name=tag" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-13%2B-blue" alt="macOS 13 or newer">
+  <img src="https://img.shields.io/badge/arch-universal-blue" alt="Universal binary">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/mukes555/PortKilla" alt="MIT license"></a>
+</p>
 
-<p align="center"><img src="assets/screenshot.png" width="500" alt="PortKilla: listening ports with process, project, memory, connected clients, a supervisor chip, and the AI agent that started each"></p>
+<p align="center">
+  <b>Every listening port, who started it, and the right way to stop it.</b><br>
+  A menu bar app, a Workbench window, a <code>portkilla</code> CLI, and an MCP server,<br>
+  so you free ports in one keystroke and your AI agents never kill each other's servers.
+</p>
 
-<p align="center"><img src="assets/workbench.png" width="820" alt="The PortKilla Workbench: a sidebar of ports, projects, agent sessions, watchlist, and history; a sortable table; an inspector for the selected port"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/screenshot-dark.png">
+    <img src="assets/screenshot-light.png" width="580" alt="The PortKilla popover: watched ports on top, then every listening port with its type, process, exposure, connected clients, the agent session that started it, project, memory, and CPU trend">
+  </picture>
+</p>
 
-**PortKilla** is a lightweight, native macOS menu bar app that helps developers identify and kill processes occupying ports. Instantly fix `EADDRINUSE` errors, terminate stuck Node.js servers, and free up localhost ports without touching the terminal.
+> The pictures show the 2.0 line on `main`. The current release is 1.16; 2.0 betas are next.
 
-## 🎬 See it
+## In twenty seconds
 
-<p align="center"><img src="assets/demo.gif" width="500" alt="PortKilla demo: search port 3000, kill it, watch it come back free"></p>
+<p align="center"><img src="assets/demo.gif" width="580" alt="Press the hotkey, type 3000, press Return: the port is free"></p>
 
-## 🚀 Key Features
+1. <kbd>⌥</kbd><kbd>⌘</kbd><kbd>P</kbd> opens PortKilla from any app. The search field already has focus.
+2. Type what you mean: `3000`, `vite`, `kill 3000`, `open 5173`, `watch 8080`, `free port`, or `>` for commands.
+3. <kbd>⏎</kbd> does it. A server with clients, a lease, or a running agent behind it asks first.
 
-*   **See What’s Listening**: Lists listening TCP ports and bound UDP sockets with process name, command, and memory.
-*   **Process Tree View**: Expand any process to see its child processes (e.g., Python spawning worker threads).
-*   **Smart Kill**:
-    *   **Kill Port**: Terminates the main process.
-    *   **Kill Tree**: Automatically terminates child processes (like `sleep` or worker threads) when killing the parent.
-    *   **Force Kill**: Hold Option while clicking kill to send SIGKILL.
-*   **Docker Integration**: Automatically detects and displays Docker container names next to mapped ports.
-*   **Kill All Dev**: One-click bulk kill for every dev server in the Web category (Node, Python, Java, Ruby, PHP, Go, nginx), with a protected list that keeps IDEs and tools safe. On the Databases or Docker tab the same button kills that category instead.
-*   **Test Radar (Beta)**: Detect common test runners (Jest/Vitest/Mocha/etc) and kill them from the Tests filter.
-*   **History + CSV Export**: View recent kills and export to CSV.
+<img src="assets/menubar.png" width="210" align="right" alt="The quokka in the menu bar, next to the number of dev ports">
 
-## ⚡ Keyboard-First Workflow
+It lives in the menu bar as the quokka with the count of your dev ports (not every macOS daemon). Pin it as a floating window when you want it to stay, or open the Workbench when you want the whole picture.
 
-The whole flow works without touching the mouse: **⌥⌘P → type "3000" or "vite" → ⏎ → dead**.
-
-*   **⌥⌘P**: Open PortKilla from anywhere (global hotkey, no permissions needed).
-*   **Type to search**: The search field is focused the moment the popover opens.
-*   **↑ / ↓**: Move the selection. **→ / ←**: Expand/collapse the process tree.
-*   **⏎**: Kill the selected process (**⌘⏎** force kills with SIGKILL).
-*   **⌘O**: Open `http://localhost:<port>` for the selected row in your browser.
-*   **⌘C**: Copy the selected port number.
-*   **⌘R**: Refresh. **⌘K**: Kill all dev servers (or all tests on the Tests filter).
-*   **Esc**: Clear search, then close.
-*   **Option+Click ✕**: Force kill. **Shift+Click ✕**: Kill the whole process tree.
-
-## 🛡 Signal over Noise
-
-*   **Hide System Processes** (default on): system daemons stay out of your way — a footer hint shows how many are hidden.
-*   **Exposed badge**: ports bound to `0.0.0.0`/`*` are flagged — they're reachable from your local network, not just localhost.
-*   **Project detection**: each dev server shows its actual project folder (from the process working directory) — right-click to reveal it in Finder or open it in Terminal.
-*   **Connected clients**: every listener shows how many connections are open to it, and killing a server that still has clients always asks first.
-*   **The Workbench**: a full window with a sortable table, ports by project, ports by agent session (with one-click clean-up of ended sessions), the watchlist, History, and an inspector that shows the evidence behind each owner.
-*   **Sparklines, peers, and a peek**: the Workbench charts CPU and memory per process, lists who is connected to each server (local, LAN, elsewhere), and can show a local web server's status and title with one click.
-*   **Type what you mean**: `kill 3000`, `open 5173`, `watch 8080`, `free port`, or `>` for commands, right in the search field; Return does it.
-*   **Supervisors understood**: a pm2 app, a launchd job, a Docker container, or a reloader (nodemon, `next dev`, `uvicorn --reload`) would undo a plain kill, so PortKilla stops it the way its supervisor expects and shows why.
-*   **Secrets stay private**: command lines are redacted (`--token=...`, `KEY=...`, URL passwords, bearer tokens) before they are shown, exported, or handed to an agent.
-*   **Smart menu-bar count**: the badge counts your dev ports, not every macOS daemon.
-*   **Protected processes** (shield icon): IDEs and tools are skipped by bulk kills.
-*   **Launch at Login**: toggle it in Settings (⚙︎ / ⌘,).
-
-## 🔔 Port Watchlist
-
-Right-click any port → **Watch**. Watched ports are **pinned to the top of the list with live status** — including "free ✓" — and PortKilla notifies you the moment a watched port **frees up** (no more `EADDRINUSE` retry-loops) or when **something new grabs it**. Searching a free port number offers to watch it in one click, and a kill that's slow to finish notifies you when the port is finally available.
-
-## 🤖 Agent-Aware (friendly-fire protection)
-
-Running several AI coding agents? PortKilla attributes each dev server to the
-**agent that started it** (Claude Code, Codex CLI, Gemini CLI, Copilot CLI,
-OpenCode, Aider, Cursor, VS Code, Windsurf, Zed, Trae). No launcher, no
-registry, no setup: it reads two passive signals, the process tree and the
-environment markers agents leave on their children (like `CLAUDECODE=1`). The
-second one survives `nohup`, pm2, and backgrounded shells, so a server keeps
-its owner even after it has been reparented to launchd.
-
-**One decision for every kill.** The CLI refuses to stop a port owned by
-another agent's *running* session; the GUI warns you before you do it, bulk
-dialogs say how many targets belong to running agents, and port guards never
-auto-kill one. Sessions that have ended show a grey "(ended)" chip and can be
-stopped by anyone. An editor terminal (VS Code, Cursor, ...) counts as "started
-inside the editor", not as an agent, so it never locks a port. Commands typed in
-an editor terminal are treated as a person's, except against another agent's
-running server, where they need `--force`: an editor's built-in agent leaves no
-marker PortKilla can see. Identified agents are also refused servers nobody
-claims (most likely a person's), so they ask instead of guessing.
-
-```bash
-portkilla kill 3000
-# :3000 (PID 812) is owned by Cursor (session 812), not Claude Code (session 46200)
-# Refusing to kill another agent's server. Pass --force to override, or run `portkilla whoami` ...
-```
-
-- `portkilla whoami` shows how the guard sees the caller; `portkilla whois <port>`
-  shows the evidence behind an owner. Tools that export no session id can set
-  `PORTKILLA_SESSION`; the full compatibility matrix is in
-  [docs/AGENTS.md](docs/AGENTS.md).
-- `portkilla list --mine`, `--agent <name>`, `--unowned`, `--orphaned` filter by owner.
-- `portkilla kill <port> --dry-run [--json]` reports the decision without signalling.
-- `portkilla free <port>` (exit 0 if already free), `wait <port>`, and
-  `history --port <port>` (who started and who stopped it) round out the
-  agent workflow. Kills from the CLI appear in the app's History too.
-- Markers seen through tmux, screen, zellij, or ssh name the agent but not
-  the session, since a multiplexer inherits the environment of whoever
-  started it.
-- `portkilla agent-docs` prints a snippet for your CLAUDE.md / AGENTS.md so
-  agents call `portkilla free` instead of `kill -9 $(lsof -ti:PORT)`;
-  `--write` puts it there for you, `--claude-hook` prints a Claude Code hook
-  that intercepts the old habit.
-- `portkilla mcp` runs an MCP server over stdio (tools `list_ports`,
-  `kill_port`, `whoami`, `wait_for_port_free`) so the guard is a tool the
-  agent has rather than a convention it remembers:
-
-  ```json
-  { "mcpServers": { "portkilla": { "command": "portkilla", "args": ["mcp"] } } }
-  ```
-- Export `PORTKILLA_OWNER=<name>` to declare who you are and to label every
-  server you start. When nothing is known about a port, PortKilla says so
-  rather than guessing.
-
-## 📡 More Signal
-
-*   **Native scanner**: ports and processes are enumerated with raw kernel syscalls (libproc) — a full scan takes ~20ms with zero subprocesses.
-*   **Pin as Floating Window**: keep the list on top while you work (⋯ menu); resizable, remembers its place, and every shortcut works in it.
-*   **Port guards** 🛡⚡: opt-in per watched port (right-click → Guard, or Settings → Watched ports) — anything of yours that grabs a guarded port gets auto-killed, with a notification. Servers of a running AI agent session are never auto-killed.
-*   **UDP ports** are listed too (tagged `UDP`; ephemeral outgoing sockets filtered out).
-*   **Age & CPU** per process in tooltips and details — Test Radar shows live CPU to expose runaway watchers.
-*   **Open Project in your editor**: VS Code, Cursor, Zed, Sublime Text, and Trae are auto-detected.
-*   **Configurable hotkey**: Settings → Shortcuts (default ⌥⌘P).
-
-## 🤖 Set up your agents
-
-```bash
-portkilla setup                      # asks, tool by tool; --yes applies everything
-```
-
-Or piece by piece: `portkilla agent-docs --claude|--codex|--cursor|--windsurf`
-writes the rule file each tool reads (CLAUDE.md, AGENTS.md,
-`.cursor/rules/portkilla.mdc`, `.windsurf/rules/portkilla.md`);
-`portkilla mcp --setup` prints the MCP registration for Claude Code, Cursor,
-and Codex. Claude Code users can take the plugin instead, which bundles the
-MCP server, the lsof hook, a skill, and `/portkilla:ports` and `/portkilla:free`:
-
-```bash
-claude plugin marketplace add mukes555/PortKilla
-claude plugin install portkilla@portkilla
-```
-
-The full compatibility matrix, tool by tool, is in [docs/AGENTS.md](docs/AGENTS.md).
-
-## ⌨️ CLI Companion
-
-The app bundle ships a standalone `portkilla` CLI (no AppKit, starts in a few
-milliseconds), and the app binary answers the same commands:
-
-```bash
-# Homebrew installs already have `portkilla` on PATH; otherwise:
-ln -s /Applications/PortKilla.app/Contents/Helpers/portkilla /usr/local/bin/portkilla
-```
-
-```bash
-portkilla list            # table of listening ports (with owning agent)
-portkilla list --json     # JSON output for scripts
-portkilla kill 3000       # graceful kill of everything on :3000 (SIGTERM, verified)
-portkilla kill 3000 --force
-portkilla kill --pid 812 --dry-run --json
-portkilla free 3000 && npm run dev   # exit 0 when already free
-portkilla wait 3000 --timeout 30     # block until the port is free
-portkilla history --port 3000        # who started it, who stopped it
-portkilla whoami          # which agent the friendly-fire guard thinks you are
-portkilla whois 3000      # who started it, and why PortKilla thinks so
-portkilla exec --free-port -- npm run dev   # PORT set to a free, leased, attributed port
-portkilla reserve 3000 --for 10m            # lease a free port; release with `release`
-portkilla drift           # servers not on the port their .env or package.json says
-portkilla kill --orphaned # stop servers left behind by agent sessions that ended
-portkilla free-port --prefer 3000    # first free port in 3000-3999, nothing else printed
-portkilla schema kill     # every field of `kill --json`, documented
-portkilla doctor --agents # how every AI tool is recognised on this machine
-```
-
-Exit codes: 0 done, 1 nothing listening, 2 usage, 3 refused (another agent's
-live session owns it, or nobody PortKilla can name), 4 kill failed, 5 still
-running after the wait, 6 managed (a supervisor would undo the kill and its
-tool is not on PATH; the command to run is printed).
-
-There's also a URL scheme: `open "portkilla://kill/3000"` or `portkilla://show`.
-
-## 🔄 Updates
-
-PortKilla checks GitHub Releases once a day (Settings → About → **Check for Updates…**) and shows a **Download vX.Y.Z** item when a newer version exists. No auto-installer — the app is unsigned (no Apple Developer program), so updates stay a deliberate download.
-
-> **First launch note:** the app is not notarized, so macOS warns once. On
-> macOS 15+ use System Settings → Privacy & Security → **Open Anyway**; on
-> 13 and 14, right-click → **Open**. Homebrew skips all of this. Details and
-> uninstall steps: [docs/FIRST-RUN.md](docs/FIRST-RUN.md).
-
-## 💻 Requirements
-
-- **macOS 13 (Ventura) or newer** — including the latest macOS. (Uses Ventura-era
-  APIs: `SMAppService` for launch-at-login, `NavigationSplitView` for Settings.)
-- **Apple Silicon and Intel** — the release is a **universal binary** (arm64 +
-  x86_64), running natively on both.
-- No dependencies to install; the app is fully self-contained.
-
-## 📦 Installation
-
-### Homebrew (recommended)
+## Install
 
 ```bash
 brew tap mukes555/tap
-brew install --cask portkilla
+brew install --cask portkilla        # later: brew reinstall --cask portkilla
 ```
 
-If Homebrew asks you to trust the tap (standard for third-party casks), run
-`brew trust mukes555/tap` once. The cask installs the latest universal release,
-clears the Gatekeeper quarantine, and puts the `portkilla` CLI on your PATH.
-Shell completions: `portkilla completions zsh` (also bash, fish). To update later:
+The cask installs the universal build, clears the Gatekeeper quarantine, and puts `portkilla` on your PATH. Prefer a download? Grab the DMG from [Releases](https://github.com/mukes555/PortKilla/releases/latest); the app is ad-hoc signed, not notarized, so macOS asks once (System Settings > Privacy & Security > Open Anyway on macOS 15, right-click > Open on 13 and 14). Details and uninstall steps: [docs/FIRST-RUN.md](docs/FIRST-RUN.md).
+
+Without Homebrew, the CLI ships inside the app:
 
 ```bash
-brew reinstall --cask portkilla
+ln -s /Applications/PortKilla.app/Contents/Helpers/portkilla /usr/local/bin/portkilla
+portkilla completions zsh            # also bash and fish
 ```
 
-(The cask tracks `latest`, so a plain `brew upgrade` does not see new releases.)
+## The popover
 
-### Build from Source
-PortKilla is written in native Swift for maximum performance and minimal battery impact.
+<img src="assets/palette.png" width="330" align="right" alt="Typing kill 4400 offers to stop the server, and says its watch-mode supervisor goes with it">
+
+- **Type what you mean.** `kill 3000`, `open 5173`, `watch 8080`, `free port`, `>` commands. Return runs it; the bar says exactly what will happen.
+- **Every row tells you enough to decide.** A type tile, the port, the process, and chips for what matters: `exposed` on all interfaces, connected clients, the agent session that started it (teal while it runs, grey once it ended), project, container, a lease, a supervisor.
+- **Two densities, three sizes.** Simple shows the essentials; Advanced adds the command, project chips, CPU with a trend line, and the process tree. Compact, Regular, or Large in Settings.
+- **Calm until you point.** Kill is always there. Open in browser, Watch, and Details appear on hover. <kbd>⌥</kbd>-click force kills, <kbd>⇧</kbd>-click takes the whole tree.
+- **Supervisors understood.** pm2, launchd, Docker, nodemon, `next dev`, `uvicorn --reload`: a plain kill would be undone, so PortKilla stops it the way its supervisor expects and says so first.
+- **Watch and guard.** Watched ports sit on top with live status, including "free", and notify you when they change. A guard auto-kills whatever grabs a port, except a running agent's server.
+- **Filters and bulk kills.** All, Dev, Databases, Docker, Tests. <kbd>⌘</kbd><kbd>K</kbd> kills the current filter, skipping protected tools and supervised servers.
+
+## The Workbench
+
+<p align="center"><img src="assets/workbench.png" width="900" alt="The Workbench: a sidebar of Ports, Projects, Agents, Watchlist, and History; a sortable table with project, agent, supervisor, memory, CPU, trend, and age; an inspector on the right"></p>
+
+- **Ports** as a sortable table with project, agent, supervisor, memory, CPU, trend, and age.
+- **Projects** groups servers by folder; **Agents** groups them by session, with one click to clean up what an ended session left behind.
+- **Watchlist** holds watched ports, guards, and port leases; **History** knows who started and who stopped every port, with CSV export.
+- **The inspector** shows who is connected (local, LAN, elsewhere), the evidence behind the owner, the port's history, and a one-click peek at a local web server's status and title.
+
+## For AI agents
+
+<img src="PortKilla/assets/mascot/quokka-guard.png" width="150" align="right" alt="The quokka on guard">
+
+Running Claude Code, Codex, Cursor, and friends side by side means `kill -9 $(lsof -ti:3000)` eventually kills the wrong server. PortKilla attributes every dev server to the agent session that started it, from two passive signals: the process tree, and the environment markers agents leave on their children (`CLAUDECODE=1` and the like), which survive `nohup`, pm2, and reparenting. No launcher, no registry.
+
+**One rule everywhere.** An agent that asks to stop another agent's running server, or a server nobody claims, is refused and told why. You get a notification and decide. People are warned, never refused. Ended sessions and editor terminals never lock a port.
+
+```bash
+$ portkilla kill 3000
+:3000 (PID 812) is owned by Cursor (session 812), not Claude Code (session 46200)
+Refusing to kill another agent's server. Ask the user, or start yours on a free port.
+```
+
+Set the tools up in one go, or piece by piece:
+
+```bash
+portkilla setup                                  # asks per tool; --yes applies everything
+portkilla agent-docs --claude|--codex|--cursor|--windsurf   # rule files the tools read
+portkilla mcp --setup                            # MCP registration for Claude Code, Cursor, Codex
+claude plugin marketplace add mukes555/PortKilla && claude plugin install portkilla@portkilla
+```
+
+The MCP server (`portkilla mcp`) exposes `list_ports`, `whois_port`, `kill_port`, `free_port`, `reserve_port`, `release_port`, `whoami`, and `wait_for_port_free`, so the guard is a tool the agent has rather than a habit it must remember. Ports can be leased before use: `portkilla exec --free-port -- npm run dev` picks a free port, leases it, sets `PORT`, and labels the server; `reserve 3000 --for 10m` holds one by hand. Tools without a session id can export `PORTKILLA_OWNER` and `PORTKILLA_SESSION`. The full compatibility matrix is in [docs/AGENTS.md](docs/AGENTS.md).
+
+## The CLI
+
+Starts in a few milliseconds, no AppKit, and every command has `--json` and a documented schema (`portkilla schema kill`).
+
+```bash
+portkilla list [--json] [--mine | --agent <name> | --unowned | --orphaned]
+portkilla kill 3000 [--force] [--dry-run]        # SIGTERM, verified; also by --pid
+portkilla free 3000 && npm run dev               # exit 0 when already free
+portkilla wait 3000 --timeout 30                 # block until the port is free
+portkilla whois 3000                             # who started it, and the evidence
+portkilla whoami                                 # how the guard sees the caller
+portkilla history --port 3000 [--all]            # kills, and refusals with --all
+portkilla free-port --prefer 3000                # first free port in 3000-3999
+portkilla exec --free-port -- npm run dev        # leased, attributed, PORT set
+portkilla reserve 3000 --for 10m                # hold a free port; release, reservations
+portkilla drift                                  # servers off the port their config names
+portkilla kill --orphaned                        # left behind by ended agent sessions
+portkilla doctor --agents                        # how every AI tool is recognised here
+```
+
+Exit codes: `0` done, `1` nothing listening, `2` usage, `3` refused, `4` kill failed, `5` still running after the wait, `6` a supervisor would undo the kill and its tool is not on PATH (the command to run is printed). There is a URL scheme too: `open "portkilla://kill/3000"` or `portkilla://show`.
+
+## Keyboard
+
+| Keys | Action |
+| --- | --- |
+| <kbd>⌥</kbd><kbd>⌘</kbd><kbd>P</kbd> | Open PortKilla from anywhere (changeable in Settings) |
+| <kbd>↑</kbd> <kbd>↓</kbd>, <kbd>→</kbd> <kbd>←</kbd> | Move the selection, expand or collapse the tree |
+| <kbd>⏎</kbd>, <kbd>⌘</kbd><kbd>⏎</kbd> | Kill the selection, force kill |
+| <kbd>⌘</kbd><kbd>O</kbd>, <kbd>⌘</kbd><kbd>C</kbd> | Open `localhost:<port>`, copy the port |
+| <kbd>⌘</kbd><kbd>K</kbd>, <kbd>⌘</kbd><kbd>R</kbd> | Kill the current filter, refresh |
+| <kbd>⌘</kbd><kbd>,</kbd>, <kbd>Esc</kbd> | Settings; clear the search, then close |
+
+## Settings
+
+- **General:** launch at login, refresh interval, confirm before killing, notifications and sound, watched ports and their guards, history length.
+- **Display:** popover size, row density, hide system processes, automatic peeks, the menu bar icon (traced quokka or the color app icon) and count.
+- **Shortcuts:** the global hotkey and a list of everything else.
+- **Protected:** process names that bulk kills never touch (IDEs and tools by default).
+- **About:** updates (checked once a day against GitHub Releases, downloaded by you), debug info for bug reports, reset.
+
+## Privacy and safety
+
+No accounts, no telemetry. The only network request is the daily release check. Command lines are redacted (`--token=`, `KEY=`, URL passwords, bearer tokens) before they are shown, exported, or handed to an agent. Kills are verified, bulk kills skip protected names and supervised servers, and the one automation that kills without asking, the guard, never touches a running agent's server. Ports and processes come from raw kernel calls (libproc): a full scan takes about 20 ms with no subprocesses.
+
+## Requirements and building
+
+macOS 13 or newer, Apple Silicon or Intel (one universal binary), nothing to install. To build it yourself:
 
 ```bash
 git clone https://github.com/mukes555/PortKilla.git
-cd PortKilla/PortKilla     # the Swift package lives in a nested dir
-./scripts/build.sh
+cd PortKilla/PortKilla            # the Swift package is nested
+./scripts/build.sh                # dist/PortKilla.app; add --dmg for a disk image
 ```
 
-> Contributing? See **[CONTRIBUTING.md](CONTRIBUTING.md)** and
-> **[ARCHITECTURE.md](ARCHITECTURE.md)** — `swift run PortKilla` launches the
-> app in ~60s, and `swift test --disable-sandbox` runs the suite.
+`swift run PortKilla` launches the app and `swift test --disable-sandbox` runs the suite. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the module map in [ARCHITECTURE.md](ARCHITECTURE.md). Security reports: [SECURITY.md](SECURITY.md). What changed when: [CHANGELOG.md](CHANGELOG.md).
 
-Build output lands in `dist/`:
+## License
 
-- `dist/PortKilla.app`
-
-Drag `PortKilla.app` to `/Applications`.
-
-### Build a DMG (optional)
-
-```bash
-./scripts/build.sh --dmg
-```
-
-This produces `dist/PortKilla-1.16.0.dmg`.
-
-To distribute to other Macs without Gatekeeper prompts, you’ll eventually want Developer ID signing + notarization.
-
-## ❓ FAQ
-
-**Why is it unsigned?** Notarization needs a paid Apple Developer account, which
-this project does not have. The build is ad-hoc signed and reproducible
-(`scripts/build.sh`), releases ship `SHA256SUMS`, and the source is here.
-See [docs/FIRST-RUN.md](docs/FIRST-RUN.md).
-
-**Why menu bar only?** It is a tool you reach for from any app, so it lives
-in the menu bar (`LSUIElement`) with a global hotkey instead of a Dock icon.
-Pin it as a floating window when you want it to stay.
-
-**What does "exposed" mean?** The socket is bound to `0.0.0.0` or `*`, so it
-is reachable from your local network, not just this machine. It is the one
-badge that is a security signal rather than a convenience.
-
-**How does agent attribution work without a launcher?** Two passive
-signals: the process tree (server → shell → agent) and the environment
-markers agents leave on their children (`CLAUDECODE=1` and friends), which
-survive being reparented. No daemon, no registry. When PortKilla doesn't
-know, it says so.
-
-**Something looks wrong. How do I report it?** `portkilla doctor` (or
-Settings → About → Copy debug info) gives the facts a bug report needs.
-
-## 🖥 Usage
-
-1.  **Open PortKilla** from your menu bar (the quokka; Settings > Display can swap it for the color app icon).
-2.  **View Active Ports**: See a categorized list of Web, Database, and other processes.
-3.  **Process Tree**: In Advanced density, click a row with a chevron to expand its child processes; in Simple density a click opens the details sheet.
-4.  **Free a Port**: 
-    *   Click **X** to kill.
-    *   **Shift+Click X** to kill the entire process tree.
-    *   **Option+Click X** to force kill.
-5.  **Row density & Settings**: toggle **Simple / Advanced** in the header; open **Settings** with ⚙︎ or ⌘, (sidebar-style, native).
-6.  **History**: open it from the **⋯** menu to view and export past kills.
-
-## 🤝 Contributing
-
-Contributions welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)** for a 60-second
-clone-to-run guide and **[ARCHITECTURE.md](ARCHITECTURE.md)** for the module map.
-
-## 📄 License
-
-MIT License. Free to use for personal and commercial development.
+MIT. Free for personal and commercial use.

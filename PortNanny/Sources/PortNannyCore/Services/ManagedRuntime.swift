@@ -226,11 +226,14 @@ extension ManagedRuntime {
     public static func waitForPortsFree(_ ports: [Int], timeout: TimeInterval) -> Set<Int> {
         var busy = Set(ports)
         let deadline = Date().addingTimeInterval(timeout)
-        while !busy.isEmpty && Date() < deadline {
+        // One look before the clock: `--timeout 0` asks "is it free now?".
+        repeat {
             let listening = Set((NativeScanner.allListeners() ?? []).map(\.port))
             busy = busy.intersection(listening)
-            if !busy.isEmpty { Thread.sleep(forTimeInterval: 0.2) }
-        }
+            if busy.isEmpty { break }
+            if Date() >= deadline { break }
+            Thread.sleep(forTimeInterval: 0.2)
+        } while true
         return busy
     }
 

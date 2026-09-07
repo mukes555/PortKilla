@@ -22,7 +22,8 @@ public enum ToolLocator {
                            "\(home)/.volta/bin", "\(home)/.bun/bin", "\(home)/Library/pnpm", "\(home)/.local/share/pnpm",
                            "\(home)/.yarn/bin", "\(home)/.local/bin"]
         // nvm and fnm keep one bin directory per Node version.
-        for versions in ["\(home)/.nvm/versions/node", "\(home)/.local/share/fnm/node-versions"] {
+        for versions in ["\(home)/.nvm/versions/node", "\(home)/.local/share/fnm/node-versions",
+                         "\(home)/Library/Application Support/fnm/node-versions"] {
             let names = (try? FileManager.default.contentsOfDirectory(atPath: versions)) ?? []
             for name in names.sorted().reversed() {
                 directories.append("\(versions)/\(name)/bin")

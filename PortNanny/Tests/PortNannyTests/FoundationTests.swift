@@ -5,6 +5,40 @@ import XCTest
 /// full decision matrix.
 final class FoundationTests: XCTestCase {
 
+    // MARK: - Redaction gaps found by the audit
+
+    func testRedactionCatchesDigitNamesQuotedSecretsAndChildCommands() {
+        let cases = [
+            "docker run -e S3_SECRET_KEY=abc123 img",
+            "env AUTH0_SECRET=hunter2 node app.js",
+            "node app --config {\"token\":\"sk-live-1\"}",
+            "curl -H 'X-API-Key: abc' https://x",
+        ]
+        for command in cases {
+            let redacted = CommandRedaction.redact(command)
+            XCTAssertFalse(redacted.contains("abc123"), redacted)
+            XCTAssertFalse(redacted.contains("hunter2"), redacted)
+            XCTAssertFalse(redacted.contains("sk-live-1"), redacted)
+            XCTAssertTrue(redacted.contains(CommandRedaction.mask) || !redacted.contains("abc"), redacted)
+        }
+        XCTAssertEqual(CommandRedaction.redact("node server.js --port 3000"), "node server.js --port 3000", "an innocent line is untouched")
+    }
+
+    func testControlCharactersCannotReachATerminal() {
+        let spoofed = "node\u{1b}[2K\rKilled everything\u{7}"
+        let safe = CommandRedaction.printable(spoofed)
+        XCTAssertFalse(safe.contains("\u{1b}"), safe)
+        XCTAssertFalse(safe.contains("\r"), safe)
+        XCTAssertTrue(safe.hasPrefix("node"))
+        XCTAssertEqual(CommandRedaction.printable("plain text\ttabbed"), "plain text\ttabbed", "tabs are how tables line up")
+    }
+
+    func testALeaseReasonIsCappedAndStripped() {
+        let lease = Reservation(port: 3000, owner: "bot", reason: String(repeating: "x", count: 5000) + "\u{1b}[31m")
+        XCTAssertEqual(lease.reason?.count, 200)
+        XCTAssertFalse(lease.reason?.contains("\u{1b}") ?? true)
+    }
+
     func testRedactionCoversTheCommonShapes() {
         XCTAssertEqual(CommandRedaction.redact("node server.js --token=abc123 --port 3000"), "node server.js --token=[redacted] --port 3000")
         XCTAssertEqual(CommandRedaction.redact("app --api-key sk-live-xyz"), "app --api-key [redacted]")

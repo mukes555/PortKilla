@@ -63,7 +63,7 @@ extension PortManager {
             } else if let now, was != now {
                 // Newly occupied OR the occupant changed identity between scans
                 // (a restart/swap must still fire the guard, not go unnoticed).
-                events.append(WatchEvent(port: port, kind: .occupied(by: now)))
+                events.append(WatchEvent(port: port, kind: .occupied(by: occupantName(now))))
             }
         }
         return events
@@ -135,6 +135,16 @@ extension PortManager {
         return owners
     }
 
+    /// Occupancy is remembered as "pid name": a supervisor that restarts its
+    /// server keeps the name but not the pid, and the guard must see that as
+    /// a new occupant rather than nothing at all.
+    static func occupantIdentity(pid: Int, name: String) -> String { "\(pid) \(name)" }
+
+    /// The name inside an identity, for the text a person reads.
+    static func occupantName(_ identity: String) -> String {
+        identity.split(separator: " ", maxSplits: 1).last.map(String.init) ?? identity
+    }
+
     public func processWatchedPorts(with ports: [PortInfo], guardOwners: [Int: AgentOwner] = [:]) {
         guard !watchedPorts.isEmpty else {
             watchedOccupancy = [:]
@@ -143,7 +153,7 @@ extension PortManager {
 
         var current: [Int: String] = [:]
         for port in watchedPorts {
-            current[port] = ports.first { $0.port == port }?.processName
+            current[port] = ports.first { $0.port == port }.map { Self.occupantIdentity(pid: $0.pid, name: $0.processName) }
         }
 
         // The very first scan just establishes the baseline

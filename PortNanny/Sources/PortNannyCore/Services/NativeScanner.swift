@@ -144,7 +144,7 @@ public enum NativeScanner {
         // queue, and a wholesale replacement milliseconds apart would zero the
         // timer's deltas for a cycle.
         cpuSampleLock.lock()
-        previousCPUSample.merge(newCPUSamples) { _, new in new }
+        previousCPUSample.merge(newCPUSamples) { old, new in new.time - old.time < 0.5 ? old : new }
         previousCPUSample = previousCPUSample.filter { newCPUSamples[$0.key] != nil }
         cpuSampleLock.unlock()
         ProcessFacts.shared.prune(keeping: Set(pids))

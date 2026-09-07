@@ -33,6 +33,10 @@ public enum AgentSignatures {
 
     public static let treeSignatures: [TreeSignature] = [
         TreeSignature(name: "Claude Code", confidence: .agent, label: "claude") { _, exe in exe == "claude" },
+        // An npm install runs as node; without this its sessions read as ended.
+        TreeSignature(name: "Claude Code", confidence: .agent, label: "claude") { cmd, exe in
+            exe == "node" && cmd.contains("/@anthropic-ai/claude-code/")
+        },
         TreeSignature(name: "Codex CLI", confidence: .agent, label: "codex") { _, exe in exe == "codex" },
         TreeSignature(name: "Gemini CLI", confidence: .agent, label: "gemini") { _, exe in exe == "gemini" },
         TreeSignature(name: "Copilot CLI", confidence: .agent, label: "copilot") { _, exe in exe == "copilot" },

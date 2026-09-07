@@ -166,7 +166,9 @@ public enum AgentAttribution {
                 fromTree.sessionKey = environment[AgentSignatures.claudeSessionIdKey]
             }
             if fromTree.sessionKey == nil {
-                fromTree.sessionKey = declaredSession(in: environment)
+                // The same fallback `exec` stamps on what it starts, so a
+                // detached server and its own session still match.
+                fromTree.sessionKey = declaredSession(in: environment) ?? fromTree.sessionPid.map(String.init)
             }
             return fromTree
         }

@@ -185,6 +185,9 @@ extension PortManager {
                 fields.append(port.managedBy?.label ?? "")
                 fields.append(port.reservation?.owner ?? "")
                 fields.append(port.expectedPort.map { String($0.port) } ?? "")
+                // A light scan leaves this empty; the first full scan after
+                // one must republish so the row gets its project back.
+                fields.append(port.projectPath ?? "")
             }
             return fields.joined(separator: "|")
         }

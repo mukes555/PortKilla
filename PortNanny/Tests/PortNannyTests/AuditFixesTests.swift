@@ -122,6 +122,40 @@ final class AuditFixesTests: XCTestCase {
         XCTAssertGreaterThan(drawnPixels, 0, "the close button drew nothing")
     }
 
+    // MARK: - The guard's own decision loop
+
+    func testTheGuardSkipsTheBaselineSparesALiveAgentAndStandsDown() {
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
+        manager.watchedPorts = [3000]
+        manager.guardedPorts = [3000]
+        // A pid nothing can signal: the guard's decision is what is under test.
+        let intruder = PortInfo(port: 3000, pid: 999_999, processName: "node", command: "node app.js",
+                                user: NSUserName(), memoryUsage: "1MB", memorySizeKB: 1024, type: .nodejs)
+
+        manager.hasCompletedFirstScan = false
+        manager.processWatchedPorts(with: [intruder])
+        XCTAssertTrue(manager.terminatingPids.isEmpty, "the first scan is a baseline, not a verdict")
+        XCTAssertFalse(manager.watchedOccupancy.isEmpty, "and it is remembered")
+
+        manager.hasCompletedFirstScan = true
+        manager.watchedOccupancy = [:]
+        let live = AgentOwner(name: "Claude Code", sessionPid: 10, source: .processTree)
+        manager.processWatchedPorts(with: [intruder], guardOwners: [999_999: live])
+        XCTAssertTrue(manager.terminatingPids.isEmpty, "a running agent's server is never auto-killed")
+        XCTAssertTrue(manager.isGuarded(3000), "and the guard stays armed")
+
+        let striking = PortManager.forTesting()
+        defer { striking.discardTestDefaults() }
+        striking.watchedPorts = [3000]
+        striking.guardedPorts = [3000]
+        striking.hasCompletedFirstScan = true
+        while striking.isGuarded(3000) && striking.registerGuardStrike(on: 3000) == false {}
+        striking.watchedOccupancy = [:]
+        striking.processWatchedPorts(with: [intruder])
+        XCTAssertFalse(striking.isGuarded(3000), "something that keeps coming back makes the guard stand down")
+    }
+
     // MARK: - Security
 
     func testChildCommandsAreRedactedLikeTheirParent() {

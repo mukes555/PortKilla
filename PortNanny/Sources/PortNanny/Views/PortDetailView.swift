@@ -96,7 +96,9 @@ struct PortDetailView: View {
             Spacer()
         }
         .padding()
-        // Must fit inside the 500pt-wide popover window it's presented over
-        .frame(width: 450, height: 430)
+        // Must fit inside the 500pt-wide popover window it's presented over;
+        // the rows scroll because Agent, Managed by, and Command can wrap.
+        .frame(width: 450)
+        .frame(minHeight: 300, idealHeight: 430, maxHeight: 560)
     }
 }

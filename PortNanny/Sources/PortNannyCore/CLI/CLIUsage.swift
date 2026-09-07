@@ -28,9 +28,9 @@ extension CLIArguments {
             sends SIGKILL). Refuses (exit 3) when another AI agent's running
             session owns it, or when the caller is an agent and nobody claims the
             server (Settings > Agents can turn that part off), unless --force.
-            --dry-run reports the decision without
-            signalling. free is the same command with exit 0 when the port was
-            already free, for `portnanny free 3000 && npm run dev`. --orphaned
+            --dry-run reports the decision without signalling. free is the same
+            command with exit 0 when the port was already free, for
+            `portnanny free 3000 && npm run dev`. --orphaned
             stops every server left behind by an agent session that has ended
             (any agent's); exit 0 when there is nothing to clean up.
 
@@ -205,9 +205,9 @@ extension CLIArguments {
     Friendly-fire guard: kill refuses to stop a port owned by a different AI
     agent session, or one nobody claims when the caller is an agent (the app's
     Settings > Agents can turn that part off), unless --force. Owners are
-    detected from the process tree and from the
-    environment agents leave on their children; export PORTNANNY_OWNER=<name>
-    to declare who you are (and to label what you start), and
+    detected from the process tree and from the environment agents leave on
+    their children; export PORTNANNY_OWNER=<name> to declare who you are (and
+    to label what you start), and
     PORTNANNY_SESSION=<unique> to tell your sessions apart. The PortKilla
     names, PORTKILLA_OWNER and PORTKILLA_SESSION, are read too.
 

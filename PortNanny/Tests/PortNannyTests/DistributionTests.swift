@@ -4,6 +4,19 @@ import XCTest
 
 final class DistributionTests: XCTestCase {
 
+    func testEveryMCPToolIsNamedInTheHelpAndTheAgentDocs() throws {
+        let names = MCPServer.tools.compactMap { $0["name"] as? String }
+        XCTAssertEqual(names.count, 8, "the tool list is the contract agents read")
+        let help = CLIArguments.usage(for: "mcp")
+        let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let agentDocs = try String(contentsOf: repoRoot.appendingPathComponent("docs/AGENTS.md"), encoding: .utf8)
+        for name in names {
+            XCTAssertTrue(help.contains(name), "`portnanny help mcp` never mentions \(name)")
+            XCTAssertTrue(agentDocs.contains(name), "docs/AGENTS.md never mentions \(name)")
+        }
+    }
+
     func testPrereleaseTagsAreNeverOfferedAsUpdates() {
         XCTAssertFalse(UpdateChecker.isVersion("2.0.0-rc1", newerThan: "1.14.0"))
         XCTAssertFalse(UpdateChecker.isVersion("1.15.0-beta", newerThan: "1.14.0"))

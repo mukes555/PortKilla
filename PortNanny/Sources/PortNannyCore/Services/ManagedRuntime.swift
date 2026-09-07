@@ -90,7 +90,10 @@ extension ManagedRuntime {
     /// line, so a project folder named "nodemon" does not count.
     static let reloaders: [ReloaderSignature] = [
         ReloaderSignature(name: "nodemon") { cmd, _ in cmd.contains("nodemon") },
-        ReloaderSignature(name: "next dev") { cmd, _ in cmd.contains("/next/dist/bin/next") && cmd.contains(" dev") || cmd.hasSuffix("next dev") },
+        ReloaderSignature(name: "next dev") { cmd, _ in
+            let isNextBinary = cmd.contains("/next/dist/bin/next") && cmd.contains(" dev")
+            return isNextBinary || cmd.hasSuffix("next dev")
+        },
         ReloaderSignature(name: "uvicorn --reload") { cmd, _ in cmd.contains("uvicorn") && cmd.contains("--reload") },
         ReloaderSignature(name: "fastapi dev") { cmd, _ in cmd.contains("fastapi") && cmd.contains(" dev") },
         ReloaderSignature(name: "watch mode") { cmd, _ in

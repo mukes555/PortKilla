@@ -119,9 +119,10 @@ extension PortListView {
         HStack(spacing: 6) {
             Image(systemName: "keyboard")
                 .font(.system(size: 10))
-            Text("Tip: press \(appDelegate.hotkeyDisplay) anywhere to open PortNanny · ↑↓ select · ⏎ kill · ⌘O open in browser")
+            Text("Tip: \(appDelegate.hotkeyDisplay) opens PortNanny anywhere · ↑↓ select · ⏎ kill · ⌘O browser")
                 .font(.system(size: 10))
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
             Spacer()
             Button(action: { didDismissHotkeyTip = true }) {
                 Image(systemName: "xmark.circle.fill")

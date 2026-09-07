@@ -57,6 +57,45 @@ final class AuditFixesTests: XCTestCase {
         XCTAssertEqual(KillDecision.forAgent(caller: caller, target: detached), .allow, "its own session may stop its own server")
     }
 
+    // MARK: - Bugs the coverage pass found
+
+    func testALoneMarkerIsRefusedRatherThanDuplicated() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("portnanny-audit-\(UUID().uuidString).md")
+        defer { try? FileManager.default.removeItem(at: file) }
+        try "# Rules\n\n\(AgentDocsInstaller.beginMarker)\nmy own notes\n".write(to: file, atomically: true, encoding: .utf8)
+
+        XCTAssertThrowsError(try AgentDocsInstaller.install(into: file)) { error in
+            guard case AgentDocsInstaller.InstallError.danglingMarker = error else { return XCTFail("expected a dangling marker error, got \(error)") }
+        }
+        let text = try String(contentsOf: file, encoding: .utf8)
+        XCTAssertTrue(text.contains("my own notes"), "nothing the person wrote is touched")
+        XCTAssertEqual(text.components(separatedBy: AgentDocsInstaller.beginMarker).count, 2, "and no second block is appended")
+    }
+
+    func testListFiltersAreAlternativesNotASet() {
+        for combination in [["--mine", "--orphaned"], ["--unowned", "--agent", "Cursor"], ["--mine", "--unowned"]] {
+            XCTAssertEqual(CLIArguments.parse(["list"] + combination), .failure(.conflictingTargets), combination.joined(separator: " "))
+        }
+        guard case .success(.list(let allowed)) = CLIArguments.parse(["list", "--mine", "--json"]) else {
+            return XCTFail("--json is not a filter and must still parse alongside one")
+        }
+        XCTAssertTrue(allowed.mine)
+        XCTAssertTrue(allowed.json)
+    }
+
+    func testAnExplicitRangeSurvivesPrefer() {
+        guard case .success(.exec(let typed)) = CLIArguments.parse(["exec", "--range", "3000-3999", "--prefer", "3500", "--", "npm"]) else {
+            return XCTFail("expected exec options")
+        }
+        XCTAssertEqual(typed.range, 3000...3999, "the range the caller typed is the range they get")
+        XCTAssertEqual(typed.prefer, 3500)
+
+        guard case .success(.exec(let shifted)) = CLIArguments.parse(["exec", "--prefer", "5000", "--", "npm"]) else {
+            return XCTFail("expected exec options")
+        }
+        XCTAssertEqual(shifted.range, 5000...5999, "prefer alone still shifts the default window")
+    }
+
     // MARK: - Security
 
     func testChildCommandsAreRedactedLikeTheirParent() {

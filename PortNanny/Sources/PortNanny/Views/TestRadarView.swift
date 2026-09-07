@@ -183,7 +183,9 @@ struct TestDetailView: View {
 
 struct TestProcessRow: View {
     let test: TestProcessInfo
-    @ObservedObject var manager: PortManager
+    /// Not observed: the row reads the manager but never needs to redraw
+    /// when an unrelated port changes.
+    let manager: PortManager
     let onSelect: () -> Void
     let onKillRequest: (_ force: Bool) -> Void
 

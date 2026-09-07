@@ -58,11 +58,13 @@ public enum AgentDocsInstaller {
     public enum InstallError: LocalizedError {
         case unreadable(String)
         case markersOutOfOrder(String)
+        case danglingMarker(String)
 
         public var errorDescription: String? {
             switch self {
             case .unreadable(let path): return "\(path) exists but is not readable as UTF-8 text; nothing was written"
             case .markersOutOfOrder(let path): return "\(path) has a portnanny:end marker before its portnanny:begin marker; fix the markers by hand"
+            case .danglingMarker(let path): return "\(path) has one portnanny marker without its pair; fix the markers by hand"
             }
         }
     }
@@ -94,7 +96,14 @@ public enum AgentDocsInstaller {
     /// The block already in the file, under either generation of markers.
     private static func existingBlock(in text: String, path: String) throws -> Range<String.Index>? {
         for (begin, end) in [(beginMarker, endMarker), (legacyBeginMarker, legacyEndMarker)] {
-            guard let start = text.range(of: begin), let finish = text.range(of: end) else { continue }
+            let start = text.range(of: begin)
+            let finish = text.range(of: end)
+            // Appending past a lone marker would duplicate the block, and the
+            // next run would delete everything between the two begins.
+            guard let start, let finish else {
+                if start != nil || finish != nil { throw InstallError.danglingMarker(path) }
+                continue
+            }
             guard start.lowerBound < finish.upperBound else { throw InstallError.markersOutOfOrder(path) }
             return start.lowerBound..<finish.upperBound
         }

@@ -90,8 +90,10 @@ struct SettingsView: View {
 
 private struct GeneralSettings: View {
     @ObservedObject var portManager: PortManager
-    @State private var launchAtLogin = LoginItem.isEnabled
-    @State private var loginNeedsApproval = LoginItem.requiresApproval
+    // Read in onAppear, not here: a @State default runs on every rebuild,
+    // and each read is a synchronous XPC call to launchd.
+    @State private var launchAtLogin = false
+    @State private var loginNeedsApproval = false
     @State private var notificationsBlocked = false
 
     private let historyLimits = [50, 100, 200, 500]

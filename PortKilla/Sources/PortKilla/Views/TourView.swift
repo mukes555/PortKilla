@@ -9,7 +9,13 @@ struct TourView: View {
     let onFinish: () -> Void
     @EnvironmentObject var appDelegate: AppDelegate
     @AppStorage(DefaultsKey.didFinishTour) private var didFinishTour = false
-    @State private var page = 0
+    @State private var page: Int
+
+    init(portManager: PortManager, initialPage: Int = 0, onFinish: @escaping () -> Void) {
+        _portManager = ObservedObject(wrappedValue: portManager)
+        self.onFinish = onFinish
+        _page = State(initialValue: initialPage)
+    }
 
     private let pageCount = 3
 
@@ -58,9 +64,7 @@ struct TourView: View {
 
     private var portsPage: some View {
         VStack(spacing: 12) {
-            Image(systemName: "bolt.fill")
-                .font(.system(size: 44))
-                .foregroundColor(.yellow)
+            MascotView(mood: .happy, size: 96)
             Text("Every port, at a glance")
                 .font(.title2.weight(.semibold))
             Text("PortKilla lists every listening port with its process, project, memory, who is connected, and which AI agent started it. Press \(appDelegate.hotkeyDisplay) anywhere to open it.")

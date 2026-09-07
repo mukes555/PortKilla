@@ -1,3 +1,4 @@
+<p align="center"><img src="assets/icon.png" width="128" alt="PortKilla's icon: a quokka in sunglasses with a coffee and a laptop"></p>
 <p align="center"><img src="assets/logo.png" width="680" alt="PortKilla — the macOS menu bar port manager"></p>
 
 # PortKilla - macOS Port Manager

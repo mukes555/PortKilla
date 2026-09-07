@@ -34,6 +34,7 @@ struct PortDetailView: View {
                     Image(systemName: "safari")
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Open in browser")
                 .help("Open http://localhost:\(port.port)")
 
                 Menu {
@@ -44,6 +45,7 @@ struct PortDetailView: View {
                     Image(systemName: "doc.on.doc")
                 }
                 .menuStyle(BorderlessButtonMenuStyle())
+                .accessibilityLabel("Copy")
             }
 
             Divider()
@@ -94,7 +96,9 @@ struct PortDetailView: View {
             Spacer()
         }
         .padding()
-        // Must fit inside the 500pt-wide popover window it's presented over
-        .frame(width: 450, height: 430)
+        // Must fit inside the 500pt-wide popover window it's presented over;
+        // the rows scroll because Agent, Managed by, and Command can wrap.
+        .frame(width: 450)
+        .frame(minHeight: 300, idealHeight: 430, maxHeight: 560)
     }
 }

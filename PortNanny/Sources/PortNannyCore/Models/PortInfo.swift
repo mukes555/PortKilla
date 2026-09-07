@@ -41,7 +41,7 @@ public struct PortInfo: Identifiable, Codable, Equatable {
     public let expectedPort: ExpectedPort?
 
     /// A host bound to all interfaces (reachable from the local network, not
-    /// just this machine). One source of truth for the "exposed" check —
+    /// just this machine). One source of truth for the "exposed" check:
     /// the scanner's raw-listener path uses this too.
     public static func isWildcardHost(_ host: String) -> Bool {
         host == "*" || host == "0.0.0.0" || host == "::"
@@ -130,7 +130,7 @@ public struct PortInfo: Identifiable, Codable, Equatable {
             case .nodejs: return "hexagon.fill"
             case .database: return "cylinder.split.1x2.fill"
             case .webserver: return "globe"
-            case .python: return "ladybug.fill" // Or custom
+            case .python: return "ladybug.fill"
             case .java: return "cup.and.saucer.fill"
             case .ruby: return "diamond.fill"
             case .php: return "p.circle.fill"

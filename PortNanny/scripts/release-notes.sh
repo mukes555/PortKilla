@@ -39,7 +39,7 @@ ${SECTION}
 ## 📦 Install
 
 Download **PortNanny-${VERSION}.dmg** below, open it, and drag PortNanny to
-Applications. Universal binary — runs natively on Apple Silicon and Intel;
+Applications. Universal binary: runs natively on Apple Silicon and Intel;
 requires macOS 13 (Ventura) or newer.
 
 > Not notarized (no Apple Developer account). First launch on macOS 15 or

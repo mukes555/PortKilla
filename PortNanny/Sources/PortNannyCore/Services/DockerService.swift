@@ -15,7 +15,7 @@ public final class DockerService {
 
     /// Container port mappings change rarely; don't shell out more often than this.
     private let cacheValidity: TimeInterval = 5.0
-    /// When docker isn't found, re-probe occasionally — it may get installed
+    /// When docker isn't found, re-probe occasionally: it may get installed
     /// or started later (the old code latched "not installed" forever).
     private let pathProbeInterval: TimeInterval = 60.0
 

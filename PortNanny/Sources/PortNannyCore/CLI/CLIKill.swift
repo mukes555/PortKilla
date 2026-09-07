@@ -81,9 +81,18 @@ public enum CLIKill {
             notes.append("note: :\(owned.port) belongs to \(owned.agentOwner?.described ?? "an agent") and you are not identified as an agent, so the friendly-fire guard did not apply. Run `portnanny whoami` or export PORTNANNY_OWNER=<name>.")
         }
 
+        // A lease refuses an agent and warns a person; the warning was being
+        // dropped, so a person killed a leased port without hearing about it.
+        let leaseStore = ReservationStore.appStore()
+        for target in targets {
+            if case .warn(let why) = KillDecision.forReservation(caller: scan.caller, reservation: leaseStore.reservation(for: target.port), asAgent: false) {
+                notes.append("note: \(why)")
+            }
+        }
+
         let plans = targets.map { plan(for: $0, force: options.force, table: scan.table, ports: scan.ports) }
         let judged = plans.flatMap { [$0.target] + $0.alsoStops }
-        let refusals = Self.refusals(caller: scan.caller, plans: plans, leases: ReservationStore.appStore(), cwd: cwd)
+        let refusals = Self.refusals(caller: scan.caller, plans: plans, leases: leaseStore, cwd: cwd)
         report.guardVerdict = verdict(caller: scan.caller, targets: judged, refused: !refusals.isEmpty, forced: options.force)
         report.reasons = refusals
         if !refusals.isEmpty && !options.force {

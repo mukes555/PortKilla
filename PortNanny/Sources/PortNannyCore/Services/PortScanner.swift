@@ -186,7 +186,7 @@ public class PortScanner {
             let memoryKb = processes.rssKB(for: raw.pid) ?? 0
             let memory = memoryKb > 0 ? MemoryFormat.string(kilobytes: memoryKb) : "N/A"
             let children = isFull ? processes.children(of: raw.pid).map {
-                PortInfo.ProcessInfo(pid: $0.pid, name: $0.name, command: $0.command)
+                PortInfo.ProcessInfo(pid: $0.pid, name: $0.name, command: CommandRedaction.redact($0.command))
             } : []
             let projectPath = isFull ? projectWorthyPath(cachedWorkingDirectory(raw.pid)) : nil
 
@@ -237,8 +237,8 @@ public class PortScanner {
 
     // MARK: - Working directories
 
-    /// Resolves working directories for PIDs not yet cached — native syscall
-    /// first, one lsof batch as fallback — and drops entries for dead PIDs.
+    /// Resolves working directories for PIDs not yet cached (native syscall
+    /// first, one lsof batch as fallback) and drops entries for dead PIDs.
     private func refreshWorkingDirectories(for pids: [Int], processes: ProcessTable) {
         cwdLock.lock()
         let live = Set(pids)
@@ -300,7 +300,7 @@ public class PortScanner {
     }
 
     /// A cwd only counts as a "project" when it's a real directory the user
-    /// would recognize — not /, not the bare home folder.
+    /// would recognize: not /, not the bare home folder.
     private func projectWorthyPath(_ path: String?) -> String? {
         guard let path, !path.isEmpty else { return nil }
         if path == "/" || path == NSHomeDirectory() {
@@ -373,8 +373,17 @@ public class PortScanner {
         return entryName.lowercased().hasPrefix(lsofName.lowercased()) ? entryName : lsofName
     }
 
+    /// argv[0] split on spaces truncates a path that contains one
+    /// ("/Users/me/Library/Application Support/fnm/.../node"), so an absolute
+    /// path defers to the kernel's own name for the process.
     private func executableName(processName: String, command: String) -> String {
         let firstToken = command.split(separator: " ").first.map(String.init) ?? ""
+        let kernelName = processName.lowercased()
+        let looksLikeAPath = firstToken.hasPrefix("/")
+        let kernelNameIsUseful = !kernelName.isEmpty && kernelName != "unknown"
+        if looksLikeAPath, kernelNameIsUseful, !firstToken.hasSuffix("/" + kernelName) {
+            return kernelName
+        }
         let base = firstToken.split(separator: "/").last.map(String.init) ?? ""
         return (base.isEmpty ? processName : base).lowercased()
     }

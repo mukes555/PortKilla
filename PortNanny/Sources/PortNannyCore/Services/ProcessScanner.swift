@@ -2,7 +2,6 @@ import Foundation
 
 public class ProcessScanner {
 
-    // Keywords to identify test processes
     private let testKeywords = [
         "jest",
         "vitest",
@@ -91,7 +90,6 @@ public class ProcessScanner {
         if lowerCommand.contains("vitest") { return .vitest }
         if lowerCommand.contains("mocha") { return .mocha }
 
-        // Generic check
         for keyword in testKeywords {
             if lowerCommand.contains(keyword) {
                 return .other

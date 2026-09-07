@@ -28,9 +28,9 @@ extension CLIArguments {
             sends SIGKILL). Refuses (exit 3) when another AI agent's running
             session owns it, or when the caller is an agent and nobody claims the
             server (Settings > Agents can turn that part off), unless --force.
-            --dry-run reports the decision without
-            signalling. free is the same command with exit 0 when the port was
-            already free, for `portnanny free 3000 && npm run dev`. --orphaned
+            --dry-run reports the decision without signalling. free is the same
+            command with exit 0 when the port was already free, for
+            `portnanny free 3000 && npm run dev`. --orphaned
             stops every server left behind by an agent session that has ended
             (any agent's); exit 0 when there is nothing to clean up.
 
@@ -100,8 +100,9 @@ extension CLIArguments {
             portnanny mcp --setup [claude|cursor|codex]
 
             Runs a Model Context Protocol server over stdin/stdout with the tools
-            list_ports, kill_port (dry-run by default), whois_port, whoami, and
-            wait_for_port_free. It is not a background service: each agent starts
+            list_ports, whois_port, kill_port (dry-run by default), free_port,
+            reserve_port, release_port, whoami, and wait_for_port_free. It is not
+            a background service: each agent starts
             its own copy when it needs one and stops it afterwards, so register it
             once and forget it. `--setup` prints the registration (the exact
             `claude mcp add` command, Cursor's mcp.json, Codex's config.toml).
@@ -116,7 +117,7 @@ extension CLIArguments {
             when the whole range is taken.
             """
         case "schema": return """
-            portnanny schema [list|kill|whois|whoami|wait|history|version|doctor|agents|free-port]
+            portnanny schema [list|kill|whois|whoami|wait|history|version|doctor|agents|free-port|reserve|release|reservations|drift]
 
             Prints the JSON contract for a command's --json output: every field and
             its meaning (`agents` is `doctor --agents`). Fields are only ever added,
@@ -204,9 +205,9 @@ extension CLIArguments {
     Friendly-fire guard: kill refuses to stop a port owned by a different AI
     agent session, or one nobody claims when the caller is an agent (the app's
     Settings > Agents can turn that part off), unless --force. Owners are
-    detected from the process tree and from the
-    environment agents leave on their children; export PORTNANNY_OWNER=<name>
-    to declare who you are (and to label what you start), and
+    detected from the process tree and from the environment agents leave on
+    their children; export PORTNANNY_OWNER=<name> to declare who you are (and
+    to label what you start), and
     PORTNANNY_SESSION=<unique> to tell your sessions apart. The PortKilla
     names, PORTKILLA_OWNER and PORTKILLA_SESSION, are read too.
 

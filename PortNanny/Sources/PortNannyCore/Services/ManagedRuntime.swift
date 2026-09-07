@@ -90,7 +90,10 @@ extension ManagedRuntime {
     /// line, so a project folder named "nodemon" does not count.
     static let reloaders: [ReloaderSignature] = [
         ReloaderSignature(name: "nodemon") { cmd, _ in cmd.contains("nodemon") },
-        ReloaderSignature(name: "next dev") { cmd, _ in cmd.contains("/next/dist/bin/next") && cmd.contains(" dev") || cmd.hasSuffix("next dev") },
+        ReloaderSignature(name: "next dev") { cmd, _ in
+            let isNextBinary = cmd.contains("/next/dist/bin/next") && cmd.contains(" dev")
+            return isNextBinary || cmd.hasSuffix("next dev")
+        },
         ReloaderSignature(name: "uvicorn --reload") { cmd, _ in cmd.contains("uvicorn") && cmd.contains("--reload") },
         ReloaderSignature(name: "fastapi dev") { cmd, _ in cmd.contains("fastapi") && cmd.contains(" dev") },
         ReloaderSignature(name: "watch mode") { cmd, _ in
@@ -226,11 +229,14 @@ extension ManagedRuntime {
     public static func waitForPortsFree(_ ports: [Int], timeout: TimeInterval) -> Set<Int> {
         var busy = Set(ports)
         let deadline = Date().addingTimeInterval(timeout)
-        while !busy.isEmpty && Date() < deadline {
+        // One look before the clock: `--timeout 0` asks "is it free now?".
+        repeat {
             let listening = Set((NativeScanner.allListeners() ?? []).map(\.port))
             busy = busy.intersection(listening)
-            if !busy.isEmpty { Thread.sleep(forTimeInterval: 0.2) }
-        }
+            if busy.isEmpty { break }
+            if Date() >= deadline { break }
+            Thread.sleep(forTimeInterval: 0.2)
+        } while true
         return busy
     }
 

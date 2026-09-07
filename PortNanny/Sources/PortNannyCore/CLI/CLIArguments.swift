@@ -158,6 +158,10 @@ public enum CLIArguments {
             }
             index += 1
         }
+        // The usage says `--mine | --agent <name> | --unowned | --orphaned`;
+        // silently applying one of two would show the wrong servers.
+        let selectors = [options.mine, options.unowned, options.orphaned, options.agent != nil].filter { $0 }
+        guard selectors.count <= 1 else { return .failure(.conflictingTargets) }
         return .success(.list(options))
     }
 

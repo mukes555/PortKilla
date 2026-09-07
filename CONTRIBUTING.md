@@ -4,7 +4,7 @@ Thanks for your interest! PortNanny is a small, dependency-free, native macOS
 menu-bar app (with a built-in CLI). This guide gets you from clone to running in
 about a minute, and explains how the project is organized.
 
-> New to the codebase? Read [ARCHITECTURE.md](ARCHITECTURE.md) first — it maps
+> New to the codebase? Read [ARCHITECTURE.md](ARCHITECTURE.md) first: it maps
 > the module layout and the scan pipeline.
 
 ## Prerequisites
@@ -13,7 +13,7 @@ about a minute, and explains how the project is organized.
   will not build or run on Linux or Windows.
 - A Swift toolchain. CI builds with **Swift 6.0.2**; `Package.swift` declares a
   `5.9` minimum. Anything in that range should work.
-- **No third-party dependencies.** There are zero external Swift packages — just
+- **No third-party dependencies.** There are zero external Swift packages, just
   the standard library, AppKit/SwiftUI, and a thin C shim (`CLibProc`) over
   Darwin's `libproc`.
 
@@ -33,7 +33,7 @@ Every `swift` command below is run from that package root.
 
 ```bash
 swift build
-swift run PortNanny            # launches the menu-bar app (look for the ⚡ icon)
+swift run PortNanny            # launches the menu-bar app (look for the quokka)
 ```
 
 The package also builds the standalone CLI, and the app binary answers the
@@ -70,12 +70,12 @@ and build again.
 ```
 
 The app is **ad-hoc signed** (no Apple Developer account), so Gatekeeper will
-warn on first open — right-click → Open, or
+warn on first open: right-click → Open, or
 `xattr -dr com.apple.quarantine dist/PortNanny.app`.
 
 ## Developer hooks (env vars)
 
-The app renders its own UI offscreen for screenshots and the README GIF — no
+The app renders its own UI offscreen for screenshots and the README GIF, no
 screen-recording permission needed. CI uses the first one as a smoke test.
 
 | Env var | Effect |
@@ -88,6 +88,9 @@ screen-recording permission needed. CI uses the first one as a smoke test.
 | `PORTNANNY_SNAPSHOT_SELECT=3000` | Select that port in the Workbench, so the inspector renders |
 | `PORTNANNY_SNAPSHOT_TOUR_PAGE=1` | Which page of the welcome tour to render |
 | `PORTNANNY_MASCOT_DIR=assets/mascot` | Where a bare binary finds the quokka art (an app bundle carries it) |
+| `PORTNANNY_DEFAULTS_SUITE=<suite>` | Preferences and history go to that defaults domain, so renders and scenario runs never touch your own settings |
+| `PORTNANNY_SNAPSHOT_PANE=general\|display\|agents\|shortcuts\|protected\|about` | Which Settings pane to render |
+| `PORTNANNY_SNAPSHOT_TEXTSIZE=large` | Render at an accessibility text size to check that rows reflow |
 | `PORTNANNY_SNAPSHOT_DENSITY=clean\|advanced` | Seed the row density |
 | `PORTNANNY_SNAPSHOT_WATCH=3000,9999` | Seed watched ports |
 | `PORTNANNY_SNAPSHOT_APPEARANCE=light\|dark` | Force appearance |
@@ -146,7 +149,7 @@ Match the surrounding style.
 
 ## Submitting a pull request
 
-1. Branch from `main` — **never push directly to `main`/`master`** (CI gates it).
+1. Branch from `main`. **Never push directly to `main`/`master`** (CI gates it).
 2. Keep the change focused; one concern per PR.
 3. `swift build && swift test --disable-sandbox` must pass, and the build must stay green.
 4. Add an entry to [CHANGELOG.md](CHANGELOG.md) under an "Unreleased" heading.
@@ -155,7 +158,7 @@ Match the surrounding style.
 
 ## Releases (maintainers)
 
-Tag a version — `git tag v1.6.0 && git push --tags` — and
+Tag a version (`git tag v1.6.0 && git push --tags`) and
 `.github/workflows/release.yml` builds the universal DMG + zip and publishes a
 GitHub release whose notes come from `CHANGELOG.md`. Full process and the
 "What's new" standard: **[RELEASING.md](RELEASING.md)**.

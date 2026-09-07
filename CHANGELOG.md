@@ -11,6 +11,62 @@ release, rename it to the version and date.
 
 ## [Unreleased]
 
+A full audit: six passes over the code (correctness, security,
+performance, UX and conventions, docs, test coverage), every confirmed
+finding fixed, and a test for each defect.
+
+### Fixed
+- **The guard could miss a supervisor's respawn.** Watched occupancy
+  remembered a process name, so a server restarted under the same name
+  looked like nothing had happened and the guard never fired.
+- **`wait --timeout 0` always said "still in use"**, because it never
+  looked at the port before checking the clock.
+- **Attribution walked the wrong chain.** With a session pid to follow,
+  the CLI stopped before reaching its own parents, so `whoami` named the
+  wrong source and a lease taken by one agent could be refused to that
+  same agent. A caller whose agent has no session id of its own now
+  borrows its pid, the value `exec` stamps on what it starts, so a
+  detached server and its own session match.
+- **Claude Code installed through npm** runs as node, matched no
+  signature, and its live sessions read as ended, which let anyone stop
+  its servers. Servers under a path containing a space (fnm's default)
+  were classified Other rather than Node.js, and pm2 under fnm was not
+  found.
+- A project name that arrived with the first full scan after a background
+  one was not treated as a change, so rows kept a missing project. A CPU
+  sample taken milliseconds after another showed a process at 50%.
+- A lease warning meant for people was collected and dropped.
+- **A rule file with one PortNanny marker and not its pair** was appended
+  to, duplicating the block; the next run then deleted the person's own
+  text between the two markers. `list --mine --orphaned` quietly applied
+  one of the two. `exec --range` was dropped when it equalled the default.
+
+### Security
+- Command lines of a listener's **children** went into `--json` and MCP
+  output unredacted, so a worker started with `--token=...` leaked. The
+  redaction also missed digit-bearing names (`S3_SECRET_KEY`), JSON
+  secrets, and header secrets.
+- A lease reason is capped and stripped of control characters.
+- Every GitHub Action is pinned to a commit, the release token is scoped
+  to the job that publishes, and the Homebrew cask is pinned to the
+  checksum the build wrote rather than to a fresh download that could
+  hash an error page.
+
+### Changed
+- **Destructive buttons ask first.** Clear History, both Release buttons,
+  and Reset Defaults went straight through while every kill confirms.
+- **Empty states tell the truth.** A filtered list said "nothing is
+  listening" while the header counted every port; the Workbench table had
+  no empty or scanning state at all.
+- **The detail sheets close properly**: a real button with a name for
+  VoiceOver, on Escape, instead of a fake traffic light. Ten icon-only
+  buttons gained accessibility labels.
+- One vocabulary (Stop watching, Remove guard, Option-click), ":3000" in
+  notification titles, and "free" readable in light mode.
+- Fewer wakeups: a successful scan no longer republishes to every view,
+  the hidden scan runs at a background priority, and Settings stopped
+  asking launchd for its login-item status on every redraw.
+
 <!-- next -->
 
 ## 2.1.1 (2026-09-07)

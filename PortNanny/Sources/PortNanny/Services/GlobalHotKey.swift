@@ -5,7 +5,7 @@ import Carbon.HIToolbox
 
 /// A global keyboard shortcut that works without Accessibility permission.
 ///
-/// Uses Carbon's RegisterEventHotKey — the one macOS API that delivers global
+/// Uses Carbon's RegisterEventHotKey, the one macOS API that delivers global
 /// hotkeys to background apps permission-free (NSEvent global monitors would
 /// require the user to grant Accessibility access).
 final class GlobalHotKey {
@@ -52,7 +52,7 @@ final class GlobalHotKey {
             { _, _, userData in
                 guard let userData else { return noErr }
                 // Carbon delivers hotkey events on the main run loop, so call
-                // synchronously — a deferred main.async could fire onPress()
+                // synchronously: a deferred main.async could fire onPress()
                 // after the object was replaced (Change Hotkey) and freed.
                 let hotKey = Unmanaged<GlobalHotKey>.fromOpaque(userData).takeUnretainedValue()
                 hotKey.onPress()

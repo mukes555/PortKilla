@@ -64,7 +64,10 @@ public struct ProcessTable {
         var seen = Set<Int>()
         var queue = [pid] + extra
 
-        while let current = queue.popLast(), current > 0, !seen.contains(current), seen.count < 64 {
+        // Skipping a chain's end (launchd's ppid 0) must not end the walk:
+        // with `extra` pids the caller's own chain is still in the queue.
+        while let current = queue.popLast(), seen.count < 64 {
+            guard current > 0, !seen.contains(current) else { continue }
             seen.insert(current)
             guard let bsd = NativeScanner.bsdInfo(Int32(current)) else { continue }
             let shortName = NativeScanner.stringFromFixedCArray(bsd.pbi_name)

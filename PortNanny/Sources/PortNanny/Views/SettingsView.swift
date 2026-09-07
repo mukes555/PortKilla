@@ -4,7 +4,7 @@ import AppKit
 
 /// The dedicated Settings window (⌘,), styled like macOS System Settings:
 /// a sidebar of categories on the left, the selected pane on the right.
-/// Everything here is a preference — never an action.
+/// Everything here is a preference, never an action.
 struct SettingsView: View {
     @ObservedObject var portManager: PortManager
     @EnvironmentObject var appDelegate: AppDelegate
@@ -90,8 +90,10 @@ struct SettingsView: View {
 
 private struct GeneralSettings: View {
     @ObservedObject var portManager: PortManager
-    @State private var launchAtLogin = LoginItem.isEnabled
-    @State private var loginNeedsApproval = LoginItem.requiresApproval
+    // Read in onAppear, not here: a @State default runs on every rebuild,
+    // and each read is a synchronous XPC call to launchd.
+    @State private var launchAtLogin = false
+    @State private var loginNeedsApproval = false
     @State private var notificationsBlocked = false
 
     private let historyLimits = [50, 100, 200, 500]
@@ -171,7 +173,7 @@ private struct GeneralSettings: View {
                             ))
                             .toggleStyle(.switch)
                             .controlSize(.small)
-                            Button("Unwatch") { portManager.toggleWatch(port) }
+                            Button("Stop Watching") { portManager.toggleWatch(port) }
                                 .controlSize(.small)
                         }
                     }
@@ -282,7 +284,7 @@ private struct ShortcutsSettings: View {
                     Button("Change…") { recording = true }
                     Button("Reset") { appDelegate.resetHotKey() }
                 }
-                Text("Works from any app — no Accessibility permission required.")
+                Text("Works from any app, no Accessibility permission required.")
                     .settingsCaption()
             }
 
@@ -400,8 +402,8 @@ struct UpdateButton: View {
     var body: some View {
         if InstallSource.detect() == .homebrew {
             Button("Update to v\(version) with Homebrew") {
-                Pasteboard.copy("brew reinstall --cask portnanny")
-                portManager.showToast("Copied: brew reinstall --cask portnanny")
+                Pasteboard.copy("brew upgrade --cask portnanny")
+                portManager.showToast("Copied: brew upgrade --cask portnanny")
             }
             .buttonStyle(.borderedProminent)
             .help("Copies the Homebrew command; the cask replaces the app and quits the running copy")

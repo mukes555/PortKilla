@@ -103,7 +103,9 @@ extension PortManager {
         let depth: PortScanner.ScanDepth = isUIVisible ? .full : .light
         let guarded = guardedPorts
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        // Nobody is waiting on a hidden scan, so it can be scheduled with
+        // other background work rather than on a performance core.
+        DispatchQueue.global(qos: depth == .full ? .userInitiated : .utility).async { [weak self] in
             guard let self = self else { return }
 
             // One native snapshot shared by both scanners.
@@ -144,7 +146,9 @@ extension PortManager {
                     let usedFallback = self.scanner.lastScanUsedFallback
                     if usedFallback != self.isCompatibilityScan { self.isCompatibilityScan = usedFallback }
                     self.clock.lastUpdated = Date()
-                    self.lastErrorMessage = nil
+                    // Assigning nil to nil still publishes, which would
+                    // re-render every observer on every scan.
+                    if self.lastErrorMessage != nil { self.lastErrorMessage = nil }
                     if showToast {
                         self.showToast("Refreshed")
                     }
@@ -185,6 +189,9 @@ extension PortManager {
                 fields.append(port.managedBy?.label ?? "")
                 fields.append(port.reservation?.owner ?? "")
                 fields.append(port.expectedPort.map { String($0.port) } ?? "")
+                // A light scan leaves this empty; the first full scan after
+                // one must republish so the row gets its project back.
+                fields.append(port.projectPath ?? "")
             }
             return fields.joined(separator: "|")
         }

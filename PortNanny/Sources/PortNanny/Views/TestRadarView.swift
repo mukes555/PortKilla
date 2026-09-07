@@ -15,7 +15,6 @@ struct TestRadarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Column Headers
             HStack {
                 Text("Type")
                     .frame(width: 80, alignment: .leading)
@@ -34,7 +33,6 @@ struct TestRadarView: View {
 
             Divider()
 
-            // List
             if tests.isEmpty {
                 VStack {
                     Spacer()
@@ -44,7 +42,7 @@ struct TestRadarView: View {
                         .padding(.bottom, 8)
                     Text("No active test processes")
                     .foregroundColor(.secondary)
-                Text("Background tests will appear here (Beta)")
+                Text("Background tests will appear here")
                     .font(.caption)
                     .foregroundColor(.secondary.opacity(0.7))
                     .padding(.top, 4)
@@ -152,6 +150,7 @@ struct TestDetailView: View {
                     Image(systemName: "doc.on.doc")
                 }
                 .menuStyle(BorderlessButtonMenuStyle())
+                .accessibilityLabel("Copy")
             }
 
             Divider()
@@ -183,13 +182,14 @@ struct TestDetailView: View {
 
 struct TestProcessRow: View {
     let test: TestProcessInfo
-    @ObservedObject var manager: PortManager
+    /// Not observed: the row reads the manager but never needs to redraw
+    /// when an unrelated port changes.
+    let manager: PortManager
     let onSelect: () -> Void
     let onKillRequest: (_ force: Bool) -> Void
 
     var body: some View {
         HStack {
-            // Type Icon
             HStack {
                 HStack(spacing: 4) {
                     Image(systemName: test.type.icon)
@@ -234,10 +234,8 @@ struct TestProcessRow: View {
                 onSelect()
             }
 
-            // Action
             HStack(spacing: 4) {
                 Spacer()
-                // Kill Button
                 Button(action: {
                     // Option = force kill (SIGKILL)
                     onKillRequest(NSEvent.modifierFlags.contains(.option))

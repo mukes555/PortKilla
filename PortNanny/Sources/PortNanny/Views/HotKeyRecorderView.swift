@@ -78,7 +78,7 @@ struct HotKeyRecorderView: View {
         if registered {
             dismiss()
         } else {
-            errorText = "\(display) couldn't be registered — likely taken by the system"
+            errorText = "\(display) couldn't be registered, likely taken by the system"
         }
         return true
     }

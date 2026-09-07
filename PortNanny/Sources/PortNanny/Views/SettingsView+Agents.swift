@@ -160,6 +160,9 @@ struct AgentsSettings: View {
             }
             Spacer()
             Button("Release") {
+                guard KillConfirm.run(title: "Release :\(lease.port)?",
+                                      message: "\(lease.describedHolder) is holding it \(lease.expiryDescription()). Releasing lets anything else take the port.",
+                                      confirmTitle: "Release") else { return }
                 _ = ReservationStore.shared.release(port: lease.port, by: nil, force: true)
                 loadLeases()
             }

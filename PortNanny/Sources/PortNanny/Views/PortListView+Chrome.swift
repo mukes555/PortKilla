@@ -3,7 +3,7 @@ import SwiftUI
 import Foundation
 import AppKit
 
-// MARK: - Header, settings menu, footer, empty state
+// MARK: - Header, overflow menu, footer, empty state
 extension PortListView {
 
     var headerView: some View {
@@ -57,7 +57,7 @@ extension PortListView {
         DensityToggle(density: $portManager.viewDensity)
     }
 
-    /// Overflow menu: actions only (never settings — those live in ⚙︎).
+    /// Overflow menu: actions only (never settings, those live in ⚙︎).
     var overflowMenu: some View {
         Menu {
             Button("Refresh") { portManager.refresh(showToast: true) }
@@ -94,10 +94,11 @@ extension PortListView {
         .menuStyle(BorderlessButtonMenuStyle())
         .menuIndicator(.hidden)
         .fixedSize()
+        .accessibilityLabel("More actions")
         .help("Actions")
     }
 
-    /// Gear opens the dedicated Settings window — settings only, no actions.
+    /// Gear opens the dedicated Settings window: settings only, no actions.
     var settingsButton: some View {
         Button {
             appDelegate.openSettings()
@@ -110,6 +111,7 @@ extension PortListView {
         }
         .buttonStyle(.plain)
         .keyboardShortcut(",", modifiers: .command)
+        .accessibilityLabel("Settings")
         .help("Settings")
     }
 
@@ -117,15 +119,17 @@ extension PortListView {
         HStack(spacing: 6) {
             Image(systemName: "keyboard")
                 .font(.system(size: 10))
-            Text("Tip: press \(appDelegate.hotkeyDisplay) anywhere to open PortNanny · ↑↓ select · ⏎ kill · ⌘O open in browser")
+            Text("Tip: \(appDelegate.hotkeyDisplay) opens PortNanny anywhere · ↑↓ select · ⏎ kill · ⌘O browser")
                 .font(.system(size: 10))
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
             Spacer()
             Button(action: { didDismissHotkeyTip = true }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 10))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss tip")
         }
         .foregroundColor(.secondary)
         .padding(.horizontal, 8)
@@ -147,6 +151,7 @@ extension PortListView {
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(6)
@@ -232,13 +237,26 @@ extension PortListView {
                         .padding(.bottom, 8)
                     Text(":\(String(searchedPort)) is free")
                         .font(.headline)
-                    Button(portManager.isWatched(searchedPort) ? "Watching ⭐" : "Watch :\(String(searchedPort))") {
+                    Button(portManager.isWatched(searchedPort) ? "Watching" : "Watch :\(String(searchedPort))") {
                         portManager.toggleWatch(searchedPort)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .padding(.top, 6)
                 }
+            } else if searchText.isEmpty, filter != .all {
+                // The header still counts every port, so "nothing is
+                // listening" here would contradict the line above it.
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 32))
+                    .foregroundColor(.secondary)
+                    .padding(.bottom, 8)
+                Text("No \(filter.rawValue.lowercased()) ports right now")
+                    .font(.headline)
+                Button("Show All") { filter = .all }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .padding(.top, 6)
             } else if searchText.isEmpty {
                 MascotView(mood: .sleepy, size: 96)
                     .padding(.bottom, 8)
@@ -276,7 +294,6 @@ extension PortListView {
 
     var footerView: some View {
         VStack(spacing: 0) {
-            // Status Bar
             // The header carries the totals; this line only says when the
             // list is narrower than the scan, and how it was scanned.
             HStack {

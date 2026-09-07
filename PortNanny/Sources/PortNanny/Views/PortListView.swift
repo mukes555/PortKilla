@@ -205,14 +205,6 @@ struct PortListView: View {
         }
     }
 
-    // MARK: - Keyboard
-
-    // MARK: - Kill flows
-
-    // MARK: - Header
-
-    // MARK: - Content
-
     var portsContentView: some View {
         VStack(spacing: 0) {
             // Column headers; the widths scale with the rows' text size.

@@ -329,7 +329,7 @@ struct PortRowView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Kill \(port.processName) on port \(port.port)")
-                .help("Click to kill. Option+Click to force kill. Shift+Click to kill process tree.")
+                .help("Click to kill. Option-click to force kill. Shift-click to kill the process tree.")
             }
         }
         .font(.system(size: 13))

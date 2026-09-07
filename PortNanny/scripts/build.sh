@@ -57,7 +57,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# 3. Copy Executable — multi-arch builds land under .build/apple/Products,
+# 3. Copy Executable: multi-arch builds land under .build/apple/Products,
 # single-arch under .build/release; support both.
 echo "📂 Copying executable..."
 if [ -f "$PROJECT_ROOT/.build/apple/Products/Release/$APP_NAME" ]; then

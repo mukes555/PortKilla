@@ -21,7 +21,6 @@ struct HistoryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 Text("Time")
                     .frame(width: 60, alignment: .leading)
@@ -77,7 +76,7 @@ struct HistoryView: View {
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundColor(item.action == .refused ? .orange : .red)
 
-                                // The same server tends to come back — offer a re-kill
+                                // The same server tends to come back, so offer a re-kill
                                 if isPortActiveAgain(item.port) {
                                     Button("Kill again") {
                                         killAgain(item)
@@ -107,6 +106,9 @@ struct HistoryView: View {
                 Spacer()
 
                 Button("Clear History") {
+                    guard KillConfirm.run(title: "Clear the history?",
+                                          message: "Every kill and refusal PortNanny has recorded goes away. This cannot be undone.",
+                                          confirmTitle: "Clear") else { return }
                     HistoryManager.shared.clearHistory()
                 }
                 .buttonStyle(.bordered)

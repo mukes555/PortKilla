@@ -18,7 +18,7 @@ public enum LoginItem {
         SMAppService.openSystemSettingsLoginItems()
     }
 
-    /// Returns false when registration isn't possible — e.g. when running the
+    /// Returns false when registration isn't possible, e.g. when running the
     /// bare SwiftPM binary during development instead of the .app bundle.
     @discardableResult
     public static func setEnabled(_ enabled: Bool) -> Bool {

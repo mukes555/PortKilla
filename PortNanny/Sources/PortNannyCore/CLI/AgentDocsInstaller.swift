@@ -7,6 +7,10 @@ import Foundation
 public enum AgentDocsInstaller {
     public static let beginMarker = "<!-- portnanny:begin -->"
     public static let endMarker = "<!-- portnanny:end -->"
+    /// The markers before 2.1: a file PortKilla wrote is updated in place,
+    /// not given a second section.
+    public static let legacyBeginMarker = "<!-- portkilla:begin -->"
+    public static let legacyEndMarker = "<!-- portkilla:end -->"
 
     public static func run(_ options: CLICommand.AgentDocsOptions) -> Int32 {
         if options.claudeHook {
@@ -54,11 +58,13 @@ public enum AgentDocsInstaller {
     public enum InstallError: LocalizedError {
         case unreadable(String)
         case markersOutOfOrder(String)
+        case danglingMarker(String)
 
         public var errorDescription: String? {
             switch self {
             case .unreadable(let path): return "\(path) exists but is not readable as UTF-8 text; nothing was written"
             case .markersOutOfOrder(let path): return "\(path) has a portnanny:end marker before its portnanny:begin marker; fix the markers by hand"
+            case .danglingMarker(let path): return "\(path) has one portnanny marker without its pair; fix the markers by hand"
             }
         }
     }
@@ -73,11 +79,10 @@ public enum AgentDocsInstaller {
         let fresh = block()
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
 
-        if let start = existing.range(of: beginMarker), let end = existing.range(of: endMarker) {
-            guard start.lowerBound < end.upperBound else { throw InstallError.markersOutOfOrder(file.path) }
-            let current = String(existing[start.lowerBound..<end.upperBound]) + "\n"
+        if let range = try existingBlock(in: existing, path: file.path) {
+            let current = String(existing[range]) + "\n"
             if current == fresh { return .unchanged }
-            let replaced = existing.replacingCharacters(in: start.lowerBound..<end.upperBound, with: fresh.trimmingCharacters(in: .newlines))
+            let replaced = existing.replacingCharacters(in: range, with: fresh.trimmingCharacters(in: .newlines))
             try replaced.write(to: file, atomically: true, encoding: .utf8)
             return .updated
         }
@@ -86,6 +91,23 @@ public enum AgentDocsInstaller {
         let head = existing.isEmpty ? frontmatter(for: file) : ""
         try (existing + separator + head + fresh).write(to: file, atomically: true, encoding: .utf8)
         return .added
+    }
+
+    /// The block already in the file, under either generation of markers.
+    private static func existingBlock(in text: String, path: String) throws -> Range<String.Index>? {
+        for (begin, end) in [(beginMarker, endMarker), (legacyBeginMarker, legacyEndMarker)] {
+            let start = text.range(of: begin)
+            let finish = text.range(of: end)
+            // Appending past a lone marker would duplicate the block, and the
+            // next run would delete everything between the two begins.
+            guard let start, let finish else {
+                if start != nil || finish != nil { throw InstallError.danglingMarker(path) }
+                continue
+            }
+            guard start.lowerBound < finish.upperBound else { throw InstallError.markersOutOfOrder(path) }
+            return start.lowerBound..<finish.upperBound
+        }
+        return nil
     }
 
     /// A Claude Code PreToolUse hook: the habit is intercepted at the point

@@ -26,6 +26,7 @@ struct ProtectedProcessListView: View {
                                 .foregroundColor(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Remove \(item)")
                     }
                 }
             }
@@ -51,6 +52,9 @@ struct ProtectedProcessListView: View {
 
             HStack {
                 Button("Reset Defaults") {
+                    guard KillConfirm.run(title: "Reset the protected list?",
+                                          message: "Every name you added goes away and the built-in list comes back.",
+                                          confirmTitle: "Reset") else { return }
                     portManager.resetProtectedProcessSubstrings()
                 }
                 .buttonStyle(.bordered)

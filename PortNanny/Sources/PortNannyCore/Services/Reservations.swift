@@ -25,7 +25,7 @@ public struct Reservation: Codable, Equatable, Identifiable {
         self.owner = owner
         self.sessionKey = sessionKey
         self.sessionPid = sessionPid
-        self.reason = reason
+        self.reason = reason.map { CommandRedaction.printable(String($0.prefix(200))) }
         self.createdAt = createdAt
         self.expiresAt = createdAt.addingTimeInterval(min(max(ttl, 1), Reservation.maxTTL))
     }

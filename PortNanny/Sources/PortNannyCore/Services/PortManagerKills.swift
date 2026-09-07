@@ -97,7 +97,7 @@ extension PortManager {
                     } else {
                         // Not a failure yet: the signal was delivered and the
                         // process may still be shutting down.
-                        let hint = force ? "" : " Option+click to force kill (SIGKILL)."
+                        let hint = force ? "" : " Option-click to force kill (SIGKILL)."
                         self.lastErrorMessage = "\(subject) is still shutting down.\(hint)"
                         onNotTerminated?()
                     }
@@ -140,7 +140,7 @@ extension PortManager {
 
     /// Kills whatever listens on a port number (used by the URL scheme).
     /// Scans fresh so it works even when the cached list is stale.
-    /// `respectProtected` refuses to kill a protected process — always true for
+    /// `respectProtected` refuses to kill a protected process, always true for
     /// link-initiated kills so a webpage can't terminate the user's IDE/tools.
     ///
     /// `confirm` runs on the main thread with the target found by the fresh
@@ -163,7 +163,7 @@ extension PortManager {
 
             if respectProtected && self.isProtectedProcessName(target.processName) {
                 DispatchQueue.main.async {
-                    self.showToast(":\(portNumber) is protected — not killed")
+                    self.showToast(":\(portNumber) is protected, not killed")
                 }
                 return
             }

@@ -22,9 +22,11 @@ top of it:
 - **`PortNannyTests`** links both, so the suite can drive the core directly
   and spawn the debug `portnanny` as a real process.
 
-Subcommands: `list`, `kill`, `free`, `free-port`, `wait`, `open`, `history`,
-`whoami`, `doctor`, `schema`, `agent-docs`, `mcp`, `completions`, `version`,
-`help`.
+Subcommands: `list`, `kill`, `free`, `wait`, `open`, `history`, `whois`,
+`whoami`, `reserve`, `release`, `reservations`, `exec`, `drift`, `free-port`,
+`schema`, `doctor`, `setup`, `agent-docs`, `mcp`, `completions`, `version`,
+`help` (the list in `CLICompletions.commands` is the source of truth), plus
+`__serve` in debug builds for the scenario tests.
 
 ```
                          ┌───────────────────────────┐

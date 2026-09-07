@@ -84,7 +84,7 @@ public final class MCPServer {
         ],
         [
             "name": "kill_port",
-            "description": "Stop every process listening on a port (SIGTERM, verified). dry_run is true by default: call again with dry_run=false to act. Refuses (isError) when another agent's running session owns the port; do not set force unless the user said so.",
+            "description": "Stop every process listening on a port (SIGTERM, verified). dry_run is true by default: call again with dry_run=false to act. Refuses (isError) when another agent's running session owns the port, when a server nobody claims is asked for by an agent (Settings > Agents can turn that part off), or when the port is leased by someone else; do not set force unless the user said so.",
             "inputSchema": ["type": "object", "properties": [
                 "port": ["type": "integer"],
                 "pid": ["type": "integer"],

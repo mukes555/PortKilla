@@ -14,7 +14,7 @@ extension PortManager {
         guardedPorts.contains(port)
     }
 
-    /// Confirmation happens in the UI — this just flips the state.
+    /// Confirmation happens in the UI: this just flips the state.
     public func toggleGuard(_ port: Int) {
         if guardedPorts.contains(port) {
             guardedPorts.remove(port)
@@ -63,7 +63,7 @@ extension PortManager {
             } else if let now, was != now {
                 // Newly occupied OR the occupant changed identity between scans
                 // (a restart/swap must still fire the guard, not go unnoticed).
-                events.append(WatchEvent(port: port, kind: .occupied(by: now)))
+                events.append(WatchEvent(port: port, kind: .occupied(by: occupantName(now))))
             }
         }
         return events
@@ -76,7 +76,7 @@ extension PortManager {
         let freed = pendingFreeNotifications.subtracting(stillBusy)
         for port in freed.sorted() {
             // Watched ports already got a "free" notification from the watch
-            // diff this cycle — don't send a second one for the same event.
+            // diff this cycle: don't send a second one for the same event.
             if !watchedPorts.contains(port) {
                 notify(.portFreed, title: "Port \(port) is free", body: "The process finally exited: :\(port) is available now.")
             }
@@ -135,6 +135,16 @@ extension PortManager {
         return owners
     }
 
+    /// Occupancy is remembered as "pid name": a supervisor that restarts its
+    /// server keeps the name but not the pid, and the guard must see that as
+    /// a new occupant rather than nothing at all.
+    static func occupantIdentity(pid: Int, name: String) -> String { "\(pid) \(name)" }
+
+    /// The name inside an identity, for the text a person reads.
+    static func occupantName(_ identity: String) -> String {
+        identity.split(separator: " ", maxSplits: 1).last.map(String.init) ?? identity
+    }
+
     public func processWatchedPorts(with ports: [PortInfo], guardOwners: [Int: AgentOwner] = [:]) {
         guard !watchedPorts.isEmpty else {
             watchedOccupancy = [:]
@@ -143,7 +153,7 @@ extension PortManager {
 
         var current: [Int: String] = [:]
         for port in watchedPorts {
-            current[port] = ports.first { $0.port == port }?.processName
+            current[port] = ports.first { $0.port == port }.map { Self.occupantIdentity(pid: $0.pid, name: $0.processName) }
         }
 
         // The very first scan just establishes the baseline
@@ -151,7 +161,7 @@ extension PortManager {
             for event in Self.watchEvents(watched: watchedPorts, previous: watchedOccupancy, current: current) {
                 switch event.kind {
                 case .freed:
-                    notify(.portFreed, title: "Port \(event.port) is free", body: "Nothing is listening on :\(event.port) anymore.")
+                    notify(.portFreed, title: ":\(event.port) is free", body: "Nothing is listening on :\(event.port) anymore.")
                 case .occupied(let name):
                     if let intruder = guardKillTarget(for: event.port, in: ports) {
                         let owner = intruder.agentOwner ?? guardOwners[intruder.pid]
@@ -181,7 +191,7 @@ extension PortManager {
                             killPort(intruder, initiator: .portGuard)
                         }
                     } else {
-                        notify(.portTaken, title: "Port \(event.port) in use", body: "'\(name)' started listening on :\(event.port).")
+                        notify(.portTaken, title: ":\(event.port) is in use", body: "'\(name)' started listening on :\(event.port).")
                     }
                 }
             }

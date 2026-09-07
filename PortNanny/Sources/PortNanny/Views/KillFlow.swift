@@ -72,7 +72,7 @@ struct KillFlow {
     /// Bulk kills list every target and count the agent sessions among them.
     /// Supervised servers are left out: a plain kill would not last, and
     /// their own verb is offered one at a time.
-    func requestKillAll(_ targets: [PortInfo], label: String) {
+    func requestKillAll(_ targets: [PortInfo], label: String, confirmTitle: String = "Kill All") {
         let (killable, supervised) = Self.bulkTargets(targets, isProtected: portManager.isProtectedProcessName)
         if killable.isEmpty {
             let why = supervised.isEmpty ? "There are no unprotected processes here." : Self.skippedNote(supervised)
@@ -85,7 +85,7 @@ struct KillFlow {
         let confirmed = KillConfirm.run(
             title: "\(label): \(killable.count) process\(killable.count == 1 ? "" : "es")?",
             message: "This will terminate the following processes:\n\n\(processList)\(agentNote)\(skipped)\n\nAre you sure?",
-            confirmTitle: "Kill All"
+            confirmTitle: confirmTitle
         )
         if confirmed {
             portManager.killPorts(killable)

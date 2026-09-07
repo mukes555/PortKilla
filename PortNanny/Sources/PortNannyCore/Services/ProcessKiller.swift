@@ -16,7 +16,7 @@ public class ProcessKiller {
             case .permissionDenied(let pid):
                 return "No permission to kill PID \(pid)"
             case .identityMismatch(let pid, _, let actual):
-                return "PID \(pid) now belongs to '\(actual)' — refresh and retry"
+                return "PID \(pid) now belongs to '\(actual)': refresh and retry"
             case .unknownError(let message):
                 return message
             }
@@ -29,12 +29,12 @@ public class ProcessKiller {
     /// possible: PIDs get recycled, and the check refuses to signal a PID that
     /// now belongs to a different program.
     public func killProcess(pid: Int, force: Bool = false, killTree: Bool = false, expectedName: String? = nil) throws {
-        // kill(0)/kill(-1) signal entire process groups — never allow them.
+        // kill(0)/kill(-1) signal entire process groups: never allow them.
         guard pid > 0 else { throw KillError.invalidPid(pid) }
 
         if let expectedName {
             guard let actualName = currentProcessName(pid: pid) else {
-                return // Already gone — nothing to do.
+                return // Already gone, nothing to do.
             }
             if !Self.namesMatch(expected: expectedName, actual: actualName) {
                 throw KillError.identityMismatch(pid: pid, expected: expectedName, actual: actualName)
@@ -58,7 +58,7 @@ public class ProcessKiller {
 
         switch errno {
         case ESRCH:
-            return // Process died in the meantime — mission accomplished.
+            return // Process died in the meantime: mission accomplished.
         case EPERM:
             throw KillError.permissionDenied(pid)
         default:
@@ -67,7 +67,7 @@ public class ProcessKiller {
     }
 
     /// Case-insensitive name match tolerant of lsof's ~9-char truncation.
-    /// An empty expected name means "cannot verify" and never matches — an
+    /// An empty expected name means "cannot verify" and never matches: an
     /// empty prefix would otherwise make the identity check always pass.
     public static func namesMatch(expected: String, actual: String) -> Bool {
         let expectedLower = expected.lowercased()

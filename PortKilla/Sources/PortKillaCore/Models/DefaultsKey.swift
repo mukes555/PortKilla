@@ -27,4 +27,6 @@ public enum DefaultsKey {
     /// Refusals live apart from kills so an older app reading `history`
     /// never meets an action it cannot decode.
     public static let refusals = "PortKilla.refusals"
+    /// Port leases, shared by the CLI and the app.
+    public static let reservations = "PortKilla.reservations"
 }

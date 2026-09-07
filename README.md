@@ -152,6 +152,8 @@ portkilla wait 3000 --timeout 30     # block until the port is free
 portkilla history --port 3000        # who started it, who stopped it
 portkilla whoami          # which agent the friendly-fire guard thinks you are
 portkilla whois 3000      # who started it, and why PortKilla thinks so
+portkilla exec --free-port -- npm run dev   # PORT set to a free, leased, attributed port
+portkilla reserve 3000 --for 10m            # lease a free port; release with `release`
 portkilla kill --orphaned # stop servers left behind by agent sessions that ended
 portkilla free-port --prefer 3000    # first free port in 3000-3999, nothing else printed
 portkilla schema kill     # every field of `kill --json`, documented

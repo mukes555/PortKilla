@@ -84,7 +84,7 @@ public enum CLIKill {
         }
 
         // The guard: refuse the whole request if any target is another agent's.
-        let refusals = targets.compactMap { target -> String? in
+        let guardRefusals = targets.compactMap { target -> String? in
             if case .refuse(let reason) = KillDecision.forAgent(caller: scan.caller, target: target.agentOwner) {
                 // A hint, not a permission: the caller's own project is where
                 // its own unclaimed server would be, and also the user's.
@@ -92,6 +92,18 @@ public enum CLIKill {
                 return ":\(target.port) (PID \(target.pid)) is \(reason)\(location)"
             }
             return nil
+        }
+        // A lease by someone else counts like an owner: agents are refused.
+        let leases = ReservationStore.appStore()
+        let reservedRefusals = targets.compactMap { target -> String? in
+            if case .refuse(let why) = KillDecision.forReservation(caller: scan.caller, reservation: leases.reservation(for: target.port), asAgent: true) {
+                return ":\(target.port) (PID \(target.pid)) is \(why)"
+            }
+            return nil
+        }
+        let refusals = guardRefusals + reservedRefusals
+        if !reservedRefusals.isEmpty {
+            report.guardVerdict = options.force ? "overridden" : "refused"
         }
         report.reasons = refusals
         if !refusals.isEmpty && !options.force {

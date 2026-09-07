@@ -6,6 +6,7 @@ struct WorkbenchWatchlist: View {
     @ObservedObject var portManager: PortManager
     @Binding var selection: String?
     @State private var newPortText = ""
+    @State private var leases: [Reservation] = []
 
     private var ports: [Int] {
         portManager.watchedPorts.union(portManager.guardedPorts).sorted()
@@ -31,15 +32,84 @@ struct WorkbenchWatchlist: View {
             .controlSize(.small)
             .padding(10)
             Divider()
-            if ports.isEmpty {
+            if ports.isEmpty && leases.isEmpty {
                 WorkbenchEmpty(icon: "star", text: "Watch a port to be told when it frees up; guard one to keep it free")
             } else {
-                List(ports, id: \.self) { port in
-                    row(for: port)
-                        .padding(.vertical, 4)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        if !ports.isEmpty {
+                            sectionHeader("WATCHED AND GUARDED")
+                            ForEach(ports, id: \.self) { port in
+                                row(for: port)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                Divider()
+                            }
+                        }
+                        if !leases.isEmpty {
+                            sectionHeader("RESERVED")
+                            ForEach(leases) { lease in
+                                leaseRow(lease)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                Divider()
+                            }
+                        }
+                    }
                 }
-                .listStyle(.inset)
             }
+        }
+        .onAppear(perform: loadLeases)
+        .onReceive(portManager.clock.objectWillChange) { _ in loadLeases() }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.caption.weight(.bold))
+                .foregroundColor(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.9))
+    }
+
+    /// Leases live in the shared store; re-read when the list refreshes.
+    private func loadLeases() {
+        leases = ReservationStore.appStore().all()
+    }
+
+    /// "Reserved by Claude Code (session 56034) until 12:30 (8m left), for e2e tests"
+    private func leaseRow(_ lease: Reservation) -> some View {
+        let occupant = portManager.activePorts.first { $0.port == lease.port }
+        return HStack(spacing: 10) {
+            Image(systemName: "lock")
+                .foregroundColor(.chipPurple)
+            Text(":\(String(lease.port))")
+                .font(.system(.body, design: .monospaced))
+                .frame(width: 70, alignment: .leading)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(lease.describedHolder) \(lease.expiryDescription())")
+                    .font(.callout)
+                if let reason = lease.reason {
+                    Text(reason).font(.caption).foregroundColor(.secondary)
+                }
+            }
+            if let occupant {
+                Button {
+                    selection = occupant.id
+                } label: {
+                    Text("in use by \(occupant.processName)").font(.caption)
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+            Button("Release") {
+                _ = ReservationStore.appStore().release(port: lease.port, by: nil, force: true)
+                loadLeases()
+            }
+            .controlSize(.small)
         }
     }
 

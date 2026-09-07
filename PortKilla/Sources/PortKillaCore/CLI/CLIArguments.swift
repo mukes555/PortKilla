@@ -26,6 +26,10 @@ public enum CLICommand: Equatable {
     case agentDocs(AgentDocsOptions)
     case doctor(json: Bool, agents: Bool)
     case whois(WhoisOptions)
+    case reserve(ReserveOptions)
+    case release(port: Int, force: Bool, json: Bool)
+    case reservations(json: Bool)
+    case exec(ExecOptions)
     case completions(shell: String)
     case mcp
     case freePort(prefer: Int, range: ClosedRange<Int>, json: Bool)
@@ -42,6 +46,23 @@ public enum CLICommand: Equatable {
         var file = "CLAUDE.md"
         /// Print a Claude Code PreToolUse hook that redirects lsof-based kills.
         var claudeHook = false
+    }
+
+    public struct ReserveOptions: Equatable {
+        var port: Int
+        var ttl: TimeInterval = Reservation.defaultTTL
+        var reason: String?
+        var json = false
+    }
+
+    public struct ExecOptions: Equatable {
+        var port: Int?
+        var prefer = 3000
+        var range: ClosedRange<Int> = 3000...3999
+        var reserve = true
+        var owner: String?
+        var session: String?
+        var command: [String] = []
     }
 
     public struct WhoisOptions: Equatable {
@@ -128,6 +149,12 @@ public enum CLIArguments {
         case "history": return parseHistory(rest)
         case "whoami": return parseWhoami(rest)
         case "whois": return parseWhois(rest)
+        case "reserve": return parseReserve(rest)
+        case "release": return parseRelease(rest)
+        case "reservations":
+            if rest.isEmpty { return .success(.reservations(json: false)) }
+            return rest == ["--json"] ? .success(.reservations(json: true)) : .failure(.unknownOption(rest[0], command: "reservations"))
+        case "exec": return parseExec(rest)
         case "version", "--version", "-v":
             if rest.isEmpty { return .success(.version(json: false)) }
             return rest == ["--json"] ? .success(.version(json: true)) : .failure(.unknownOption(rest[0], command: "version"))
@@ -391,7 +418,7 @@ public enum CLIArguments {
     }
 
     /// "3000-3999"
-    private static func parseRange(_ text: String) -> ClosedRange<Int>? {
+    static func parseRange(_ text: String) -> ClosedRange<Int>? {
         let parts = text.split(separator: "-", maxSplits: 1).map { Int($0) }
         guard parts.count == 2, let low = parts[0], let high = parts[1],
               PortManager.isValidPortNumber(low), PortManager.isValidPortNumber(high), low <= high else { return nil }
@@ -408,7 +435,7 @@ public enum CLIArguments {
     }
 
     /// "--agent=Cursor" -> "Cursor"
-    private static func valueOf(option: String, in arg: String) -> String? {
+    static func valueOf(option: String, in arg: String) -> String? {
         guard arg.hasPrefix(option + "=") else { return nil }
         return String(arg.dropFirst(option.count + 1))
     }

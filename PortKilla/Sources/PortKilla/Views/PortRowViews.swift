@@ -284,6 +284,12 @@ struct PortRowView: View {
                                     .fixedSize()
                                     .help(container)
                             }
+                            if let lease = port.reservation {
+                                Chip(icon: "lock", text: "reserved", tint: .chipPurple)
+                                    .fixedSize()
+                                    .help("Reserved by \(lease.describedHolder) \(lease.expiryDescription())" + (lease.reason.map { ", for \($0)" } ?? ""))
+                                    .accessibilityLabel("reserved by \(lease.describedHolder)")
+                            }
                             // A supervisor that would undo a plain kill; Docker
                             // already shows as its container.
                             if let managed = port.managedBy, managed.kind != .docker {

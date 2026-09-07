@@ -174,6 +174,8 @@ public class PortScanner {
             DockerService.shared.refreshInBackground(dockerPresent: dockerPresent)
         }
 
+        // One read of the leases per scan; a listener on a leased port shows it.
+        let leases = isFull ? Dictionary(ReservationStore.appStore().all().map { ($0.port, $0) }, uniquingKeysWith: { a, _ in a }) : [:]
         let ports = listeners.map { raw -> PortInfo in
             let rawCommand = processes.command(for: raw.pid) ?? ""
             // Classification sees the raw arguments; everything downstream
@@ -208,7 +210,8 @@ public class PortScanner {
                 age: processes.ageSeconds(for: raw.pid).flatMap { ElapsedFormat.humanize(seconds: $0) },
                 agentOwner: isFull ? agentOwner(for: raw, type: type, containerName: containerName, processes: processes) : nil,
                 connections: raw.connections,
-                managedBy: isFull ? ManagedRuntime.detect(pid: raw.pid, containerName: containerName, type: type, in: processes) : nil
+                managedBy: isFull ? ManagedRuntime.detect(pid: raw.pid, containerName: containerName, type: type, in: processes) : nil,
+                reservation: leases[raw.port]
             )
         }
 

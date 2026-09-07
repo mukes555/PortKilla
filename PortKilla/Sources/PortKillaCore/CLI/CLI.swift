@@ -47,6 +47,14 @@ public enum PortKillaCLI {
             return agents ? DoctorAgents.run(json: json) : doctor(json: json)
         case .success(.whois(let options)):
             return CLIWhois.run(options)
+        case .success(.reserve(let options)):
+            return CLIReserve.reserve(options)
+        case .success(.release(let port, let force, let json)):
+            return CLIReserve.release(port: port, force: force, json: json)
+        case .success(.reservations(let json)):
+            return CLIReserve.list(json: json)
+        case .success(.exec(let options)):
+            return CLIExec.run(options)
         case .success(.completions(let shell)):
             print(CLICompletions.script(for: shell) ?? "")
             return CLIExit.ok
@@ -142,7 +150,9 @@ public enum PortKillaCLI {
 
     private static func freePort(prefer: Int, range: ClosedRange<Int>, json: Bool) -> Int32 {
         let listening = Set((NativeScanner.allListeners() ?? []).map(\.port))
-        let port = firstFreePort(prefer: prefer, range: range, listening: listening)
+        // Another live lease is as good as taken; our own is not.
+        let reserved = ReservationStore.appStore().portsReservedByOthers(for: callerIdentity())
+        let port = firstFreePort(prefer: prefer, range: range, listening: listening.union(reserved))
         let exit = port == nil ? CLIExit.notFound : CLIExit.ok
         if json {
             let report = FreePortReport(port: port, preferred: prefer, range: "\(range.lowerBound)-\(range.upperBound)", exitCode: exit)
@@ -384,6 +394,11 @@ public enum PortKillaCLI {
       processes share a port.
     - `portkilla whois <port>` explains who started a server and why PortKilla thinks
       so (ancestry, markers, declaration), and what `kill` would do for you.
+    - `portkilla exec --free-port --prefer 3000 -- npm run dev` picks a free port,
+      exports PORT, leases the port for the run, and attributes the server to you.
+      `portkilla reserve <port> --for 10m` leases a port you are about to use by
+      hand (exit 3 when someone else holds it); `portkilla release <port>` gives it
+      back. `free-port` and `exec` skip ports others have leased.
     - `portkilla kill --orphaned` stops every server left behind by an agent session
       that has ended; safe for anyone, exit 0 when there is nothing to clean up.
     - `portkilla history --port <port>` shows who started and who stopped a server

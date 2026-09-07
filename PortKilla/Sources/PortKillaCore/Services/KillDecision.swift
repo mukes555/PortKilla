@@ -49,6 +49,16 @@ public enum KillDecision: Equatable {
         return .allow
     }
 
+    /// A lease on the port by someone else: agents are refused, people warned.
+    public static func forReservation(caller: AgentOwner?, reservation: Reservation?, asAgent: Bool) -> KillDecision {
+        guard let reservation, !reservation.isHeld(by: caller) else { return .allow }
+        let what = "reserved by \(reservation.describedHolder) \(reservation.expiryDescription())" + (reservation.reason.map { ", for \($0)" } ?? "")
+        if asAgent, caller?.confidence == .agent {
+            return .refuse(what + "; wait, ask, or pick another port with `portkilla free-port`")
+        }
+        return .warn("The port is \(what).")
+    }
+
     /// Why the guard did or did not apply, for the CLI's report: an agent
     /// must be able to tell "checked and cleared" from "could not check".
     public static func verdict(caller: AgentOwner?, target: AgentOwner?, forced: Bool) -> String {

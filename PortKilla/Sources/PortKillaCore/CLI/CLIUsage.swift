@@ -106,6 +106,28 @@ extension CLIArguments {
             its meaning (`agents` is `doctor --agents`). Fields are only ever added,
             never renamed or removed, within a schema version.
             """
+        case "reserve", "release", "reservations": return """
+            portkilla reserve <port> [--for 10m] [--reason "..."] [--json]
+            portkilla release <port> [--force] [--json]
+            portkilla reservations [--json]
+
+            A lease on a free port: free-port and exec skip it for everyone else,
+            and kill refuses other agents on it, until it expires (default 10
+            minutes, at most a day) or you release it. Reserving a port you already
+            hold renews the lease. Exit 1 when the port is in use, 3 when someone
+            else holds the lease. release needs --force for another holder's lease.
+            """
+        case "exec": return """
+            portkilla exec [--port N | --free-port [--prefer 3000] [--range A-B]] [--no-reserve]
+                           [--owner NAME] [--session KEY] -- <command> [args...]
+
+            Runs the command with PORT set to a free port (--port must be free;
+            --free-port, the default, takes the first free one nobody else has
+            leased, starting at --prefer), leases the port for the run, and exports
+            PORTKILLA_OWNER and PORTKILLA_SESSION (yours, unless given) so the
+            server is attributed to you even when your tool leaves no marker.
+            Signals are forwarded; the exit code is the command's.
+            """
         case "doctor": return """
             portkilla doctor [--json] [--agents]
 
@@ -131,6 +153,9 @@ extension CLIArguments {
       portkilla kill --orphaned [--dry-run] [--json]   servers whose agent session ended
       portkilla free <port> [...]        like kill, but exit 0 if already free
       portkilla whois <port> [--json]    who started it, and why PortKilla thinks so
+      portkilla reserve <port> [--for 10m] [--reason "..."] [--json]
+      portkilla release <port> [--force]  |  portkilla reservations [--json]
+      portkilla exec [--port N | --free-port] [--] <command...>   PORT set, leased, attributed
       portkilla wait <port> [--timeout 30] [--json]
       portkilla open <port>
       portkilla history [--json] [--port <port>] [--limit 20]

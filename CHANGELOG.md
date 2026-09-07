@@ -14,6 +14,20 @@ release, rename it to the version and date.
 <!-- next -->
 
 ### Added
+- **Leases on free ports.** `portkilla reserve <port> [--for 10m]
+  [--reason ...]` takes a lease that `free-port` and `exec` skip for
+  everyone else and that makes `kill` refuse other agents on the port
+  (people are warned) until it expires (a day at most) or `portkilla
+  release <port>` gives it back. `portkilla reservations` lists them; the
+  Workbench watchlist shows them with a Release button, and a listener on
+  a leased port wears a "reserved" chip. MCP: `reserve_port`,
+  `release_port`, and a `free_port` tool.
+- **`portkilla exec`.** `portkilla exec --free-port --prefer 3000 -- npm
+  run dev` picks a free port nobody has leased, exports `PORT`, leases the
+  port for the run, exports `PORTKILLA_OWNER` and `PORTKILLA_SESSION`
+  (yours unless given) so the server is attributed even when the tool
+  leaves no marker, forwards signals, and exits with the command's status.
+  `--port N` insists on one port and explains who has it when it is busy.
 - **The Workbench.** A full-size window (overflow menu, or type `> workbench`)
   with a sidebar of views: a sortable table of every port; ports grouped by
   project with Reveal, Open in editor, and Kill all; ports grouped by agent

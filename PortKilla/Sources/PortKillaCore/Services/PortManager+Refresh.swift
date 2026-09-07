@@ -174,13 +174,14 @@ extension PortManager {
                 port.bindAddress ?? "",
             ]
             if depth == .full {
-                fields += [
-                    port.containerName ?? "",
-                    String(port.children?.count ?? 0),
-                    // Attribution can change on its own (a session ending);
-                    // the chip must follow.
-                    port.agentOwner.map { "\($0.sessionId)|\($0.confidence.rawValue)|\($0.sessionEnded)" } ?? ""
-                ]
+                fields.append(port.containerName ?? "")
+                fields.append(String(port.children?.count ?? 0))
+                // Attribution can change on its own (a session ending);
+                // the chip must follow.
+                let owner = port.agentOwner.map { "\($0.sessionId)|\($0.confidence.rawValue)|\($0.sessionEnded)" } ?? ""
+                fields.append(owner)
+                fields.append(port.managedBy?.label ?? "")
+                fields.append(port.reservation?.owner ?? "")
             }
             return fields.joined(separator: "|")
         }

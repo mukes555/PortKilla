@@ -231,12 +231,12 @@ private struct DisplaySettings: View {
 
             Section("Menu bar") {
                 Picker("Icon", selection: $portManager.menuBarIcon) {
-                    Text("Quokka").tag(PortManager.MenuBarIcon.quokka)
-                    Text("Bolt").tag(PortManager.MenuBarIcon.bolt)
+                    Text("Color").tag(PortManager.MenuBarIcon.color)
+                    Text("Mono").tag(PortManager.MenuBarIcon.mono)
                 }
                 .pickerStyle(.segmented)
                 Toggle("Show active port count", isOn: $portManager.showMenuBarCount)
-                Text("Displays the number of dev ports next to the icon.")
+                Text("Color is the app icon, dimmed while nothing is listening. Mono is a black-and-white quokka that follows the menu bar. The count is the number of dev ports.")
                     .settingsCaption()
             }
         }

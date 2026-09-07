@@ -11,26 +11,26 @@ final class BrandingAndSizeTests: XCTestCase {
         let manager = PortManager.forTesting()
         defer { manager.discardTestDefaults() }
         XCTAssertEqual(manager.popoverSize, .regular, "bigger by default")
-        XCTAssertEqual(manager.menuBarIcon, .quokka, "the quokka by default")
+        XCTAssertEqual(manager.menuBarIcon, .color, "the app icon by default")
 
         var sizeChanges = 0
         manager.onPopoverSizeChanged = { sizeChanges += 1 }
         var menuBarChanges = 0
         manager.onMenuBarPreferenceChanged = { menuBarChanges += 1 }
         manager.popoverSize = .large
-        manager.menuBarIcon = .bolt
+        manager.menuBarIcon = .mono
         XCTAssertEqual(sizeChanges, 1, "the open popover resizes at once")
         XCTAssertEqual(menuBarChanges, 1, "the status item redraws at once")
         XCTAssertEqual(manager.defaults.string(forKey: DefaultsKey.popoverSize), "large")
-        XCTAssertEqual(manager.defaults.string(forKey: DefaultsKey.menuBarIcon), "bolt")
+        XCTAssertEqual(manager.defaults.string(forKey: DefaultsKey.menuBarIcon), "mono")
 
         let restored = PortManager(defaults: manager.defaults, history: HistoryManager(defaults: manager.defaults), autoStart: false)
         XCTAssertEqual(restored.popoverSize, .large)
-        XCTAssertEqual(restored.menuBarIcon, .bolt)
+        XCTAssertEqual(restored.menuBarIcon, .mono)
 
         manager.resetAllSettings()
         XCTAssertEqual(manager.popoverSize, .regular)
-        XCTAssertEqual(manager.menuBarIcon, .quokka)
+        XCTAssertEqual(manager.menuBarIcon, .color)
     }
 
     func testUnknownStoredChoicesFallBackToTheDefaults() {
@@ -38,10 +38,10 @@ final class BrandingAndSizeTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suite)!
         defer { UserDefaults.discardSuite(named: suite, defaults: defaults) }
         defaults.set("gigantic", forKey: DefaultsKey.popoverSize)
-        defaults.set("dragon", forKey: DefaultsKey.menuBarIcon)
+        defaults.set("bolt", forKey: DefaultsKey.menuBarIcon)
         let manager = PortManager(defaults: defaults, history: HistoryManager(defaults: defaults), autoStart: false)
         XCTAssertEqual(manager.popoverSize, .regular)
-        XCTAssertEqual(manager.menuBarIcon, .quokka)
+        XCTAssertEqual(manager.menuBarIcon, .color, "the bolt is gone; a stored choice for it means the default")
     }
 
     func testSizesGrowAndCompactIsTheOldPopover() {
@@ -63,19 +63,41 @@ final class BrandingAndSizeTests: XCTestCase {
 
     // MARK: - Brand
 
-    func testMenuBarGlyphsAreTemplatesAndTheActiveOneIsFilled() throws {
+    func testMenuBarIconsComeFromTheArtwork() throws {
+        pointAtTheArtwork()
+        defer { unsetenv("PORTKILLA_MASCOT_DIR") }
+        let color = MenuBarGlyph.colorIcon(active: true)
+        XCTAssertFalse(color.isTemplate, "the app icon keeps its colours")
+        XCTAssertEqual(color.size, NSSize(width: 18, height: 18))
+        XCTAssertGreaterThan(try coverage(of: color), try coverage(of: MenuBarGlyph.colorIcon(active: false)), "idle is dimmed")
+
+        let mono = MenuBarGlyph.monoIcon(active: true)
+        XCTAssertTrue(mono.isTemplate, "mono follows the menu bar's look")
+        let monoCoverage = try coverage(of: mono)
+        XCTAssertGreaterThan(monoCoverage, 0.25, "the head fills the glyph")
+        XCTAssertLessThan(monoCoverage, 0.9, "the shades and the mouth are holes")
+        XCTAssertGreaterThan(monoCoverage, try coverage(of: MenuBarGlyph.monoIcon(active: false)), "idle is lighter")
+        XCTAssertTrue(MenuBarGlyph.image(.mono, active: false) === MenuBarGlyph.image(.mono, active: false), "drawn once, then cached")
+    }
+
+    func testTheVectorFaceStandsInWithoutArtwork() throws {
         let filled = MenuBarGlyph.quokka(filled: true)
         let outline = MenuBarGlyph.quokka(filled: false)
         XCTAssertTrue(filled.isTemplate)
         XCTAssertTrue(outline.isTemplate)
-        XCTAssertEqual(filled.size, NSSize(width: 18, height: 18))
         let filledCoverage = try coverage(of: filled)
         let outlineCoverage = try coverage(of: outline)
         XCTAssertGreaterThan(filledCoverage, outlineCoverage, "active is the filled face")
         XCTAssertGreaterThan(outlineCoverage, 0.05, "idle is drawn")
         XCTAssertLessThan(filledCoverage, 0.9, "the shades and the smile are cut out")
-        XCTAssertTrue(MenuBarGlyph.image(.bolt, active: true).isTemplate, "the bolt option is a symbol, a template too")
-        XCTAssertTrue(MenuBarGlyph.image(.quokka, active: false) === MenuBarGlyph.image(.quokka, active: false), "drawn once, then cached")
+    }
+
+    /// The repo's artwork stands in for the bundle's.
+    private func pointAtTheArtwork() {
+        let mascots = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("assets/mascot").path
+        setenv("PORTKILLA_MASCOT_DIR", mascots, 1)
     }
 
     /// Fraction of pixels the glyph covers, from a 72 px render.
@@ -118,13 +140,9 @@ final class BrandingAndSizeTests: XCTestCase {
     }
 
     func testTheAvatarIsTheHeadCutFromTheArtwork() throws {
-        // The repo's artwork stands in for the bundle's.
-        let mascots = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("assets/mascot").path
-        setenv("PORTKILLA_MASCOT_DIR", mascots, 1)
+        pointAtTheArtwork()
         defer { unsetenv("PORTKILLA_MASCOT_DIR") }
-        let happy = try XCTUnwrap(MascotView.artwork(for: .happy), "artwork at \(mascots)")
+        let happy = try XCTUnwrap(MascotView.artwork(for: .happy), "artwork under assets/mascot")
         let face = try XCTUnwrap(MascotView.face(for: .happy))
         XCTAssertLessThan(face.size.height, happy.size.height * 0.5, "the head, not the whole figure")
         XCTAssertGreaterThan(face.size.width / face.size.height, 0.8, "roughly square, for a circle")

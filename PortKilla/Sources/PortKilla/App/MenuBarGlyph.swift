@@ -1,34 +1,131 @@
 import AppKit
 import PortKillaCore
 
-/// The menu bar's template images: the quokka face (head, ears, shades, a
-/// smile) drawn as vectors so it stays crisp at 18 pt, and the bolt for
-/// people who prefer it. Filled means ports are active, outlined means none.
+/// The menu bar's images: the app icon itself, dimmed while nothing is
+/// listening; a monochrome quokka cut from the artwork, a template that
+/// follows the bar's light or dark look; and a vector face for a bare debug
+/// binary that has neither.
 enum MenuBarGlyph {
     static let pointSize: CGFloat = 18
     private static var cache: [String: NSImage] = [:]
+    private static var silhouette: NSImage?
 
     static func image(_ icon: PortManager.MenuBarIcon, active: Bool) -> NSImage {
         let key = "\(icon.rawValue)-\(active)"
         if let cached = cache[key] { return cached }
         let image: NSImage
         switch icon {
-        case .bolt:
-            image = NSImage(systemSymbolName: active ? "bolt.fill" : "bolt", accessibilityDescription: "PortKilla") ?? quokka(filled: active)
-        case .quokka:
-            image = quokka(filled: active)
+        case .color: image = colorIcon(active: active)
+        case .mono: image = monoIcon(active: active)
         }
         cache[key] = image
         return image
     }
 
+    /// The app icon as the bundle carries it, at menu bar size; the face
+    /// from the artwork when there is no bundle.
+    static func colorIcon(active: Bool) -> NSImage {
+        guard let source = appIcon() ?? faceInCircle() else { return quokka(filled: active) }
+        let image = NSImage(size: NSSize(width: pointSize, height: pointSize), flipped: false) { rect in
+            NSGraphicsContext.current?.imageInterpolation = .high
+            source.draw(in: rect, from: .zero, operation: .sourceOver, fraction: active ? 1 : 0.45)
+            return true
+        }
+        image.isTemplate = false
+        image.accessibilityDescription = description(active: active)
+        return image
+    }
+
+    /// The quokka's head as a template: fur is the shape, the shades and the
+    /// mouth are holes, so the face still reads at 18 points.
+    static func monoIcon(active: Bool) -> NSImage {
+        guard let mask = silhouetteFromArtwork() else { return quokka(filled: active) }
+        let image = NSImage(size: NSSize(width: pointSize, height: pointSize), flipped: false) { rect in
+            NSGraphicsContext.current?.imageInterpolation = .high
+            mask.draw(in: rect, from: .zero, operation: .sourceOver, fraction: active ? 1 : 0.5)
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = description(active: active)
+        return image
+    }
+
+    private static func description(active: Bool) -> String {
+        active ? "PortKilla, active ports" : "PortKilla, no active ports"
+    }
+
+    private static func appIcon() -> NSImage? {
+        Bundle.main.url(forResource: "AppIcon", withExtension: "icns").flatMap { NSImage(contentsOf: $0) }
+    }
+
+    private static func faceInCircle() -> NSImage? {
+        guard let face = MascotView.face(for: .happy) else { return nil }
+        let side: CGFloat = 64
+        return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            NSBezierPath(ovalIn: rect).addClip()
+            face.draw(in: rect)
+            return true
+        }
+    }
+
+    /// Thresholded at 144 px and scaled from there, so the edges come out
+    /// smooth instead of jagged. Cut once; only a hit is remembered, since
+    /// a test may point at the artwork after the first ask.
+    private static func silhouetteFromArtwork() -> NSImage? {
+        if let silhouette { return silhouette }
+        guard let face = MascotView.face(for: .happy),
+              let source = face.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let side = 144
+        guard let context = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.interpolationQuality = .high
+        // An oval, like the avatar's circle but trimmed on the right: the
+        // crop's edges hold a waving hand and a mug, noise at 18 points.
+        context.addEllipse(in: CGRect(x: 2, y: 2, width: side - 14, height: side - 4))
+        context.clip()
+        context.draw(source, in: fitted(source, in: CGFloat(side)))
+        guard let data = context.data else { return nil }
+        let pixels = data.bindMemory(to: UInt8.self, capacity: side * side * 4)
+        for index in 0..<(side * side) {
+            let pixel = pixels + index * 4
+            let alpha = Int(pixel[3])
+            let luminance = (Int(pixel[0]) * 299 + Int(pixel[1]) * 587 + Int(pixel[2]) * 114) / 1000
+            // Fur (opaque and not dark) is the shape; the shades and the
+            // mouth (near black) and the background (clear) are holes.
+            let solid = alpha > 128 && luminance > alpha * 18 / 100
+            pixel[0] = 0
+            pixel[1] = 0
+            pixel[2] = 0
+            pixel[3] = solid ? 255 : 0
+        }
+        guard let mask = context.makeImage() else { return nil }
+        let image = NSImage(cgImage: mask, size: NSSize(width: side, height: side))
+        silhouette = image
+        return image
+    }
+
+    /// The head centred in a square, whole.
+    private static func fitted(_ image: CGImage, in side: CGFloat) -> CGRect {
+        let aspect = CGFloat(image.width) / CGFloat(image.height)
+        if aspect >= 1 {
+            let height = side / aspect
+            return CGRect(x: 0, y: (side - height) / 2, width: side, height: height)
+        }
+        let width = side * aspect
+        return CGRect(x: (side - width) / 2, y: 0, width: width, height: side)
+    }
+
+    // MARK: - Vector fallback
+
+    /// A drawn face (head, ears, shades, a smile) for builds without the
+    /// artwork. Filled means ports are active, outlined means none.
     static func quokka(filled: Bool, size: CGFloat = pointSize) -> NSImage {
         let image = NSImage(size: NSSize(width: size, height: size), flipped: false) { _ in
             draw(filled: filled, unit: size / 18)
             return true
         }
         image.isTemplate = true
-        image.accessibilityDescription = filled ? "PortKilla, active ports" : "PortKilla, no active ports"
+        image.accessibilityDescription = description(active: filled)
         return image
     }
 

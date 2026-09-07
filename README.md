@@ -13,7 +13,9 @@
 `lsof -ti:3000 | xargs kill -9` frees the port. PortKilla does the same, and
 tells you *whose* server you are about to kill.
 
-<p align="center"><img src="assets/screenshot.png" width="500" alt="PortKilla: listening ports with process, memory, exposed badge, and the AI agent that started each"></p>
+<p align="center"><img src="assets/screenshot.png" width="500" alt="PortKilla: listening ports with process, project, memory, connected clients, a supervisor chip, and the AI agent that started each"></p>
+
+<p align="center"><img src="assets/workbench.png" width="820" alt="The PortKilla Workbench: a sidebar of ports, projects, agent sessions, watchlist, and history; a sortable table; an inspector for the selected port"></p>
 
 **PortKilla** is a lightweight, native macOS menu bar app that helps developers identify and kill processes occupying ports. Instantly fix `EADDRINUSE` errors, terminate stuck Node.js servers, and free up localhost ports without touching the terminal.
 

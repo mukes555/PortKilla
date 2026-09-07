@@ -99,7 +99,10 @@ Regenerate the README assets:
 
 ```bash
 # main-view screenshot
-PORTKILLA_SNAPSHOT=../assets/screenshot.png .build/debug/PortKilla
+PORTKILLA_SNAPSHOT=../assets/screenshot.png PORTKILLA_SNAPSHOT_DENSITY=advanced PORTKILLA_SNAPSHOT_WATCH=3000 .build/debug/PortKilla
+# the Workbench: a real window, photographed (needs Screen Recording permission
+# for the debug binary; the offscreen render leaves the sidebar column blank)
+PORTKILLA_SNAPSHOT=../assets/workbench.png PORTKILLA_SNAPSHOT_VIEW=workbench-live PORTKILLA_SNAPSHOT_SELECT=3000 .build/debug/PortKilla
 # animated demo
 PORTKILLA_DEMO_GIF=../assets/demo.gif .build/debug/PortKilla
 ```

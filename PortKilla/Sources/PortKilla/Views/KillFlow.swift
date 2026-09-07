@@ -45,9 +45,13 @@ struct KillFlow {
     }
 
     func requestKillTest(_ test: TestProcessInfo, force: Bool = false) {
+        var lines = ["This will terminate '\(test.processName)' (PID \(test.pid))."]
+        if case .warn(let reason) = KillDecision.forHuman(target: test.agentOwner) {
+            lines.append(reason)
+        }
         let confirmed = confirmIfNeeded(
             title: "Kill \(test.processName)?",
-            message: "This will terminate '\(test.processName)' (PID \(test.pid)).",
+            message: lines.joined(separator: "\n\n"),
             owner: test.agentOwner
         )
         guard confirmed else { return }
@@ -124,16 +128,12 @@ struct KillFlow {
     }
 
     /// Honours confirm-before-kill, and always asks when another agent's
-    /// live session owns the target, whatever the setting says.
+    /// live session owns the target, whatever the setting says. The message
+    /// already carries the warnings; nothing is added here.
     private func confirmIfNeeded(title: String, message: String, owner: AgentOwner?, alwaysAsk: Bool = false) -> Bool {
-        let decision = KillDecision.forHuman(target: owner)
-        guard portManager.confirmBeforeKill || decision != .allow || alwaysAsk else { return true }
-
-        var text = message
-        if case .warn(let reason) = decision {
-            text += "\n\n\(reason)"
-        }
-        return runKillConfirmation(title: title, message: text)
+        let mustAsk = KillDecision.forHuman(target: owner) != .allow
+        guard portManager.confirmBeforeKill || mustAsk || alwaysAsk else { return true }
+        return runKillConfirmation(title: title, message: message)
     }
 
     func runKillConfirmation(title: String, message: String) -> Bool {

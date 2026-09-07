@@ -6,7 +6,7 @@ labels: enhancement
 
 ## The problem
 
-<!-- What are you trying to do that PortKilla doesn't help with today? -->
+<!-- What are you trying to do that PortNanny doesn't help with today? -->
 
 ## Proposed solution
 

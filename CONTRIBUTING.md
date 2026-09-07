@@ -1,6 +1,6 @@
-# Contributing to PortKilla
+# Contributing to PortNanny
 
-Thanks for your interest! PortKilla is a small, dependency-free, native macOS
+Thanks for your interest! PortNanny is a small, dependency-free, native macOS
 menu-bar app (with a built-in CLI). This guide gets you from clone to running in
 about a minute, and explains how the project is organized.
 
@@ -19,12 +19,12 @@ about a minute, and explains how the project is organized.
 
 ## The one gotcha: the package lives in a nested directory
 
-The Git repo is named `PortKilla` and the Swift package sits in a `PortKilla/`
+The Git repo is named `PortNanny` and the Swift package sits in a `PortNanny/`
 subdirectory of it. After cloning you have to step in twice:
 
 ```bash
-git clone https://github.com/mukes555/PortKilla.git
-cd PortKilla/PortKilla        # repo root → Swift package root
+git clone https://github.com/mukes555/PortNanny.git
+cd PortNanny/PortNanny        # repo root → Swift package root
 ```
 
 Every `swift` command below is run from that package root.
@@ -33,17 +33,17 @@ Every `swift` command below is run from that package root.
 
 ```bash
 swift build
-swift run PortKilla            # launches the menu-bar app (look for the ⚡ icon)
+swift run PortNanny            # launches the menu-bar app (look for the ⚡ icon)
 ```
 
 The package also builds the standalone CLI, and the app binary answers the
 same subcommands:
 
 ```bash
-swift run portkilla-cli list          # table of listening ports
-swift run portkilla-cli list --json   # JSON, for scripting
-swift run portkilla-cli kill 3000     # graceful kill; add --force for SIGKILL
-swift run PortKilla list          # the app binary in CLI mode
+swift run portnanny-cli list          # table of listening ports
+swift run portnanny-cli list --json   # JSON, for scripting
+swift run portnanny-cli kill 3000     # graceful kill; add --force for SIGKILL
+swift run PortNanny list          # the app binary in CLI mode
 ```
 
 ## Test
@@ -52,26 +52,26 @@ swift run PortKilla list          # the app binary in CLI mode
 swift build && swift test --disable-sandbox
 ```
 
-`swift build` first: the scenario tests spawn the debug `portkilla-cli`
+`swift build` first: the scenario tests spawn the debug `portnanny-cli`
 executable next to the test bundle, and `swift test` alone does not build
 it. `--disable-sandbox` is required: several tests exercise the native
 scanner, which makes raw `libproc` syscalls the SwiftPM sandbox blocks.
 
-If the link step ever complains that `_portkilla_cli_main` is undefined,
+If the link step ever complains that `_portnanny_cli_main` is undefined,
 the incremental state is stale: `rm -rf .build/arm64-apple-macosx/debug`
 and build again.
 
 ## Build a distributable app
 
 ```bash
-./scripts/build.sh            # → dist/PortKilla.app (ad-hoc signed)
-./scripts/build.sh --dmg      # also produces dist/PortKilla-<version>.dmg
-./scripts/build.sh --bundle-id=com.you.PortKilla   # override the bundle id
+./scripts/build.sh            # → dist/PortNanny.app (ad-hoc signed)
+./scripts/build.sh --dmg      # also produces dist/PortNanny-<version>.dmg
+./scripts/build.sh --bundle-id=com.you.PortNanny   # override the bundle id
 ```
 
 The app is **ad-hoc signed** (no Apple Developer account), so Gatekeeper will
 warn on first open — right-click → Open, or
-`xattr -dr com.apple.quarantine dist/PortKilla.app`.
+`xattr -dr com.apple.quarantine dist/PortNanny.app`.
 
 ## Developer hooks (env vars)
 
@@ -80,20 +80,20 @@ screen-recording permission needed. CI uses the first one as a smoke test.
 
 | Env var | Effect |
 |---|---|
-| `PORTKILLA_SNAPSHOT=/path.png` | Render a view offscreen to PNG, then quit |
-| `PORTKILLA_SNAPSHOT_VIEW=main\|bulkkill\|protected\|detail\|settings\|workbench\|workbench-live\|tour` | Which view to render (default `main`); `workbench-live` opens the real window for a moment so the sidebar material draws |
-| `PORTKILLA_SNAPSHOT_SEARCH="kill 3000"` | Seed the popover's search field, so the palette bar renders |
-| `PORTKILLA_SNAPSHOT_SECTION=ports\|projects\|agents\|watchlist\|history` | Which Workbench view to render |
-| `PORTKILLA_SNAPSHOT_SELECT=3000` | Select that port in the Workbench, so the inspector renders |
-| `PORTKILLA_SNAPSHOT_TOUR_PAGE=1` | Which page of the welcome tour to render |
-| `PORTKILLA_MASCOT_DIR=assets/mascot` | Where a bare binary finds the quokka art (an app bundle carries it) |
-| `PORTKILLA_SNAPSHOT_DENSITY=clean\|advanced` | Seed the row density |
-| `PORTKILLA_SNAPSHOT_WATCH=3000,9999` | Seed watched ports |
-| `PORTKILLA_SNAPSHOT_APPEARANCE=light\|dark` | Force appearance |
-| `PORTKILLA_SHOW_ON_LAUNCH=1` | Auto-open the popover on launch |
-| `PORTKILLA_DEMO_GIF=/path.gif` | Render the scripted demo reel (fabricated data) to an animated GIF, then quit |
+| `PORTNANNY_SNAPSHOT=/path.png` | Render a view offscreen to PNG, then quit |
+| `PORTNANNY_SNAPSHOT_VIEW=main\|bulkkill\|protected\|detail\|settings\|workbench\|workbench-live\|tour` | Which view to render (default `main`); `workbench-live` opens the real window for a moment so the sidebar material draws |
+| `PORTNANNY_SNAPSHOT_SEARCH="kill 3000"` | Seed the popover's search field, so the palette bar renders |
+| `PORTNANNY_SNAPSHOT_SECTION=ports\|projects\|agents\|watchlist\|history` | Which Workbench view to render |
+| `PORTNANNY_SNAPSHOT_SELECT=3000` | Select that port in the Workbench, so the inspector renders |
+| `PORTNANNY_SNAPSHOT_TOUR_PAGE=1` | Which page of the welcome tour to render |
+| `PORTNANNY_MASCOT_DIR=assets/mascot` | Where a bare binary finds the quokka art (an app bundle carries it) |
+| `PORTNANNY_SNAPSHOT_DENSITY=clean\|advanced` | Seed the row density |
+| `PORTNANNY_SNAPSHOT_WATCH=3000,9999` | Seed watched ports |
+| `PORTNANNY_SNAPSHOT_APPEARANCE=light\|dark` | Force appearance |
+| `PORTNANNY_SHOW_ON_LAUNCH=1` | Auto-open the popover on launch |
+| `PORTNANNY_DEMO_GIF=/path.gif` | Render the scripted demo reel (fabricated data) to an animated GIF, then quit |
 
-`portkilla __serve <port>` (debug builds only) listens on 127.0.0.1 and
+`portnanny __serve <port>` (debug builds only) listens on 127.0.0.1 and
 sleeps forever; the scenario tests use it as a stand-in for an agent's dev
 server, with whatever environment the scenario needs.
 
@@ -101,23 +101,23 @@ Regenerate the README assets:
 
 ```bash
 # main-view screenshot
-PORTKILLA_DEFAULTS_SUITE=com.mukes555.PortKilla.readme PORTKILLA_MASCOT_DIR=assets/mascot PORTKILLA_SNAPSHOT=../assets/screenshot-dark.png PORTKILLA_SNAPSHOT_APPEARANCE=dark PORTKILLA_SNAPSHOT_DENSITY=advanced PORTKILLA_SNAPSHOT_WATCH=3000 .build/debug/PortKilla
-# (the same with APPEARANCE=light for screenshot-light.png; PORTKILLA_SNAPSHOT_SEARCH="kill 4400" for palette.png)
+PORTNANNY_DEFAULTS_SUITE=com.mukes555.PortNanny.readme PORTNANNY_MASCOT_DIR=assets/mascot PORTNANNY_SNAPSHOT=../assets/screenshot-dark.png PORTNANNY_SNAPSHOT_APPEARANCE=dark PORTNANNY_SNAPSHOT_DENSITY=advanced PORTNANNY_SNAPSHOT_WATCH=3000 .build/debug/PortNanny
+# (the same with APPEARANCE=light for screenshot-light.png; PORTNANNY_SNAPSHOT_SEARCH="kill 4400" for palette.png)
 # the Workbench: a real window, photographed (needs Screen Recording permission
 # for the debug binary; the offscreen render leaves the sidebar column blank)
-PORTKILLA_DEFAULTS_SUITE=com.mukes555.PortKilla.readme PORTKILLA_MASCOT_DIR=assets/mascot PORTKILLA_SNAPSHOT=../assets/workbench.png PORTKILLA_SNAPSHOT_VIEW=workbench-live PORTKILLA_SNAPSHOT_SELECT=3000 .build/debug/PortKilla
+PORTNANNY_DEFAULTS_SUITE=com.mukes555.PortNanny.readme PORTNANNY_MASCOT_DIR=assets/mascot PORTNANNY_SNAPSHOT=../assets/workbench.png PORTNANNY_SNAPSHOT_VIEW=workbench-live PORTNANNY_SNAPSHOT_SELECT=3000 .build/debug/PortNanny
 # animated demo
-PORTKILLA_DEFAULTS_SUITE=com.mukes555.PortKilla.readme PORTKILLA_MASCOT_DIR=assets/mascot PORTKILLA_DEMO_GIF=../assets/demo.gif .build/debug/PortKilla
+PORTNANNY_DEFAULTS_SUITE=com.mukes555.PortNanny.readme PORTNANNY_MASCOT_DIR=assets/mascot PORTNANNY_DEMO_GIF=../assets/demo.gif .build/debug/PortNanny
 ```
 
 ## The Claude Code plugin
 
-`plugins/portkilla` is a Claude Code plugin (manifest in `.claude-plugin/`,
+`plugins/portnanny` is a Claude Code plugin (manifest in `.claude-plugin/`,
 MCP registration in `.mcp.json`, the lsof hook in `hooks/`, the skill in
-`skills/portkilla/SKILL.md`, slash commands in `commands/`), listed by the
+`skills/portnanny/SKILL.md`, slash commands in `commands/`), listed by the
 marketplace file at the repository root. A test keeps the skill's command
-list in step with `portkilla agent-docs`. Try a working copy with
-`claude --plugin-dir plugins/portkilla`.
+list in step with `portnanny agent-docs`. Try a working copy with
+`claude --plugin-dir plugins/portnanny`.
 
 ## Artwork
 

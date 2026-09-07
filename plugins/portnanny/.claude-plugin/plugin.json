@@ -1,0 +1,9 @@
+{
+  "name": "portnanny",
+  "version": "0.1.0",
+  "description": "Free ports through PortNanny: the friendly-fire guard that keeps AI agents from killing each other's servers.",
+  "author": { "name": "Mukesh Kumar", "url": "https://github.com/mukes555/PortNanny" },
+  "homepage": "https://github.com/mukes555/PortNanny",
+  "repository": "https://github.com/mukes555/PortNanny",
+  "keywords": ["ports", "localhost", "dev-server", "agents", "macos"]
+}

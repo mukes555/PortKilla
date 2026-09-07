@@ -12,9 +12,9 @@ DerivedData/
 *.xcworkspace/
 xcuserdata/
 
-# Custom Build Outputs (PortKilla)
-PortKilla/dist/
-PortKilla/Builds/
+# Custom Build Outputs (PortNanny)
+PortNanny/dist/
+PortNanny/Builds/
 
 # Local/Temporary Files
 plan.md

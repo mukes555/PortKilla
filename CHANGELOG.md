@@ -25,8 +25,8 @@ release, rename it to the version and date.
   pinned window follows.
 - **Richer rows.** Type tiles, section headers with counts and accents,
   port and process names a size up, memory with CPU and its trend in
-  Advanced, and the browser, watch, and details verbs on hover so the
-  list stays calm. Guard buttons use a shield.
+  Advanced, and the browser and watch verbs on hover so the list stays
+  calm. Guard buttons use a shield.
 - Debug snapshot renders keep their density and watch list in the
   throwaway suite instead of the developer's own preferences.
 

@@ -63,7 +63,7 @@ portkilla completions zsh            # also bash and fish
 - **Type what you mean.** `kill 3000`, `open 5173`, `watch 8080`, `free port`, `>` commands. Return runs it; the bar says exactly what will happen.
 - **Every row tells you enough to decide.** A type tile, the port, the process, and chips for what matters: `exposed` on all interfaces, connected clients, the agent session that started it (teal while it runs, grey once it ended), project, container, a lease, a supervisor.
 - **Two densities, three sizes.** Simple shows the essentials; Advanced adds the command, project chips, CPU with a trend line, and the process tree. Compact, Regular, or Large in Settings.
-- **Calm until you point.** Kill is always there. Open in browser, Watch, and Details appear on hover. <kbd>⌥</kbd>-click force kills, <kbd>⇧</kbd>-click takes the whole tree.
+- **Calm until you point.** Kill is always there, and Details in Advanced. Open in browser and Watch fade in on hover (VoiceOver has them as row actions). <kbd>⌥</kbd>-click force kills, <kbd>⇧</kbd>-click takes the whole tree.
 - **Supervisors understood.** pm2, launchd, Docker, nodemon, `next dev`, `uvicorn --reload`: a plain kill would be undone, so PortKilla stops it the way its supervisor expects and says so first.
 - **Watch and guard.** Watched ports sit on top with live status, including "free", and notify you when they change. A guard auto-kills whatever grabs a port, except a running agent's server.
 - **Filters and bulk kills.** All, Dev, Databases, Docker, Tests. <kbd>⌘</kbd><kbd>K</kbd> kills the current filter, skipping protected tools and supervised servers.
@@ -137,11 +137,12 @@ Exit codes: `0` done, `1` nothing listening, `2` usage, `3` refused, `4` kill fa
 
 ## Settings
 
-- **General:** launch at login, refresh interval, confirm before killing, notifications and sound, watched ports and their guards, history length.
-- **Display:** popover size, row density, hide system processes, automatic peeks, the menu bar icon (traced quokka or the color app icon) and count.
+- **General:** launch at login, refresh interval, confirm before killing, a switch per notification (port freed, port taken, guard, refusal), watched ports and their guards, history length.
+- **Display:** popover size, row density, hide system processes, UDP sockets, and ephemeral ports, automatic peeks, the menu bar icon (traced quokka or the color app icon) and count.
+- **Agents:** the AI tools on this Mac, the guard's switch for servers nobody claims, a project setup with a click per step, and leases with their default length.
 - **Shortcuts:** the global hotkey and a list of everything else.
 - **Protected:** process names that bulk kills never touch (IDEs and tools by default).
-- **About:** updates (checked once a day against GitHub Releases, downloaded by you), debug info for bug reports, reset.
+- **About:** updates (a daily check you can turn off, betas if you want them, downloaded by you), debug info for bug reports, reset.
 
 ## Privacy and safety
 

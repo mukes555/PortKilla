@@ -79,7 +79,7 @@ extension PortListView {
                         portManager.showToast("Copied: brew reinstall --cask portkilla")
                     }
                 } else {
-                    Button("Download v\(newer)…") { NSWorkspace.shared.open(UpdateChecker.releasesPageURL) }
+                    Button("Download v\(newer)…") { NSWorkspace.shared.open(UpdateChecker.releasePage(for: newer)) }
                 }
             }
             Button("Quit PortKilla") { NSApplication.shared.terminate(nil) }
@@ -219,7 +219,7 @@ extension PortListView {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Button("Show All") {
-                        portManager.hideSystemProcesses = false
+                        portManager.showEverything()
                         filter = .all
                     }
                     .buttonStyle(.bordered)
@@ -260,21 +260,28 @@ extension PortListView {
         .frame(maxHeight: .infinity)
     }
 
+    private var statusLine: String {
+        var parts: [String] = []
+        let shown = filteredPorts.count
+        if filter == .tests {
+            parts.append("\(portManager.activeTests.count) tests running · \(portManager.totalTestsMemory)")
+        } else if shown != portManager.visiblePorts.count {
+            parts.append("\(shown) of \(portManager.visiblePorts.count) ports shown")
+        }
+        if portManager.isCompatibilityScan {
+            parts.append("compatibility scan")
+        }
+        return parts.joined(separator: " · ")
+    }
+
     var footerView: some View {
         VStack(spacing: 0) {
             // Status Bar
             // The header carries the totals; this line only says when the
-            // list is narrower than the scan.
+            // list is narrower than the scan, and how it was scanned.
             HStack {
-                if filter == .tests {
-                    Text("\(portManager.activeTests.count) tests running · \(portManager.totalTestsMemory)")
-                } else if filteredPorts.count != portManager.visiblePorts.count {
-                    Text("\(filteredPorts.count) of \(portManager.visiblePorts.count) ports shown")
-                }
-                if portManager.isCompatibilityScan {
-                    Text("· compatibility scan")
-                        .help("The native scanner is unavailable here, so PortKilla is reading ports through lsof. It works, but each refresh is slower.")
-                }
+                Text(statusLine)
+                    .help(portManager.isCompatibilityScan ? "The native scanner is unavailable here, so PortKilla is reading ports through lsof. It works, but each refresh is slower." : "")
                 Spacer()
                 UpdatedLabel(clock: portManager.clock, isOnScreen: isOnScreen)
             }

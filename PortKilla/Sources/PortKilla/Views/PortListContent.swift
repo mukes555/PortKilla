@@ -4,8 +4,8 @@ import SwiftUI
 /// The scrolling list: one section per category, rows inside.
 struct PortListContent: View {
     let groupedPorts: [(key: PortInfo.PortCategory, value: [PortInfo])]
+    let metrics: RowMetrics
     @ObservedObject var portManager: PortManager
-    @Binding var hoverId: String?
     @Binding var selectedId: String?
     @Binding var expandedIds: Set<String>
     let onSelectPort: (PortInfo) -> Void
@@ -20,8 +20,8 @@ struct PortListContent: View {
                         PortSectionView(
                             category: category,
                             ports: ports,
+                            metrics: metrics,
                             portManager: portManager,
-                            hoverId: $hoverId,
                             selectedId: $selectedId,
                             expandedIds: $expandedIds,
                             onSelectPort: onSelectPort,
@@ -43,8 +43,8 @@ struct PortListContent: View {
 struct PortSectionView: View {
     let category: PortInfo.PortCategory
     let ports: [PortInfo]
+    let metrics: RowMetrics
     @ObservedObject var portManager: PortManager
-    @Binding var hoverId: String?
     @Binding var selectedId: String?
     @Binding var expandedIds: Set<String>
     let onSelectPort: (PortInfo) -> Void
@@ -57,10 +57,10 @@ struct PortSectionView: View {
                 PortRowView(
                     port: port,
                     density: portManager.viewDensity,
+                    metrics: metrics,
                     isProtected: portManager.isProtectedProcessName(port.processName),
                     isWatched: portManager.isWatched(port.port),
                     isTerminating: portManager.terminatingPids.contains(port.pid),
-                    isHovered: hoverId == port.id,
                     isSelected: selectedId == port.id,
                     manager: portManager,
                     isExpanded: expansionBinding(for: port.id),
@@ -69,12 +69,6 @@ struct PortSectionView: View {
                     onKillChild: onKillChild
                 )
                     .id(port.id)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(rowBackground(for: port.id))
-                    .onHover { isHovering in
-                        hoverId = isHovering ? port.id : nil
-                    }
                     .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .top)), removal: .opacity))
                 Divider()
             }
@@ -93,15 +87,5 @@ struct PortSectionView: View {
                 }
             }
         )
-    }
-
-    private func rowBackground(for id: String) -> Color {
-        if selectedId == id {
-            return Color.accentColor.opacity(0.15)
-        }
-        if hoverId == id {
-            return Color.accentColor.opacity(0.06)
-        }
-        return Color.clear
     }
 }

@@ -229,7 +229,7 @@ private struct DisplaySettings: View {
                     Text("Advanced").tag(PortManager.ViewDensity.advanced)
                 }
                 .pickerStyle(.segmented)
-                Text("Simple shows port, name, and memory. Advanced adds the command, project/container, CPU, and the process tree.")
+                Text("Simple shows the port, the name, its badges, and memory. Advanced adds the command, project and container chips, CPU with its trend, and the process tree.")
                     .settingsCaption()
             }
 
@@ -406,7 +406,7 @@ struct UpdateButton: View {
             .buttonStyle(.borderedProminent)
             .help("Copies the Homebrew command; the cask replaces the app and quits the running copy")
         } else {
-            Button("Download v\(version)…") { NSWorkspace.shared.open(UpdateChecker.releasesPageURL) }
+            Button("Download v\(version)…") { NSWorkspace.shared.open(UpdateChecker.releasePage(for: version)) }
                 .buttonStyle(.borderedProminent)
         }
     }

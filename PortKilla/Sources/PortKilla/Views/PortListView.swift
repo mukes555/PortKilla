@@ -50,7 +50,6 @@ struct PortListView: View {
 
     @ObservedObject var portManager: PortManager
     @EnvironmentObject var appDelegate: AppDelegate
-    @State private var hoverId: String?
     @State var searchText = ""
     @State var filter: ListFilter = .all
     @State var eventMonitor: Any?
@@ -58,10 +57,7 @@ struct PortListView: View {
     @State var selectedId: String?
     @State var expandedIds: Set<String> = []
     @State var isOnScreen = false
-    @ScaledMetric(relativeTo: .body) var gutterWidth: CGFloat = RowMetrics.gutter
-    @ScaledMetric(relativeTo: .body) var portColumnWidth: CGFloat = RowMetrics.port
-    @ScaledMetric(relativeTo: .body) var memoryColumnWidth: CGFloat = RowMetrics.memory
-    @ScaledMetric(relativeTo: .body) var actionColumnWidth: CGFloat = RowMetrics.action
+    @ScaledMetric(relativeTo: .body) var textScale: CGFloat = 1
     @AppStorage(DefaultsKey.didDismissHotkeyTip) var didDismissHotkeyTip = false
     @FocusState var isSearchFocused: Bool
 
@@ -139,6 +135,7 @@ struct PortListView: View {
     /// hosting controller's ideal size, and an unbounded list would grow
     /// with its content); only the pinned panel may be resized.
     private var popoverSize: NSSize { portManager.popoverSize.dimensions }
+    var metrics: RowMetrics { RowMetrics.forPopover(portManager.popoverSize, pinned: hostedInPinnedWindow) }
     private var maxWidth: CGFloat { hostedInPinnedWindow ? .infinity : popoverSize.width }
     private var maxHeight: CGFloat { hostedInPinnedWindow ? .infinity : popoverSize.height }
 
@@ -220,15 +217,15 @@ struct PortListView: View {
         VStack(spacing: 0) {
             // Column headers; the widths scale with the rows' text size.
             HStack(spacing: RowMetrics.spacing) {
-                Spacer().frame(width: gutterWidth)
+                Spacer().frame(width: metrics.gutter * textScale)
                 Text("Port")
-                    .frame(width: portColumnWidth, alignment: .leading)
+                    .frame(width: metrics.port * textScale, alignment: .leading)
                 Text("Process")
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text("Memory")
-                    .frame(width: memoryColumnWidth, alignment: .trailing)
+                    .frame(width: metrics.memory * textScale, alignment: .trailing)
                 Text("Action")
-                    .frame(width: actionColumnWidth, alignment: .trailing)
+                    .frame(width: metrics.action * textScale, alignment: .trailing)
             }
             .font(.caption.weight(.medium))
             .foregroundColor(.secondary)
@@ -241,6 +238,7 @@ struct PortListView: View {
             if showWatchedSection {
                 WatchedSectionView(
                     portManager: portManager,
+                    metrics: metrics,
                     onKillRequest: { port in requestKill(port, force: false, killTree: false) }
                 )
             }
@@ -252,8 +250,8 @@ struct PortListView: View {
             } else {
                 PortListContent(
                     groupedPorts: groupedPorts,
+                    metrics: metrics,
                     portManager: portManager,
-                    hoverId: $hoverId,
                     selectedId: $selectedId,
                     expandedIds: $expandedIds,
                     onSelectPort: { port in activeSheet = .portDetail(port) },
@@ -262,10 +260,10 @@ struct PortListView: View {
                 )
             }
 
-            // The hide-system filter must never look like missing data
-            if portManager.hiddenSystemPortsCount > 0 {
-                Button(action: { portManager.hideSystemProcesses = false }) {
-                    Text("Show \(portManager.hiddenSystemPortsCount) hidden system port\(portManager.hiddenSystemPortsCount == 1 ? "" : "s")")
+            // A filter (system, UDP, ephemeral) must never look like missing data
+            if portManager.hiddenPortsCount > 0 {
+                Button(action: { portManager.showEverything() }) {
+                    Text("Show \(portManager.hiddenPortsCount) hidden port\(portManager.hiddenPortsCount == 1 ? "" : "s")")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }

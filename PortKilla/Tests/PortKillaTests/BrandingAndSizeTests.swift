@@ -151,7 +151,7 @@ final class BrandingAndSizeTests: XCTestCase {
         // The box starts at the very first opaque row, so the ear tips are in.
         let full = try XCTUnwrap(happy.cgImage(forProposedRect: nil, context: nil, hints: nil))
         let box = try XCTUnwrap(MascotView.headBox(in: full))
-        XCTAssertLessThanOrEqual(box.minY, CGFloat(full.height) * 0.08, "the ears begin near 7% down this artwork")
+        XCTAssertLessThanOrEqual(box.minY, CGFloat(full.height) * 0.13, "the ears begin about 11% down this artwork; the box starts just above them")
         XCTAssertGreaterThan(box.width, CGFloat(full.width) * 0.45, "ear to ear")
         XCTAssertLessThan(box.maxY, CGFloat(full.height) * 0.5, "stops at the chin, above the mug and the hand")
     }

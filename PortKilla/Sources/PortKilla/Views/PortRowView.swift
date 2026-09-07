@@ -4,8 +4,8 @@ import AppKit
 
 /// One port: its type tile and number, the process and what is known about
 /// it, memory and CPU, and the verbs. Plain values in (not an observed
-/// manager), so a publish on PortManager re-evaluates only the rows whose
-/// values changed.
+/// manager), and its own hover state, so a publish on PortManager or a
+/// mouse crossing re-evaluates this row and not the list.
 struct PortRowView: View {
     static func chipText(_ text: String, cap: Int = 24) -> String {
         text.count > cap ? text.prefix(cap) + "…" : text
@@ -13,11 +13,10 @@ struct PortRowView: View {
 
     let port: PortInfo
     let density: PortManager.ViewDensity
+    let metrics: RowMetrics
     let isProtected: Bool
     let isWatched: Bool
     let isTerminating: Bool
-    /// Hover and selection reveal the secondary verbs.
-    let isHovered: Bool
     let isSelected: Bool
     /// Unobserved; the context menu, the star, and the sparkline need it.
     let manager: PortManager
@@ -26,16 +25,13 @@ struct PortRowView: View {
     let onKillRequest: (_ force: Bool, _ killTree: Bool) -> Void
     let onKillChild: (PortInfo.ProcessInfo) -> Void
 
-    // Column widths follow the text size so Larger Text reflows instead of clipping.
-    @ScaledMetric(relativeTo: .body) private var gutterWidth: CGFloat = RowMetrics.gutter
-    @ScaledMetric(relativeTo: .body) private var portColumnWidth: CGFloat = RowMetrics.port
-    @ScaledMetric(relativeTo: .body) private var nameCapWidth: CGFloat = RowMetrics.nameCap
-    @ScaledMetric(relativeTo: .body) private var memoryColumnWidth: CGFloat = RowMetrics.memory
-    @ScaledMetric(relativeTo: .body) private var actionColumnWidth: CGFloat = RowMetrics.action
-    @ScaledMetric(relativeTo: .body) private var tileSize: CGFloat = RowMetrics.tile
+    @State private var isHovered = false
+    // Widths follow the text size so Larger Text reflows instead of clipping.
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
 
     private var isAdvanced: Bool { density == .advanced }
     private var hasTree: Bool { !(port.children ?? []).isEmpty }
+    /// Hover and selection reveal the secondary verbs.
     private var showsExtraVerbs: Bool { isHovered || isSelected }
 
     /// Compact identifier shown inline in Simple mode (project, else container).
@@ -67,6 +63,12 @@ struct PortRowView: View {
         return lines.joined(separator: "\n")
     }
 
+    private var background: Color {
+        if isSelected { return Color.accentColor.opacity(0.15) }
+        if isHovered { return Color.accentColor.opacity(0.06) }
+        return .clear
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: RowMetrics.spacing) {
@@ -92,6 +94,9 @@ struct PortRowView: View {
             .accessibilityElement(children: .contain)
             .accessibilityLabel(accessibilityLabel)
             .accessibilityAddTraits(isSelected ? .isSelected : [])
+            // The hover-only verbs, reachable without a mouse.
+            .accessibilityAction(named: isWatched ? "Stop watching" : "Watch") { manager.toggleWatch(port.port) }
+            .accessibilityAction(named: "Open in browser") { Browser.openLocalhost(port: port.port) }
             .contextMenu {
                 PortRowContextMenu(port: port, manager: manager, onSelect: onSelect, onKillRequest: onKillRequest)
             }
@@ -100,6 +105,10 @@ struct PortRowView: View {
                 childRows(children)
             }
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(background)
+        .onHover { isHovered = $0 }
     }
 
     // MARK: - Columns
@@ -119,18 +128,18 @@ struct PortRowView: View {
                 Color.clear
             }
         }
-        .frame(width: gutterWidth)
+        .frame(width: metrics.gutter * scale)
     }
 
     private var portColumn: some View {
         HStack(spacing: 8) {
-            IconTile(type: port.type, size: tileSize)
+            IconTile(type: port.type, size: metrics.tile * scale)
             Text(":\(String(port.port))")
                 .font(.system(.title3, design: .monospaced).weight(.semibold))
                 .foregroundColor(.primary)
                 .lineLimit(1)
         }
-        .frame(width: portColumnWidth, alignment: .leading)
+        .frame(width: metrics.port * scale, alignment: .leading)
     }
 
     private var processColumn: some View {
@@ -144,7 +153,7 @@ struct PortRowView: View {
                     // Natural width, capped: fixedSize keeps the frame from
                     // filling (which starved the chips) while the cap still
                     // truncates long names.
-                    .frame(maxWidth: nameCapWidth, alignment: .leading)
+                    .frame(maxWidth: metrics.nameCap * scale, alignment: .leading)
                     .fixedSize(horizontal: true, vertical: false)
 
                 badges
@@ -264,14 +273,15 @@ struct PortRowView: View {
                 .help("CPU now, and over the last \(MetricsHistory.capacity) scans")
             }
         }
-        .frame(width: memoryColumnWidth, alignment: .trailing)
+        .frame(width: metrics.memory * scale, alignment: .trailing)
     }
 
-    /// Kill is always there; the browser, the star, and details show on
-    /// hover or selection so an idle list stays calm.
+    /// Kill is always there; the browser and the star fade in on hover or
+    /// selection so an idle list stays calm (VoiceOver reaches them as row
+    /// actions), and Details stays put in Advanced.
     private var actionColumn: some View {
         HStack(spacing: 6) {
-            if showsExtraVerbs {
+            Group {
                 if port.type.category == .web {
                     Button(action: { Browser.openLocalhost(port: port.port) }) {
                         Image(systemName: "safari")
@@ -289,6 +299,9 @@ struct PortRowView: View {
                 .accessibilityLabel(isWatched ? "Stop watching port \(port.port)" : "Watch port \(port.port)")
                 .help(isWatched ? "Stop watching" : "Watch: be told when it frees up or gets taken")
             }
+            .opacity(showsExtraVerbs ? 1 : 0)
+            .allowsHitTesting(showsExtraVerbs)
+            .accessibilityHidden(true)
 
             if isAdvanced {
                 Button(action: onSelect) {
@@ -320,13 +333,13 @@ struct PortRowView: View {
             }
         }
         .font(.system(size: 13))
-        .frame(width: actionColumnWidth, alignment: .trailing)
+        .frame(width: metrics.action * scale, alignment: .trailing)
     }
 
     private func childRows(_ children: [PortInfo.ProcessInfo]) -> some View {
         ForEach(children) { child in
             HStack(spacing: 8) {
-                Spacer().frame(width: gutterWidth + tileSize + 8)
+                Spacer().frame(width: (metrics.gutter + metrics.tile) * scale + 8)
 
                 Image(systemName: "arrow.turn.down.right")
                     .foregroundColor(.secondary.opacity(0.5))

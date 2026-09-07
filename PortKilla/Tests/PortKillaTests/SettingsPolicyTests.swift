@@ -37,6 +37,9 @@ final class SettingsPolicyTests: XCTestCase {
         XCTAssertEqual(KillDecision.forAgent(caller: agent, target: nil, refusesUnclaimed: false), .allow)
         Policy.refusesUnclaimedServers = false
         XCTAssertEqual(KillDecision.forAgent(caller: agent, target: nil), .allow, "the CLI reads the switch through the policy")
+        XCTAssertEqual(KillDecision.verdict(caller: agent, target: nil, forced: false), "allowed: unclaimed guard off", "an audit can tell the switch from a person")
+        let unclaimed = PortInfo(port: 3000, pid: 1, processName: "node", command: "node", user: "me", memoryUsage: "1MB", memorySizeKB: 1, type: .nodejs)
+        XCTAssertEqual(CLIKill.verdict(caller: agent, targets: [unclaimed], refused: false, forced: false), "allowed: unclaimed guard off")
         let other = AgentOwner(name: "Cursor", sessionPid: 20, source: .processTree)
         XCTAssertTrue(KillDecision.forAgent(caller: agent, target: other).isRefusal, "another agent's running server is refused whatever the switch says")
     }
@@ -99,15 +102,20 @@ final class SettingsPolicyTests: XCTestCase {
         manager.activePorts = [port(3000), port(5353, proto: "udp"), port(52000), port(80, user: "root")]
         manager.recomputeVisiblePorts()
         XCTAssertEqual(manager.visiblePorts.map(\.port), [3000, 5353, 52000], "system processes hidden, the rest shown")
-        XCTAssertEqual(manager.hiddenSystemPortsCount, 1)
+        XCTAssertEqual(manager.hiddenPortsCount, 1)
+        XCTAssertEqual(manager.menuBarBadgeCount, 3)
 
         manager.showUDP = false
         XCTAssertEqual(manager.visiblePorts.map(\.port), [3000, 52000])
         manager.hideEphemeralPorts = true
         XCTAssertEqual(manager.visiblePorts.map(\.port), [3000])
-        XCTAssertEqual(manager.hiddenSystemPortsCount, 1, "the footer's hint counts system processes only")
+        XCTAssertEqual(manager.hiddenPortsCount, 3, "the hint counts every filter, so nothing hidden looks like nothing running")
+        XCTAssertEqual(manager.menuBarBadgeCount, 1, "the menu bar count follows the same filters")
         manager.hideSystemProcesses = false
         XCTAssertEqual(manager.visiblePorts.map(\.port), [3000, 80], "showing system processes does not undo the other filters")
+        manager.showEverything()
+        XCTAssertEqual(manager.visiblePorts.count, 4)
+        XCTAssertEqual(manager.hiddenPortsCount, 0)
     }
 
     // MARK: - Updates
@@ -154,6 +162,28 @@ final class SettingsPolicyTests: XCTestCase {
         let failed = CLISetup.apply(missing, project: project)
         XCTAssertFalse(failed.ok)
         XCTAssertTrue(failed.message.contains("not on PATH"), failed.message)
+    }
+
+    func testABetaDownloadOpensItsOwnReleasePage() {
+        XCTAssertEqual(UpdateChecker.releasePage(for: "2.1.0-beta.1").absoluteString, "https://github.com/mukes555/PortKilla/releases/tag/v2.1.0-beta.1")
+    }
+
+    func testRowMetricsGiveCompactTheProcessColumnBack() {
+        let compact = RowMetrics.forPopover(.compact, pinned: false)
+        let regular = RowMetrics.forPopover(.regular, pinned: false)
+        XCTAssertLessThan(compact.port + compact.memory + compact.action, regular.port + regular.memory + regular.action)
+        XCTAssertEqual(RowMetrics.forPopover(.compact, pinned: true), regular, "the pinned window is resizable, so it keeps the regular set")
+        XCTAssertEqual(RowMetrics.forPopover(.large, pinned: false), regular)
+    }
+
+    func testTheSetupFolderMustExistAndNothingDefaultsToHome() throws {
+        XCTAssertNil(AgentsSettings.projectFolder(""))
+        XCTAssertNil(AgentsSettings.projectFolder("/nonexistent/\(UUID().uuidString)"))
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("portkilla-not-a-folder-\(UUID().uuidString)")
+        try "x".write(to: file, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: file) }
+        XCTAssertNil(AgentsSettings.projectFolder(file.path), "a file is not a project folder")
+        XCTAssertEqual(AgentsSettings.projectFolder(FileManager.default.temporaryDirectory.path)?.path, FileManager.default.temporaryDirectory.path)
     }
 
     func testLeaseLengthsAlwaysIncludeTheCurrentChoice() {

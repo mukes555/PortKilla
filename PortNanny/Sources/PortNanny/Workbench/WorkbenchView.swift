@@ -66,10 +66,10 @@ struct WorkbenchView: View {
     /// and draws blank in offscreen renders; `workbench-live` captures it.
     private var sidebar: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                BrandAvatar(size: 24)
+            HStack(spacing: 10) {
+                BrandAvatar(size: 36)
                 Text("PortNanny")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                 Spacer()
             }
             .padding(.horizontal, 14)

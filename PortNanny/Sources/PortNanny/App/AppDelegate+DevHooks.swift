@@ -105,6 +105,8 @@ extension AppDelegate {
                 NSApp.terminate(nil)
             }
             return
+        case "avatar":
+            view = NSHostingView(rootView: AvatarSheet())
         case "menubar":
             // Both menu bar glyphs, active and idle, on a light and a dark
             // bar, at 4x and at their real size.
@@ -184,3 +186,22 @@ struct MenuBarGlyphSheet: View {
     }
 }
 
+
+
+/// PORTNANNY_SNAPSHOT_VIEW=avatar: the head crop large, with its box drawn,
+/// and at the sizes the header and the Workbench use.
+struct AvatarSheet: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: 32) {
+            BrandAvatar(size: 320)
+                .border(Color.red.opacity(0.6))
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(spacing: 10) { BrandAvatar(size: 40); Text("PortNanny").font(.system(size: 15, weight: .bold)) }
+                HStack(spacing: 10) { BrandAvatar(size: 36); Text("PortNanny").font(.system(size: 14, weight: .bold)) }
+                MascotView(mood: .happy, size: 200)
+            }
+        }
+        .padding(24)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+}

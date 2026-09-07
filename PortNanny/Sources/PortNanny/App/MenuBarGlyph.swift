@@ -28,7 +28,7 @@ enum MenuBarGlyph {
     /// from the artwork when there is no bundle. Rasterised, so the 1024 px
     /// icon file is read once and let go.
     static func colorIcon(active: Bool) -> NSImage {
-        guard let source = appIcon() ?? MascotView.face(for: .happy) else { return quokka(filled: active) }
+        guard let source = appIcon() ?? MascotView.face(for: .happy, aspect: 1) else { return quokka(filled: active) }
         let image = rasterised(source, alpha: active ? 1 : 0.45)
         image.isTemplate = false
         image.accessibilityDescription = description(active: active)
@@ -76,7 +76,8 @@ enum MenuBarGlyph {
     /// a test may point at the artwork after the first ask.
     private static func silhouetteFromArtwork() -> NSImage? {
         if let silhouette { return silhouette }
-        guard let face = MascotView.face(for: .happy),
+        // The square box: the glyph stays a round head, not a head and a collar.
+        guard let face = MascotView.face(for: .happy, aspect: 1),
               let source = face.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
         let side = 144
         guard let context = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,

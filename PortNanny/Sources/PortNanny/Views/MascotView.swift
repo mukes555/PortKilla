@@ -32,15 +32,21 @@ struct MascotView: View {
         return loaded
     }
 
+    /// Height over width of the head box. A fifth taller than the ear span
+    /// puts the chin inside the box and the neck fade on the collar; a square
+    /// (aspect 1) stops under the mouth, which is the round shape the menu
+    /// bar traces.
+    static let headAspect: CGFloat = 1.2
+
     /// The head alone, ears to chin, for avatars and the menu bar: the
     /// artwork is a full figure and would be a blob at 30 pt. The box comes
     /// from the artwork's own outline, so the ears are never cut.
-    static func face(for mood: Mood) -> NSImage? {
-        let key = "\(mood.rawValue)-face"
+    static func face(for mood: Mood, aspect: CGFloat = headAspect) -> NSImage? {
+        let key = "\(mood.rawValue)-face-\(aspect)"
         if let cached = cache[key] { return cached }
         guard let full = artwork(for: mood),
               let image = full.cgImage(forProposedRect: nil, context: nil, hints: nil),
-              let box = headBox(in: image),
+              let box = headBox(in: image, aspect: aspect),
               let cropped = image.cropping(to: box),
               let softened = fadedAtTheNeck(cropped) else { return nil }
         let face = NSImage(cgImage: softened, size: NSSize(width: box.width, height: box.height))
@@ -48,11 +54,11 @@ struct MascotView: View {
         return face
     }
 
-    /// A square around the head: its top is the first opaque row (the ear
-    /// tips), its sides the widest span of the upper head, and a head is
-    /// about as tall as it is wide with the ears. The hand and the mug sit
-    /// lower and wider, outside the box.
-    static func headBox(in image: CGImage) -> CGRect? {
+    /// The box around the head: its top is the first opaque row (the ear
+    /// tips), its sides the widest span of the upper head, and its height
+    /// the width times `aspect`. The hand and the mug sit lower and wider,
+    /// outside the box.
+    static func headBox(in image: CGImage, aspect: CGFloat = headAspect) -> CGRect? {
         let width = image.width
         let height = image.height
         guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
@@ -78,9 +84,11 @@ struct MascotView: View {
         }
         guard right > left else { return nil }
         let span = CGFloat(right - left)
-        let margin = span * 0.04
-        let side = span + margin * 2
-        let box = CGRect(x: CGFloat(left) - margin, y: CGFloat(top) - margin, width: side, height: side)
+        // Room on both sides: the cheeks bulge past the ears, and a head
+        // that touches the frame reads as cut off.
+        let margin = span * 0.08
+        let boxWidth = span + margin * 2
+        let box = CGRect(x: CGFloat(left) - margin, y: CGFloat(top) - margin, width: boxWidth, height: boxWidth * aspect)
         return box.intersection(CGRect(x: 0, y: 0, width: width, height: height))
     }
 

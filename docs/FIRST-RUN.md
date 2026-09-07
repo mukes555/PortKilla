@@ -48,7 +48,9 @@ bundle id.
 - **Homebrew:** `brew upgrade --cask portnanny` (the tap records the
   rename, so `brew upgrade` on its own finds it too). It removes
   PortKilla.app, installs PortNanny.app, and links a `portkilla` command
-  next to `portnanny`.
+  next to `portnanny`. Homebrew trusts third-party casks by name, so if it
+  refuses to load the renamed cask, run `brew trust mukes555/tap` once
+  and upgrade again.
 - **DMG:** quit PortKilla, drag PortNanny to Applications, then delete
   PortKilla.app.
 - **Settings, watched ports, guards, history, refusals, and leases** are

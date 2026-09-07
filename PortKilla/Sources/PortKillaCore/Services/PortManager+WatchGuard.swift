@@ -78,16 +78,16 @@ extension PortManager {
             // Watched ports already got a "free" notification from the watch
             // diff this cycle — don't send a second one for the same event.
             if !watchedPorts.contains(port) {
-                notify(title: "Port \(port) is free", body: "The process finally exited — :\(port) is available now.")
+                notify(.portFreed, title: "Port \(port) is free", body: "The process finally exited: :\(port) is available now.")
             }
         }
         pendingFreeNotifications.subtract(freed)
     }
 
-    /// Sends a notification only when the user has them enabled. Guard kills
-    /// still happen regardless — only the alert is suppressed.
-    private func notify(title: String, body: String) {
-        guard notificationsEnabled else { return }
+    /// Sends a notification only when the person wants that kind. Guard
+    /// kills still happen regardless; only the alert is suppressed.
+    private func notify(_ kind: NotificationKind, title: String, body: String) {
+        guard notifies(kind) else { return }
         Notifier.send(title: title, body: body, sound: notificationSound)
     }
 
@@ -151,7 +151,7 @@ extension PortManager {
             for event in Self.watchEvents(watched: watchedPorts, previous: watchedOccupancy, current: current) {
                 switch event.kind {
                 case .freed:
-                    notify(title: "Port \(event.port) is free", body: "Nothing is listening on :\(event.port) anymore.")
+                    notify(.portFreed, title: "Port \(event.port) is free", body: "Nothing is listening on :\(event.port) anymore.")
                 case .occupied(let name):
                     if let intruder = guardKillTarget(for: event.port, in: ports) {
                         let owner = intruder.agentOwner ?? guardOwners[intruder.pid]
@@ -160,6 +160,7 @@ extension PortManager {
                             // The only unattended kill in the app never takes
                             // another agent's live server; the person decides.
                             notify(
+                                .guardKill,
                                 title: "Guard on :\(event.port)",
                                 body: "'\(name)' took the port but was not auto-killed. \(reason)"
                             )
@@ -167,18 +168,20 @@ extension PortManager {
                             guardedPorts.remove(event.port)
                             guardStrikes[event.port] = nil
                             notify(
+                                .guardKill,
                                 title: "Guard on :\(event.port) stood down",
                                 body: "'\(intruder.processName)' keeps coming back. Stop it at the source, then re-enable the guard."
                             )
                         } else {
                             notify(
+                                .guardKill,
                                 title: "Guard on :\(event.port)",
-                                body: "Auto-killing '\(intruder.processName)' — it grabbed a guarded port."
+                                body: "Auto-killing '\(intruder.processName)': it grabbed a guarded port."
                             )
                             killPort(intruder, initiator: .portGuard)
                         }
                     } else {
-                        notify(title: "Port \(event.port) in use", body: "'\(name)' started listening on :\(event.port).")
+                        notify(.portTaken, title: "Port \(event.port) in use", body: "'\(name)' started listening on :\(event.port).")
                     }
                 }
             }

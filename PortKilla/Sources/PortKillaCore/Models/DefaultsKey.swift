@@ -11,6 +11,20 @@ public enum DefaultsKey {
     public static let showMenuBarCount = "PortKilla.showMenuBarCount"
     public static let menuBarIcon = "PortKilla.menuBarIcon"
     public static let popoverSize = "PortKilla.popoverSize"
+    public static let notifyPortFreed = "PortKilla.notifyPortFreed"
+    public static let notifyPortTaken = "PortKilla.notifyPortTaken"
+    public static let notifyGuardKills = "PortKilla.notifyGuardKills"
+    public static let notifyRefusals = "PortKilla.notifyRefusals"
+    public static let showUDP = "PortKilla.showUDP"
+    public static let hideEphemeralPorts = "PortKilla.hideEphemeralPorts"
+    public static let autoUpdateCheck = "PortKilla.autoUpdateCheck"
+    public static let includePrereleases = "PortKilla.includePrereleases"
+    /// Read by the CLI too: the guard's rule for unclaimed servers, and the
+    /// lease length `reserve` uses without --for.
+    public static let guardRefusesUnclaimed = "PortKilla.guardRefusesUnclaimed"
+    public static let leaseDefaultTTL = "PortKilla.leaseDefaultTTL"
+    /// The folder Settings > Agents writes rule files into.
+    public static let setupProject = "PortKilla.setupProject"
     public static let notificationsEnabled = "PortKilla.notificationsEnabled"
     public static let notificationSound = "PortKilla.notificationSound"
     public static let historyLimit = "PortKilla.historyLimit"

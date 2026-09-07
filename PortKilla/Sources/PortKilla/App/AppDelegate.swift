@@ -12,6 +12,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     var popover: NSPopover!
     var historyWindow: NSWindow?
     var settingsWindow: NSWindow?
+    let settingsRouter = SettingsView.Router()
     var workbenchWindow: NSWindow?
     var tourWindow: NSWindow?
     private(set) var pinnedPanel: NSPanel?
@@ -303,16 +304,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         }
     }
 
-    /// Opens the dedicated Settings window (gear icon / ⌘,).
-    func openSettings() {
+    /// Opens the dedicated Settings window (gear icon / ⌘,), at a pane when
+    /// something points there.
+    func openSettings(pane: SettingsView.Pane? = nil) {
         // The transient popover floats at a high window level and would sit on
-        // top of a normal window — close it so Settings is actually visible.
+        // top of a normal window; close it so Settings is actually visible.
         popover.performClose(nil)
+        if let pane { settingsRouter.pane = pane }
 
         if settingsWindow == nil {
-            let view = SettingsView(portManager: portManager).environmentObject(self)
+            let view = SettingsView(portManager: portManager, router: settingsRouter).environmentObject(self)
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 480, height: 420),
+                contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
                 styleMask: [.titled, .closable],
                 backing: .buffered, defer: false
             )

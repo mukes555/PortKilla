@@ -31,6 +31,19 @@ release, rename it to the version and date.
   throwaway suite instead of the developer's own preferences.
 
 ### Added
+- **Settings > Agents.** The AI tools this Mac has and how each is
+  recognised, the guard's one switch ("Refuse agents a server nobody
+  claims", followed by the CLI and the MCP server too), a project setup
+  with a click per step (what `portkilla setup` does: rule files, the MCP
+  registration for Claude Code), and leases: the default length
+  `portkilla reserve` uses and a Release button for each active lease.
+- **Notifications per event.** A watched port freeing up, something taking
+  one, a guard acting, and an agent being refused each have a switch under
+  the master.
+- **What the list shows.** Settings > Display can hide UDP sockets and
+  ephemeral ports (49152 and up).
+- **Updates.** The daily check is a switch, and "Include beta releases"
+  offers prereleases, which rank below the release they precede.
 - **`portkilla setup`** walks through setting up the AI tools on this Mac:
   checks `portkilla` on PATH, and for each tool found offers to register
   the MCP server with Claude Code (`claude mcp add`), write its rule file

@@ -41,10 +41,10 @@ public class PortManager: ObservableObject {
 
     /// The ports the list shows, honoring the hide-system setting. Cached:
     /// it was recomputed on every access, thousands of times a minute.
-    public private(set) var visiblePorts: [PortInfo] = []
+    public internal(set) var visiblePorts: [PortInfo] = []
     /// Menu-bar badge: only dev-relevant ports. Counting every system daemon
     /// made the badge permanently ~30 and therefore meaningless.
-    public private(set) var menuBarBadgeCount = 0
+    public internal(set) var menuBarBadgeCount = 0
     /// Set by the app delegate; fires after `activePorts` has changed.
     public var onPortsChanged: (() -> Void)?
 
@@ -191,6 +191,64 @@ public class PortManager: ObservableObject {
         }
     }
 
+    // Which events notify, under the master switch.
+    @Published public var notifyPortFreed = true { didSet { persist(notifyPortFreed, DefaultsKey.notifyPortFreed) } }
+    @Published public var notifyPortTaken = true { didSet { persist(notifyPortTaken, DefaultsKey.notifyPortTaken) } }
+    @Published public var notifyGuardKills = true { didSet { persist(notifyGuardKills, DefaultsKey.notifyGuardKills) } }
+    @Published public var notifyRefusals = true { didSet { persist(notifyRefusals, DefaultsKey.notifyRefusals) } }
+
+    public enum NotificationKind {
+        case portFreed, portTaken, guardKill, refusal
+    }
+
+    public func notifies(_ kind: NotificationKind) -> Bool {
+        guard notificationsEnabled else { return false }
+        switch kind {
+        case .portFreed: return notifyPortFreed
+        case .portTaken: return notifyPortTaken
+        case .guardKill: return notifyGuardKills
+        case .refusal: return notifyRefusals
+        }
+    }
+
+    // What the list shows besides system processes.
+    @Published public var showUDP = true {
+        didSet {
+            recomputeVisiblePorts()
+            persist(showUDP, DefaultsKey.showUDP)
+        }
+    }
+    /// Ports from 49152 up are mostly ephemeral: something's outgoing side,
+    /// or a server that picked a random port and does not mind which.
+    @Published public var hideEphemeralPorts = false {
+        didSet {
+            recomputeVisiblePorts()
+            persist(hideEphemeralPorts, DefaultsKey.hideEphemeralPorts)
+        }
+    }
+
+    @Published public var autoUpdateCheck = true { didSet { persist(autoUpdateCheck, DefaultsKey.autoUpdateCheck) } }
+    @Published public var includePrereleases = false { didSet { persist(includePrereleases, DefaultsKey.includePrereleases) } }
+
+    // Policy the CLI follows too; see `Policy`.
+    @Published public var guardRefusesUnclaimed = true {
+        didSet {
+            Policy.refusesUnclaimedServers = guardRefusesUnclaimed
+            persist(guardRefusesUnclaimed, DefaultsKey.guardRefusesUnclaimed)
+        }
+    }
+    @Published public var leaseDefaultTTL: TimeInterval = Reservation.defaultTTL {
+        didSet {
+            Policy.defaultLeaseTTL = leaseDefaultTTL
+            persist(leaseDefaultTTL, DefaultsKey.leaseDefaultTTL)
+        }
+    }
+
+    private func persist(_ value: Any, _ key: String) {
+        guard !isRestoringPreferences else { return }
+        defaults.set(value, forKey: key)
+    }
+
     /// How many kills the History window keeps.
     @Published public var historyLimit: Int = 50 {
         didSet {
@@ -276,6 +334,20 @@ public class PortManager: ObservableObject {
         if let stored = defaults.object(forKey: DefaultsKey.notificationSound) as? Bool {
             notificationSound = stored
         }
+        notifyPortFreed = defaults.object(forKey: DefaultsKey.notifyPortFreed) as? Bool ?? true
+        notifyPortTaken = defaults.object(forKey: DefaultsKey.notifyPortTaken) as? Bool ?? true
+        notifyGuardKills = defaults.object(forKey: DefaultsKey.notifyGuardKills) as? Bool ?? true
+        notifyRefusals = defaults.object(forKey: DefaultsKey.notifyRefusals) as? Bool ?? true
+        showUDP = defaults.object(forKey: DefaultsKey.showUDP) as? Bool ?? true
+        hideEphemeralPorts = defaults.object(forKey: DefaultsKey.hideEphemeralPorts) as? Bool ?? false
+        autoUpdateCheck = defaults.object(forKey: DefaultsKey.autoUpdateCheck) as? Bool ?? true
+        includePrereleases = defaults.object(forKey: DefaultsKey.includePrereleases) as? Bool ?? false
+        guardRefusesUnclaimed = defaults.object(forKey: DefaultsKey.guardRefusesUnclaimed) as? Bool ?? true
+        if let stored = defaults.object(forKey: DefaultsKey.leaseDefaultTTL) as? Double, Policy.isValidLeaseTTL(stored) {
+            leaseDefaultTTL = stored
+        }
+        Policy.refusesUnclaimedServers = guardRefusesUnclaimed
+        Policy.defaultLeaseTTL = leaseDefaultTTL
         if let stored = defaults.object(forKey: DefaultsKey.historyLimit) as? Int, (10...1000).contains(stored) {
             historyLimit = stored
         }
@@ -297,62 +369,12 @@ public class PortManager: ObservableObject {
 
             // Once a day, quietly see if a newer release exists. Deferred so
             // launch never waits on the network.
-            if UpdateChecker.shouldAutoCheck() {
+            if autoUpdateCheck && UpdateChecker.shouldAutoCheck() {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
                     self?.checkForUpdates(manual: false)
                 }
             }
         }
-    }
-
-    // MARK: - Updates
-
-    public func checkForUpdates(manual: Bool) {
-        UpdateChecker.fetchNewerVersion { [weak self] result in
-            guard let self = self else { return }
-            switch result {
-            case .newer(let version):
-                UpdateChecker.markChecked()
-                self.updateAvailableVersion = version
-                if manual { self.showToast("v\(version) available") }
-            case .upToDate:
-                UpdateChecker.markChecked()
-                self.updateAvailableVersion = nil
-                if manual { self.showToast("You're up to date") }
-            case .failed(let reason):
-                // Not marked as checked, so the next launch tries again.
-                Log.update.error("update check failed: \(reason, privacy: .public)")
-                if manual { self.showToast("Couldn't check for updates: \(reason)") }
-            }
-        }
-    }
-
-    // MARK: - System process detection
-
-    private static let systemPathPrefixes = [
-        "/System/", "/usr/libexec/", "/usr/sbin/", "/sbin/", "/Library/Apple/"
-    ]
-
-    private static let currentUser = NSUserName()
-
-    /// True for ports owned by other users (root, _daemons) or by binaries
-    /// living in system locations.
-    public func isSystemPort(_ port: PortInfo) -> Bool {
-        if port.user != Self.currentUser {
-            return true
-        }
-        return Self.systemPathPrefixes.contains { port.command.hasPrefix($0) }
-    }
-
-    public func recomputeVisiblePorts() {
-        let userPorts = activePorts.filter { !isSystemPort($0) }
-        visiblePorts = hideSystemProcesses ? userPorts : activePorts
-        menuBarBadgeCount = userPorts.filter { $0.type != .ide }.count
-    }
-
-    /// How many ports the hide-system filter is currently swallowing.
-    public var hiddenSystemPortsCount: Int {
-        hideSystemProcesses ? activePorts.count - visiblePorts.count : 0
     }
 
     public func isProtectedProcessName(_ processName: String) -> Bool {
@@ -375,6 +397,16 @@ public class PortManager: ObservableObject {
         popoverSize = .regular
         notificationsEnabled = true
         notificationSound = true
+        notifyPortFreed = true
+        notifyPortTaken = true
+        notifyGuardKills = true
+        notifyRefusals = true
+        showUDP = true
+        hideEphemeralPorts = false
+        autoUpdateCheck = true
+        includePrereleases = false
+        guardRefusesUnclaimed = true
+        leaseDefaultTTL = Reservation.defaultTTL
         historyLimit = 50
         protectedProcessSubstrings = Self.defaultProtectedProcessSubstrings
         watchedPorts = []

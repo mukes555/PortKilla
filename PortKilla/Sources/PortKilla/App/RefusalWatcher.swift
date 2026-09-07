@@ -32,7 +32,7 @@ final class RefusalWatcher: NSObject, UNUserNotificationCenterDelegate {
             Log.kill.info("ignored a refusal signal with no matching record for :\(posted.port)")
             return
         }
-        guard portManager.notificationsEnabled else { return }
+        guard portManager.notifies(.refusal) else { return }
         Notifier.sendRefusal(recorded, sound: portManager.notificationSound)
     }
 

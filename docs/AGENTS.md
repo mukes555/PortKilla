@@ -9,7 +9,8 @@ matrix checked against your machine.
 - **Agents are refused, people are warned.** `portkilla kill` refuses (exit
   3) to stop a server owned by a different agent, by a different running
   session of the same agent, or by nobody it can name when the caller is an
-  agent. A person in the app is warned and decides. `--force` overrides, and
+  agent (the app's Settings > Agents can turn that last part off for this
+  Mac). A person in the app is warned and decides. `--force` overrides, and
   the override is recorded.
 - **Sessions, not tools.** Two Claude Code windows are two sessions. A
   server belongs to the session that started it; another session of the same

@@ -216,10 +216,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
 
     /// The full-size window: table, projects, agent sessions, watchlist,
     /// history, and an inspector. One instance, remembered position.
-    func openWorkbench() {
+    func openWorkbench(section: WorkbenchView.Section = .ports, selection: String? = nil) {
         popover.performClose(nil)
         if workbenchWindow == nil {
-            let view = WorkbenchView(portManager: portManager).environmentObject(self)
+            let view = WorkbenchView(portManager: portManager, initialSection: section, initialSelection: selection).environmentObject(self)
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 1380, height: 740),
                 styleMask: [.titled, .closable, .resizable, .miniaturizable],

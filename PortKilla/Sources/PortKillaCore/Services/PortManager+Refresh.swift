@@ -182,6 +182,7 @@ extension PortManager {
                 fields.append(owner)
                 fields.append(port.managedBy?.label ?? "")
                 fields.append(port.reservation?.owner ?? "")
+                fields.append(port.expectedPort.map { String($0.port) } ?? "")
             }
             return fields.joined(separator: "|")
         }

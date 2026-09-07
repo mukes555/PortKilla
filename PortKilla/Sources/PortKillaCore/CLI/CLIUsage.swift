@@ -128,6 +128,13 @@ extension CLIArguments {
             server is attributed to you even when your tool leaves no marker.
             Signals are forwarded; the exit code is the command's.
             """
+        case "drift": return """
+            portkilla drift [--json]
+
+            Servers that run somewhere other than where their project says: PORT in
+            .env files, --port or PORT= in package.json scripts, port: in
+            vite.config. Each line says which port was meant, and who holds it now.
+            """
         case "doctor": return """
             portkilla doctor [--json] [--agents]
 
@@ -156,6 +163,7 @@ extension CLIArguments {
       portkilla reserve <port> [--for 10m] [--reason "..."] [--json]
       portkilla release <port> [--force]  |  portkilla reservations [--json]
       portkilla exec [--port N | --free-port] [--] <command...>   PORT set, leased, attributed
+      portkilla drift [--json]           servers not on the port their project configured
       portkilla wait <port> [--timeout 30] [--json]
       portkilla open <port>
       portkilla history [--json] [--port <port>] [--limit 20]

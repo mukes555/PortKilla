@@ -36,6 +36,9 @@ public struct PortInfo: Identifiable, Codable, Equatable {
     public let managedBy: ManagedRuntime?
     /// A live lease on this port, when someone reserved it.
     public let reservation: Reservation?
+    /// The port the project's files say this server should be on, when it
+    /// is on a different one.
+    public let expectedPort: ExpectedPort?
 
     /// A host bound to all interfaces (reachable from the local network, not
     /// just this machine). One source of truth for the "exposed" check —
@@ -50,7 +53,7 @@ public struct PortInfo: Identifiable, Codable, Equatable {
         return Self.isWildcardHost(bindAddress)
     }
 
-    public init(port: Int, pid: Int, processName: String, command: String, user: String, memoryUsage: String, memorySizeKB: Int, type: PortType, projectName: String? = nil, projectPath: String? = nil, containerName: String? = nil, children: [ProcessInfo]? = nil, bindAddress: String? = nil, proto: String = "tcp", cpuPercent: Double = 0, age: String? = nil, agentOwner: AgentOwner? = nil, connections: Int = 0, managedBy: ManagedRuntime? = nil, reservation: Reservation? = nil) {
+    public init(port: Int, pid: Int, processName: String, command: String, user: String, memoryUsage: String, memorySizeKB: Int, type: PortType, projectName: String? = nil, projectPath: String? = nil, containerName: String? = nil, children: [ProcessInfo]? = nil, bindAddress: String? = nil, proto: String = "tcp", cpuPercent: Double = 0, age: String? = nil, agentOwner: AgentOwner? = nil, connections: Int = 0, managedBy: ManagedRuntime? = nil, reservation: Reservation? = nil, expectedPort: ExpectedPort? = nil) {
         self.port = port
         self.pid = pid
         self.processName = processName
@@ -71,6 +74,7 @@ public struct PortInfo: Identifiable, Codable, Equatable {
         self.connections = connections
         self.managedBy = managedBy
         self.reservation = reservation
+        self.expectedPort = expectedPort
     }
 
     public struct ProcessInfo: Identifiable, Codable, Equatable {

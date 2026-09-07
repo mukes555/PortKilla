@@ -284,6 +284,12 @@ struct PortRowView: View {
                                     .fixedSize()
                                     .help(container)
                             }
+                            if let expected = port.expectedPort {
+                                Chip(icon: "arrow.uturn.backward", text: "expected :\(expected.port)", tint: .chipOrange)
+                                    .fixedSize()
+                                    .help("\(expected.source) says :\(expected.port); this server ended up on :\(port.port)")
+                                    .accessibilityLabel("expected on port \(expected.port)")
+                            }
                             if let lease = port.reservation {
                                 Chip(icon: "lock", text: "reserved", tint: .chipPurple)
                                     .fixedSize()

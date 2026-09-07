@@ -145,7 +145,9 @@ final class BrandingAndSizeTests: XCTestCase {
         let happy = try XCTUnwrap(MascotView.artwork(for: .happy), "artwork under assets/mascot")
         let face = try XCTUnwrap(MascotView.face(for: .happy))
         XCTAssertLessThan(face.size.height, happy.size.height * 0.5, "the head, not the whole figure")
-        XCTAssertEqual(face.size.width, face.size.height, accuracy: 1, "a square around the head")
+        XCTAssertEqual(face.size.height, face.size.width * MascotView.headAspect, accuracy: 1, "a fifth taller than wide: the chin is in")
+        let square = try XCTUnwrap(MascotView.face(for: .happy, aspect: 1))
+        XCTAssertEqual(square.size.width, square.size.height, accuracy: 1, "the menu bar's square box")
         XCTAssertTrue(MascotView.face(for: .happy) === face, "cut once, then cached")
 
         // The box starts at the very first opaque row, so the ear tips are in.
@@ -153,6 +155,6 @@ final class BrandingAndSizeTests: XCTestCase {
         let box = try XCTUnwrap(MascotView.headBox(in: full))
         XCTAssertLessThanOrEqual(box.minY, CGFloat(full.height) * 0.2, "the ears begin about 16% down this artwork; the box starts just above them")
         XCTAssertGreaterThan(box.width, CGFloat(full.width) * 0.35, "ear to ear (the laptop and the hand make the figure wide)")
-        XCTAssertLessThan(box.maxY, CGFloat(full.height) * 0.5, "stops at the chin, above the mug and the hand")
+        XCTAssertLessThan(box.maxY, CGFloat(full.height) * 0.6, "stops at the collar, above the mug and the hand")
     }
 }

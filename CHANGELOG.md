@@ -11,6 +11,12 @@ release, rename it to the version and date.
 
 ## [Unreleased]
 
+### Changed
+- **A bigger quokka.** The avatar grows to 40 pt in the popover header and
+  36 pt in the Workbench sidebar, and the head crop now runs from the cap
+  to the chin with room on both sides, so the face is whole and centred
+  instead of ending at the mouth. The menu bar keeps its round glyph.
+
 <!-- next -->
 
 ## 2.1.0 (2026-09-07)

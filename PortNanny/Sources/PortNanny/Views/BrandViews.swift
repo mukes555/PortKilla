@@ -55,7 +55,7 @@ struct BrandHeader: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            BrandAvatar(size: 32)
+            BrandAvatar(size: 40)
             VStack(alignment: .leading, spacing: 1) {
                 Text("PortNanny")
                     .font(.system(size: 15, weight: .bold))

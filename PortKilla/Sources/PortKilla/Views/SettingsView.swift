@@ -12,6 +12,7 @@ struct SettingsView: View {
     enum Pane: String, CaseIterable, Identifiable {
         case general = "General"
         case display = "Display"
+        case agents = "Agents"
         case shortcuts = "Shortcuts"
         case protected = "Protected"
         case about = "About"
@@ -21,6 +22,7 @@ struct SettingsView: View {
             switch self {
             case .general: return "gearshape.fill"
             case .display: return "list.bullet.rectangle.fill"
+            case .agents: return "sparkles"
             case .shortcuts: return "keyboard.fill"
             case .protected: return "shield.lefthalf.filled"
             case .about: return "info.circle.fill"
@@ -31,6 +33,7 @@ struct SettingsView: View {
             switch self {
             case .general: return .gray
             case .display: return .blue
+            case .agents: return .teal
             case .shortcuts: return .purple
             case .protected: return .orange
             case .about: return .green
@@ -38,11 +41,17 @@ struct SettingsView: View {
         }
     }
 
-    @State private var selection: Pane = .general
+    /// The pane to show, so "Settings > Agents" can be opened from the tour
+    /// or a menu while the window already exists.
+    final class Router: ObservableObject {
+        @Published var pane: Pane = .general
+    }
+
+    @ObservedObject var router: Router
 
     var body: some View {
         NavigationSplitView {
-            List(Pane.allCases, selection: $selection) { pane in
+            List(Pane.allCases, selection: $router.pane) { pane in
                 NavigationLink(value: pane) {
                     Label {
                         Text(pane.rawValue)
@@ -58,10 +67,10 @@ struct SettingsView: View {
             .navigationSplitViewColumnWidth(180)
             .listStyle(.sidebar)
         } detail: {
-            detail(for: selection)
-                .navigationTitle(selection.rawValue)
+            detail(for: router.pane)
+                .navigationTitle(router.pane.rawValue)
         }
-        .frame(width: 620, height: 440)
+        .frame(width: 640, height: 480)
     }
 
     @ViewBuilder
@@ -69,6 +78,7 @@ struct SettingsView: View {
         switch pane {
         case .general:   GeneralSettings(portManager: portManager)
         case .display:   DisplaySettings(portManager: portManager)
+        case .agents:    AgentsSettings(portManager: portManager)
         case .shortcuts: ShortcutsSettings()
         case .protected: ProtectedProcessListView(portManager: portManager)
         case .about:     AboutSettings(portManager: portManager)
@@ -122,9 +132,15 @@ private struct GeneralSettings: View {
             }
 
             Section("Notifications") {
-                Toggle("Notify on watched / guarded port changes", isOn: $portManager.notificationsEnabled)
-                Toggle("Play a sound", isOn: $portManager.notificationSound)
-                    .disabled(!portManager.notificationsEnabled)
+                Toggle("Send notifications", isOn: $portManager.notificationsEnabled)
+                Group {
+                    Toggle("A watched port frees up", isOn: $portManager.notifyPortFreed)
+                    Toggle("Something takes a watched port", isOn: $portManager.notifyPortTaken)
+                    Toggle("A guard acts", isOn: $portManager.notifyGuardKills)
+                    Toggle("An agent is refused a port", isOn: $portManager.notifyRefusals)
+                    Toggle("Play a sound", isOn: $portManager.notificationSound)
+                }
+                .disabled(!portManager.notificationsEnabled)
                 if notificationsBlocked {
                     HStack {
                         Label("Notifications are blocked for PortKilla in System Settings.", systemImage: "bell.slash")
@@ -133,7 +149,7 @@ private struct GeneralSettings: View {
                         Button("Open System Settings") { openNotificationSettings() }
                     }
                 }
-                Text("Alerts when a watched port frees up or gets taken, and when a guard auto-kills.")
+                Text("A refusal is the guard saying no to an agent from the CLI or MCP; the notification lets you stop the server yourself.")
                     .settingsCaption()
             }
 
@@ -219,7 +235,9 @@ private struct DisplaySettings: View {
 
             Section("List") {
                 Toggle("Hide system processes", isOn: $portManager.hideSystemProcesses)
-                Text("Keeps macOS daemons out of the list; a footer hint shows how many are hidden.")
+                Toggle("Show UDP sockets", isOn: $portManager.showUDP)
+                Toggle("Hide ephemeral ports (49152 and up)", isOn: $portManager.hideEphemeralPorts)
+                Text("System daemons stay out of the list; a footer hint shows how many are hidden. Ephemeral ports are mostly the outgoing side of something, or a server that picked a random port.")
                     .settingsCaption()
             }
 
@@ -331,6 +349,12 @@ private struct AboutSettings: View {
                 Text("Development build: no update check.")
                     .settingsCaption()
             }
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Check for updates once a day", isOn: $portManager.autoUpdateCheck)
+                Toggle("Include beta releases", isOn: $portManager.includePrereleases)
+            }
+            .toggleStyle(.checkbox)
+            .controlSize(.small)
 
             Button("Copy debug info") {
                 Pasteboard.copy(Diagnostics.text())

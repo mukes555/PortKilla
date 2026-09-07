@@ -67,7 +67,7 @@ struct TourView: View {
             MascotView(mood: .happy, size: 96)
             Text("Every port, at a glance")
                 .font(.title2.weight(.semibold))
-            Text("PortKilla lists every listening port with its process, project, memory, who is connected, and which AI agent started it. Press \(appDelegate.hotkeyDisplay) anywhere to open it.")
+            Text("PortKilla lists every listening port with its process, project, memory, who is connected, and which AI agent started it. Press \(appDelegate.hotkeyDisplay) anywhere to open it, or open the Workbench (in the ⋯ menu) for the whole picture as a table.")
                 .multilineTextAlignment(.center)
                 .foregroundColor(.secondary)
             Text("Type what you mean in the search field: kill 3000, open 5173, watch 8080, free port, or > for commands.")
@@ -97,7 +97,7 @@ struct TourView: View {
                 .foregroundColor(.accentColor)
             Text("Set up your agents")
                 .font(.title2.weight(.semibold))
-            Text("Homebrew put `portkilla` on your PATH. Give each agent the snippet that tells it to free ports through PortKilla, and register the MCP server.")
+            Text("Give each agent the snippet that tells it to free ports through PortKilla, and register the MCP server. Settings > Agents does it with a click per tool; the commands work too.")
                 .multilineTextAlignment(.center)
                 .foregroundColor(.secondary)
             VStack(spacing: 8) {
@@ -105,11 +105,18 @@ struct TourView: View {
                 copyRow("portkilla mcp --setup", note: "prints the MCP registration for Claude Code, Cursor, Codex")
                 copyRow("portkilla doctor --agents", note: "shows how every tool on this Mac is recognised")
             }
-            Button("Open the Workbench") {
-                finish()
-                appDelegate.openWorkbench()
+            HStack(spacing: 10) {
+                Button("Open Settings > Agents") {
+                    finish()
+                    appDelegate.openSettings(pane: .agents)
+                }
+                .buttonStyle(.borderedProminent)
+                Button("Open the Workbench") {
+                    finish()
+                    appDelegate.openWorkbench()
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
         }
     }
 

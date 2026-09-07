@@ -30,11 +30,11 @@ public enum KillDecision: Equatable {
     /// treated as a person too, except against another agent's running
     /// server: the editor's own agent (Copilot, Cascade) leaves no marker,
     /// and a person only has to add --force.
-    public static func forAgent(caller: AgentOwner?, target: AgentOwner?) -> KillDecision {
+    public static func forAgent(caller: AgentOwner?, target: AgentOwner?, refusesUnclaimed: Bool = Policy.refusesUnclaimedServers) -> KillDecision {
         guard let caller else { return .allow }
         guard let target else {
             let isIdentifiedAgent = caller.confidence == .agent
-            guard isIdentifiedAgent else { return .allow }
+            guard isIdentifiedAgent, refusesUnclaimed else { return .allow }
             return .refuse("not attributed to any agent; if it is yours, start it with PORTKILLA_OWNER set, or ask the user")
         }
         guard target.isLiveAgentSession else { return .allow }

@@ -5,7 +5,7 @@ extension CLIArguments {
 
     static func parseReserve(_ args: [String]) -> Result<CLICommand, ParseError> {
         var port: Int?
-        var ttl = Reservation.defaultTTL
+        var ttl = Policy.defaultLeaseTTL
         var reason: String?
         var json = false
         var index = 0

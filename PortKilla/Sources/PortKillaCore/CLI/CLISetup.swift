@@ -43,7 +43,11 @@ public enum CLISetup {
                     print("  skipped")
                     continue
                 }
-                if apply(step, project: project) { print("  done") } else { failures += 1 }
+                let outcome = apply(step, project: project)
+                if outcome.ok { print("  " + outcome.message) } else {
+                    PortKillaCLI.printError("  " + outcome.message)
+                    failures += 1
+                }
             }
             print("")
         }
@@ -105,32 +109,32 @@ public enum CLISetup {
         return answer == "y" || answer == "yes"
     }
 
-    /// True on success; prints the failure itself.
-    static func apply(_ step: Step, project: URL) -> Bool {
+    /// What applying a step did, in one line the CLI prints and the app shows.
+    public struct Outcome: Equatable {
+        public let ok: Bool
+        public let message: String
+    }
+
+    public static func apply(_ step: Step, project: URL) -> Outcome {
         switch step.kind {
         case .note:
-            return true
+            return Outcome(ok: true, message: "nothing to apply")
         case .writeRules(let target):
             do {
                 let result = try AgentDocsInstaller.install(into: project.appendingPathComponent(target.path))
-                print("  \(result.rawValue) \(target.path)")
-                return true
+                return Outcome(ok: true, message: "\(result.rawValue) \(target.path)")
             } catch {
-                PortKillaCLI.printError("  could not write \(target.path): \(error.localizedDescription)")
-                return false
+                return Outcome(ok: false, message: "could not write \(target.path): \(error.localizedDescription)")
             }
         case .runCommand(let command):
             guard let tool = ToolLocator.resolve(command[0]) else {
-                PortKillaCLI.printError("  \(command[0]) is not on PATH; run by hand: \(command.joined(separator: " "))")
-                return false
+                return Outcome(ok: false, message: "\(command[0]) is not on PATH; run by hand: \(command.joined(separator: " "))")
             }
             do {
-                let output = try CommandRunner.run(tool, Array(command.dropFirst()), timeout: 30)
-                if !output.isEmpty { print("  " + output.trimmingCharacters(in: .newlines).replacingOccurrences(of: "\n", with: "\n  ")) }
-                return true
+                let output = try CommandRunner.run(tool, Array(command.dropFirst()), timeout: 30).trimmingCharacters(in: .whitespacesAndNewlines)
+                return Outcome(ok: true, message: output.isEmpty ? "done" : output.replacingOccurrences(of: "\n", with: "\n  "))
             } catch {
-                PortKillaCLI.printError("  \(command.joined(separator: " ")) failed: \(error.localizedDescription)")
-                return false
+                return Outcome(ok: false, message: "\(command.joined(separator: " ")) failed: \(error.localizedDescription)")
             }
         }
     }

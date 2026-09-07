@@ -6,14 +6,16 @@ import SwiftUI
 /// opened the app to get.
 struct WatchedSectionView: View {
     @ObservedObject var portManager: PortManager
+    let metrics: RowMetrics
     let onKillRequest: (PortInfo) -> Void
 
-    @ScaledMetric(relativeTo: .body) private var gutterWidth: CGFloat = RowMetrics.gutter
-    @ScaledMetric(relativeTo: .body) private var portColumnWidth: CGFloat = RowMetrics.port
-    @ScaledMetric(relativeTo: .body) private var nameCapWidth: CGFloat = RowMetrics.nameCap
-    @ScaledMetric(relativeTo: .body) private var memoryColumnWidth: CGFloat = RowMetrics.memory
-    @ScaledMetric(relativeTo: .body) private var actionColumnWidth: CGFloat = RowMetrics.action
-    @ScaledMetric(relativeTo: .body) private var tileSize: CGFloat = RowMetrics.tile
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
+    private var gutterWidth: CGFloat { metrics.gutter * scale }
+    private var portColumnWidth: CGFloat { metrics.port * scale }
+    private var nameCapWidth: CGFloat { metrics.nameCap * scale }
+    private var memoryColumnWidth: CGFloat { metrics.memory * scale }
+    private var actionColumnWidth: CGFloat { metrics.action * scale }
+    private var tileSize: CGFloat { metrics.tile * scale }
 
     var body: some View {
         let watched = portManager.watchedPorts.sorted()

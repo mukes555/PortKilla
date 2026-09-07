@@ -18,19 +18,18 @@ enum MenuBarGlyph {
         case .color: image = colorIcon(active: active)
         case .mono: image = monoIcon(active: active)
         }
-        cache[key] = image
+        // A vector stand-in is not remembered: the artwork may turn up later
+        // (a test pointing at it), and drawing it again is cheap.
+        if !image.isVectorFallback { cache[key] = image }
         return image
     }
 
     /// The app icon as the bundle carries it, at menu bar size; the face
-    /// from the artwork when there is no bundle.
+    /// from the artwork when there is no bundle. Rasterised, so the 1024 px
+    /// icon file is read once and let go.
     static func colorIcon(active: Bool) -> NSImage {
         guard let source = appIcon() ?? MascotView.face(for: .happy) else { return quokka(filled: active) }
-        let image = NSImage(size: NSSize(width: pointSize, height: pointSize), flipped: false) { rect in
-            NSGraphicsContext.current?.imageInterpolation = .high
-            source.draw(in: rect, from: .zero, operation: .sourceOver, fraction: active ? 1 : 0.45)
-            return true
-        }
+        let image = rasterised(source, alpha: active ? 1 : 0.45)
         image.isTemplate = false
         image.accessibilityDescription = description(active: active)
         return image
@@ -40,11 +39,7 @@ enum MenuBarGlyph {
     /// mouth are holes, so the face still reads at 18 points.
     static func monoIcon(active: Bool) -> NSImage {
         guard let mask = silhouetteFromArtwork() else { return quokka(filled: active) }
-        let image = NSImage(size: NSSize(width: pointSize, height: pointSize), flipped: false) { rect in
-            NSGraphicsContext.current?.imageInterpolation = .high
-            mask.draw(in: rect, from: .zero, operation: .sourceOver, fraction: active ? 1 : 0.5)
-            return true
-        }
+        let image = rasterised(mask, alpha: active ? 1 : 0.5)
         image.isTemplate = true
         image.accessibilityDescription = description(active: active)
         return image
@@ -56,6 +51,24 @@ enum MenuBarGlyph {
 
     private static func appIcon() -> NSImage? {
         Bundle.main.url(forResource: "AppIcon", withExtension: "icns").flatMap { NSImage(contentsOf: $0) }
+    }
+
+    /// An 18 pt image backed by one 36 px bitmap (Retina), drawn from the
+    /// source once; the source is not retained.
+    static func rasterised(_ source: NSImage, alpha: CGFloat) -> NSImage {
+        let pixels = Int(pointSize * 2)
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels, bitsPerSample: 8,
+                                         samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0) else { return source }
+        rep.size = NSSize(width: pointSize, height: pointSize)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSGraphicsContext.current?.imageInterpolation = .high
+        source.draw(in: NSRect(x: 0, y: 0, width: pointSize, height: pointSize), from: .zero, operation: .sourceOver, fraction: alpha)
+        NSGraphicsContext.restoreGraphicsState()
+        let image = NSImage(size: NSSize(width: pointSize, height: pointSize))
+        image.addRepresentation(rep)
+        return image
     }
 
     /// Thresholded at 144 px and scaled from there, so the edges come out
@@ -112,6 +125,7 @@ enum MenuBarGlyph {
         }
         image.isTemplate = true
         image.accessibilityDescription = description(active: filled)
+        image.isVectorFallback = true
         return image
     }
 
@@ -157,5 +171,15 @@ enum MenuBarGlyph {
         context?.compositingOperation = .destinationOut
         body()
         context?.compositingOperation = .sourceOver
+    }
+}
+
+private extension NSImage {
+    private static var fallbackKey = 0
+
+    /// Marks the drawn stand-in so the cache can tell it from the artwork.
+    var isVectorFallback: Bool {
+        get { objc_getAssociatedObject(self, &Self.fallbackKey) as? Bool ?? false }
+        set { objc_setAssociatedObject(self, &Self.fallbackKey, newValue, .OBJC_ASSOCIATION_RETAIN) }
     }
 }

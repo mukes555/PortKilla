@@ -57,6 +57,9 @@ public final class MCPServer {
         case "tools/list":
             return respond(id, ["tools": Self.tools])
         case "tools/call":
+            // This process lives as long as the agent's session; the person
+            // may have changed the guard or the lease length since it began.
+            Policy.loadFromSharedDomain()
             let name = params["name"] as? String ?? ""
             let arguments = params["arguments"] as? [String: Any] ?? [:]
             guard let result = call(tool: name, arguments: arguments) else {
@@ -107,7 +110,7 @@ public final class MCPServer {
         ],
         [
             "name": "reserve_port",
-            "description": "Lease a free port for a while (default 10 minutes) so free_port does not hand it to another agent and kill_port refuses others. Renews your own lease; fails when someone else holds it.",
+            "description": "Lease a free port for a while (default from Settings, 10 minutes unless changed) so free_port does not hand it to another agent and kill_port refuses others. Renews your own lease; fails when someone else holds it.",
             "inputSchema": ["type": "object", "properties": [
                 "port": ["type": "integer"],
                 "minutes": ["type": "number", "default": 10],
@@ -179,7 +182,7 @@ public final class MCPServer {
                 return toolResult(text: "reserve_port needs a port", structured: nil as String?, isError: true)
             }
             var options = CLICommand.ReserveOptions(port: port)
-            options.ttl = (arguments["minutes"] as? Double ?? 10) * 60
+            options.ttl = (arguments["minutes"] as? Double).map { $0 * 60 } ?? Policy.defaultLeaseTTL
             options.reason = arguments["reason"] as? String
             let report = CLIReserve.performReserve(options)
             let text = report.reservation.map { "\(report.action) :\(port) as \($0.describedHolder), \($0.expiryDescription())" } ?? report.reasons.joined(separator: "\n")

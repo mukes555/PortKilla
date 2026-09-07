@@ -164,7 +164,9 @@ public enum CLIKill {
         if refused { return forced ? "overridden" : "refused" }
         if caller == nil, targets.contains(where: { $0.agentOwner?.isLiveAgentSession == true }) { return "not-evaluated: caller unknown" }
         if targets.allSatisfy({ $0.agentOwner == nil }) {
-            return caller == nil ? "not-evaluated: target unknown" : (caller?.confidence == .agent ? "allowed" : "allowed: caller is not an agent")
+            if caller == nil { return "not-evaluated: target unknown" }
+            if caller?.confidence != .agent { return "allowed: caller is not an agent" }
+            return Policy.refusesUnclaimedServers ? "allowed" : "allowed: unclaimed guard off"
         }
         return "allowed"
     }

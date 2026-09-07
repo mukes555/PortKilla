@@ -84,7 +84,7 @@ struct Chip: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let label = colorScheme == .light ? Self.darkenedLabel(for: tint) : tint
+        let label = tint.legible(in: colorScheme)
         HStack(spacing: 2) {
             if let icon {
                 Image(systemName: icon)
@@ -117,19 +117,20 @@ struct AgentChip: View {
     }
 }
 
-private extension Chip {
+extension Color {
     /// Blending goes through AppKit; done once per tint, not once per render.
-    static var darkenedLabels: [Color: Color] = [:]
+    private static var darkenedLabels: [Color: Color] = [:]
 
-    static func darkenedLabel(for tint: Color) -> Color {
-        if let cached = darkenedLabels[tint] { return cached }
-        let darkened = tint.darkened(by: 0.3)
-        darkenedLabels[tint] = darkened
+    /// A tint drawn as text or a glyph on its own pale fill: dark mode keeps
+    /// it, light mode darkens it so yellow and teal stay readable.
+    func legible(in scheme: ColorScheme) -> Color {
+        guard scheme == .light else { return self }
+        if let cached = Self.darkenedLabels[self] { return cached }
+        let darkened = self.darkened(by: 0.3)
+        Self.darkenedLabels[self] = darkened
         return darkened
     }
-}
 
-extension Color {
     static let chipTeal = Color(nsColor: .systemTeal)
     static let chipOrange = Color(nsColor: .systemOrange)
     static let chipPurple = Color(nsColor: .systemPurple)

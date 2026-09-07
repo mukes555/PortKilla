@@ -22,8 +22,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
 
     @Published var hotkeyDisplay: String = GlobalHotKey.defaultDisplay
 
-    let portManager = PortManager()
+    let portManager: PortManager = {
+        let defaults = AppDelegate.preferenceDefaults
+        let history = defaults === UserDefaults.standard ? HistoryManager.shared : HistoryManager(defaults: defaults)
+        return PortManager(defaults: defaults, history: history)
+    }()
     var cancellables = Set<AnyCancellable>()
+
+    /// Debug renders honour PORTKILLA_DEFAULTS_SUITE for preferences as well
+    /// as history, so a snapshot's density or watch list never lands in the
+    /// developer's own settings.
+    static var preferenceDefaults: UserDefaults {
+        #if DEBUG
+        if let suite = Foundation.ProcessInfo.processInfo.environment["PORTKILLA_DEFAULTS_SUITE"], !suite.isEmpty,
+           let defaults = UserDefaults(suiteName: suite) {
+            return defaults
+        }
+        #endif
+        return .standard
+    }
 
     static func main() {
         // CLI mode: `PortKilla list`, `PortKilla kill 3000`, …
@@ -45,7 +62,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         )
 
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "bolt", accessibilityDescription: "PortKilla")
+            button.image = MenuBarGlyph.image(portManager.menuBarIcon, active: false)
             button.imagePosition = .imageLeft
             button.action = #selector(togglePopover)
             button.target = self
@@ -63,12 +80,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         popover.contentViewController = NSHostingController(rootView: contentView)
         popover.behavior = .transient
         popover.animates = true
-        popover.contentSize = NSSize(width: 500, height: 600)
+        popover.contentSize = portManager.popoverSize.dimensions
         // Track visibility so PortManager can slow the scan down while hidden.
         popover.delegate = self
 
         // Redraw the menu bar when its display preference changes
         portManager.onMenuBarPreferenceChanged = { [weak self] in self?.updateMenuBar() }
+        portManager.onPopoverSizeChanged = { [weak self] in self?.applyPopoverSize() }
 
         // Hide dock icon (make it a background agent / menu bar app only)
         NSApp.setActivationPolicy(.accessory)
@@ -83,7 +101,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         // First launch: the tour, then the popover, so the app does not
         // silently vanish into the menu bar. An upgrade skips the tour (it
         // stays in the menu) but still sees the popover once per install.
-        let defaults = UserDefaults.standard
+        let defaults = Self.preferenceDefaults
         let isFirstLaunch = !defaults.bool(forKey: DefaultsKey.hasLaunchedBefore)
         if isFirstLaunch {
             defaults.set(true, forKey: DefaultsKey.hasLaunchedBefore)
@@ -102,21 +120,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     }
 
 
-    private lazy var activeStatusImage = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Active Ports")
-    private lazy var idleStatusImage = NSImage(systemSymbolName: "bolt", accessibilityDescription: "No Active Ports")
-    private var menuBarState: (active: Bool, title: String)?
+    private var menuBarState: (active: Bool, title: String, icon: PortManager.MenuBarIcon)?
 
     func updateMenuBar() {
         guard let button = statusItem.button else { return }
         let count = portManager.menuBarBadgeCount
         let active = count > 0
         let title = (active && portManager.showMenuBarCount) ? "\(count)" : ""
+        let icon = portManager.menuBarIcon
 
         // Same state, same drawing: skip the AppKit work.
-        if let state = menuBarState, state.active == active, state.title == title { return }
-        menuBarState = (active, title)
-        button.image = active ? activeStatusImage : idleStatusImage
+        if let state = menuBarState, state.active == active, state.title == title, state.icon == icon { return }
+        menuBarState = (active, title, icon)
+        button.image = MenuBarGlyph.image(icon, active: active)
         button.title = title
+    }
+
+    /// The popover takes the chosen size at once; the pinned panel grows to
+    /// it when it is smaller and keeps whatever the person stretched it to.
+    func applyPopoverSize() {
+        let size = portManager.popoverSize.dimensions
+        popover.contentSize = size
+        guard let panel = pinnedPanel else { return }
+        panel.minSize = size
+        if panel.frame.width < size.width || panel.frame.height < size.height {
+            panel.setContentSize(size)
+        }
     }
 
     func popoverWillShow(_ notification: Notification) {
@@ -143,7 +172,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         }
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 600),
+            contentRect: NSRect(origin: .zero, size: portManager.popoverSize.dimensions),
             styleMask: [.titled, .closable, .resizable, .utilityWindow],
             backing: .buffered,
             defer: false
@@ -152,7 +181,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         panel.level = .floating
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
-        panel.minSize = NSSize(width: 500, height: 600)
+        panel.minSize = portManager.popoverSize.dimensions
         panel.contentViewController = NSHostingController(
             rootView: PortListView(portManager: portManager, hostedInPinnedWindow: true)
                 .environmentObject(self)

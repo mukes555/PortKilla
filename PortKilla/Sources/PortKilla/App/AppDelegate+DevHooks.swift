@@ -100,6 +100,10 @@ extension AppDelegate {
                 NSApp.terminate(nil)
             }
             return
+        case "menubar":
+            // Both menu bar glyphs, active and idle, on a light and a dark
+            // bar, at 4x and at their real size.
+            view = NSHostingView(rootView: MenuBarGlyphSheet())
         case "detail":
             let port = portManager.activePorts.first ?? PortInfo(
                 port: 3000, pid: 1234, processName: "node",
@@ -142,3 +146,35 @@ extension AppDelegate {
     }
     #endif
 }
+
+/// The dev hook's contact sheet for the menu bar glyphs.
+struct MenuBarGlyphSheet: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach([false, true], id: \.self) { dark in
+                HStack(spacing: 28) {
+                    ForEach([PortManager.MenuBarIcon.quokka, .bolt], id: \.self) { icon in
+                        ForEach([true, false], id: \.self) { active in
+                            HStack(spacing: 10) {
+                                glyph(icon, active: active, dark: dark, scale: 4)
+                                glyph(icon, active: active, dark: dark, scale: 1)
+                            }
+                        }
+                    }
+                }
+                .padding(20)
+                .background(dark ? Color(white: 0.12) : Color(white: 0.93))
+            }
+        }
+    }
+
+    private func glyph(_ icon: PortManager.MenuBarIcon, active: Bool, dark: Bool, scale: CGFloat) -> some View {
+        Image(nsImage: MenuBarGlyph.image(icon, active: active))
+            .renderingMode(.template)
+            .resizable()
+            .interpolation(.high)
+            .foregroundColor(dark ? .white : .black)
+            .frame(width: MenuBarGlyph.pointSize * scale, height: MenuBarGlyph.pointSize * scale)
+    }
+}
+

@@ -64,14 +64,13 @@ struct WorkbenchPortsTable: View {
     private func table(rows: [PortInfo]) -> some View {
         Table(rows, selection: $selection, sortOrder: $sortOrder) {
             TableColumn("Port", value: \.port) { port in
-                HStack(spacing: 4) {
-                    Image(systemName: port.type.icon)
-                        .foregroundColor(Color(nsColor: port.type.color))
+                HStack(spacing: 6) {
+                    IconTile(type: port.type, size: 20)
                     Text(":\(String(port.port))")
-                        .font(.system(.body, design: .monospaced))
+                        .font(.system(.body, design: .monospaced).weight(.semibold))
                 }
             }
-            .width(min: 74, ideal: 80)
+            .width(min: 86, ideal: 94)
 
             TableColumn("Process", value: \.processName) { port in
                 HStack(spacing: 6) {

@@ -9,11 +9,7 @@ extension PortListView {
     var headerView: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
-                Image(systemName: "bolt.fill")
-                    .foregroundColor(.yellow)
-                Text("PortKilla")
-                    .font(.headline)
-                    .fontWeight(.bold)
+                BrandHeader(summary: headerSummary)
 
                 Spacer()
 
@@ -38,7 +34,22 @@ extension PortListView {
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(headerBackground)
+    }
+
+    /// A whisper of the accent colour behind the brand, fading into the list.
+    private var headerBackground: some View {
+        LinearGradient(colors: [Color.accentColor.opacity(0.10), Color.accentColor.opacity(0)], startPoint: .top, endPoint: .bottom)
+            .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    var headerSummary: String {
+        BrandHeader.summary(
+            portCount: portManager.visiblePorts.count,
+            memory: portManager.totalPortsMemory,
+            liveSessions: WorkbenchModel.liveSessionCount(of: portManager.visiblePorts),
+            scanned: portManager.hasCompletedFirstScan
+        )
     }
 
     /// Modern segmented capsule to switch row density.
@@ -229,9 +240,12 @@ extension PortListView {
                     .padding(.top, 6)
                 }
             } else if searchText.isEmpty {
-                MascotView(mood: .sleepy, size: 72)
+                MascotView(mood: .sleepy, size: 96)
                     .padding(.bottom, 8)
                 Text("All quiet: nothing is listening")
+                    .font(.headline)
+                Text("Start a dev server and it shows up here.")
+                    .font(.caption)
                     .foregroundColor(.secondary)
             } else {
                 Image(systemName: "magnifyingglass")
@@ -249,11 +263,13 @@ extension PortListView {
     var footerView: some View {
         VStack(spacing: 0) {
             // Status Bar
+            // The header carries the totals; this line only says when the
+            // list is narrower than the scan.
             HStack {
                 if filter == .tests {
                     Text("\(portManager.activeTests.count) tests running · \(portManager.totalTestsMemory)")
-                } else {
-                    Text("\(filteredPorts.count) of \(portManager.visiblePorts.count) ports · \(portManager.totalPortsMemory)")
+                } else if filteredPorts.count != portManager.visiblePorts.count {
+                    Text("\(filteredPorts.count) of \(portManager.visiblePorts.count) ports shown")
                 }
                 if portManager.isCompatibilityScan {
                     Text("· compatibility scan")

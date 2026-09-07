@@ -79,6 +79,11 @@ enum WorkbenchModel {
         Set(ports.map { $0.agentOwner.map(sessionKey) ?? "(unattributed)" }).count
     }
 
+    /// Live sessions only, for the header: an ended session is not running.
+    static func liveSessionCount(of ports: [PortInfo]) -> Int {
+        Set(ports.compactMap(\.agentOwner).filter(\.isLiveAgentSession).map(sessionKey)).count
+    }
+
     private static func sessionKey(_ owner: AgentOwner) -> String {
         if owner.sessionEnded { return "\(owner.name) (ended)" }
         if owner.confidence == .editorTerminal { return "\(owner.name) terminal" }

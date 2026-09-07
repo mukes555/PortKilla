@@ -9,7 +9,7 @@ import UniformTypeIdentifiers
 #if DEBUG
 extension AppDelegate {
 
-    private static let demoSize = NSSize(width: 500, height: 600)
+    private static let demoSize = PortManager.PopoverSize.regular.dimensions
 
     func renderDemoReel(to path: String) {
         // A throwaway suite: the demo must not touch the real preferences

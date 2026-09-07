@@ -79,6 +79,12 @@ else
     echo "warning: standalone CLI not found at $CLI_SOURCE" >&2
 fi
 
+# 3a. Mascot art, when the project has it (assets/mascot/quokka-<mood>.png);
+# MascotView falls back to a symbol until then.
+if ls "$PROJECT_ROOT/assets/mascot/"quokka-*.png >/dev/null 2>&1; then
+    cp "$PROJECT_ROOT/assets/mascot/"quokka-*.png "$APP_BUNDLE/Contents/Resources/"
+fi
+
 # 3b. App icon (regenerate with scripts/make_icon.swift)
 if [ -f "$PROJECT_ROOT/assets/AppIcon.icns" ]; then
     cp "$PROJECT_ROOT/assets/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"

@@ -23,6 +23,7 @@ struct PaletteQuery: Equatable {
         case history = "Show History"
         case freePort = "Find a Free Port"
         case settings = "Settings…"
+        case tour = "Welcome Tour"
         case quit = "Quit PortKilla"
 
         var id: String { rawValue }
@@ -36,6 +37,7 @@ struct PaletteQuery: Equatable {
             case .history: return "clock"
             case .freePort: return "number"
             case .settings: return "gearshape"
+            case .tour: return "hand.wave"
             case .quit: return "power"
             }
         }

@@ -135,6 +135,8 @@ extension PortManager {
                     if Self.stableSignature(ports, depth: depth) != current {
                         self.activePorts = ports
                     }
+                    // Every scan feeds the sparklines, published or not.
+                    self.metrics.record(ports)
                     self.processWatchedPorts(with: ports, guardOwners: guardOwners)
                     self.firePendingFreeNotifications(with: ports)
                     if !self.hasCompletedFirstScan { self.hasCompletedFirstScan = true }

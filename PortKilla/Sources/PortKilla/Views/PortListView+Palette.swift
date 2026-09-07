@@ -114,6 +114,7 @@ extension PortListView {
         case .history: appDelegate.showHistory()
         case .freePort: searchText = "free port"
         case .settings: appDelegate.openSettings()
+        case .tour: appDelegate.showTour()
         case .quit: NSApplication.shared.terminate(nil)
         }
     }

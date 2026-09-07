@@ -144,6 +144,36 @@ public class PortManager: ObservableObject {
         }
     }
 
+    /// What the status item draws: the app icon in colour, or a monochrome
+    /// quokka that follows the menu bar's look.
+    public enum MenuBarIcon: String, CaseIterable {
+        case color = "quokka"
+        case mono
+    }
+    @Published public var menuBarIcon: MenuBarIcon = .color {
+        didSet {
+            guard !isRestoringPreferences else { return }
+            defaults.set(menuBarIcon.rawValue, forKey: DefaultsKey.menuBarIcon)
+            onMenuBarPreferenceChanged?()
+        }
+    }
+
+    /// How much room the popover takes; the app maps a size to points.
+    public enum PopoverSize: String, CaseIterable {
+        case compact
+        case regular
+        case large
+    }
+    @Published public var popoverSize: PopoverSize = .regular {
+        didSet {
+            guard !isRestoringPreferences else { return }
+            defaults.set(popoverSize.rawValue, forKey: DefaultsKey.popoverSize)
+            onPopoverSizeChanged?()
+        }
+    }
+    /// Set by the app delegate so a size change resizes the open popover.
+    public var onPopoverSizeChanged: (() -> Void)?
+
     /// Master switch for watch/guard notifications. Permission is requested
     /// when the user turns it on or arms a watch, never just for launching.
     @Published public var notificationsEnabled: Bool = true {
@@ -230,6 +260,12 @@ public class PortManager: ObservableObject {
         }
         if let stored = defaults.object(forKey: DefaultsKey.showMenuBarCount) as? Bool {
             showMenuBarCount = stored
+        }
+        if let stored = defaults.string(forKey: DefaultsKey.menuBarIcon), let icon = MenuBarIcon(rawValue: stored) {
+            menuBarIcon = icon
+        }
+        if let stored = defaults.string(forKey: DefaultsKey.popoverSize), let size = PopoverSize(rawValue: stored) {
+            popoverSize = size
         }
         if let stored = defaults.object(forKey: DefaultsKey.notificationsEnabled) as? Bool {
             notificationsEnabled = stored
@@ -335,6 +371,8 @@ public class PortManager: ObservableObject {
         confirmBeforeKill = true
         viewDensity = .simple
         showMenuBarCount = true
+        menuBarIcon = .color
+        popoverSize = .regular
         notificationsEnabled = true
         notificationSound = true
         historyLimit = 50

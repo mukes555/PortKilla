@@ -65,13 +65,24 @@ struct WorkbenchView: View {
     /// Note for screenshots: this column is composited by the window server
     /// and draws blank in offscreen renders; `workbench-live` captures it.
     private var sidebar: some View {
-        List(Section.allCases, selection: $section) { item in
-            NavigationLink(value: item) {
-                Label(item.rawValue, systemImage: item.icon)
-                    .badge(badge(for: item))
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                BrandAvatar(size: 24)
+                Text("PortKilla")
+                    .font(.system(size: 13, weight: .bold))
+                Spacer()
             }
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+            List(Section.allCases, selection: $section) { item in
+                NavigationLink(value: item) {
+                    Label(item.rawValue, systemImage: item.icon)
+                        .badge(badge(for: item))
+                }
+            }
+            .listStyle(.sidebar)
         }
-        .listStyle(.sidebar)
     }
 
     @ViewBuilder
@@ -91,10 +102,8 @@ struct WorkbenchView: View {
     }
 
     private var inspectorPlaceholder: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "sidebar.right")
-                .font(.system(size: 28))
-                .foregroundColor(.secondary)
+        VStack(spacing: 10) {
+            MascotView(mood: .sleepy, size: 88)
             Text("Select a port to inspect it")
                 .foregroundColor(.secondary)
         }

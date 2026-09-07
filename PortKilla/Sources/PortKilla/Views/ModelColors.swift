@@ -21,6 +21,17 @@ extension PortInfo.PortType {
     }
 }
 
+extension PortInfo.PortCategory {
+    var color: NSColor {
+        switch self {
+        case .web: return .systemGreen
+        case .database: return .systemYellow
+        case .ide: return .systemPurple
+        case .other: return .systemGray
+        }
+    }
+}
+
 extension TestProcessInfo.TestType {
     var color: NSColor {
         switch self {

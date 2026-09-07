@@ -58,10 +58,10 @@ struct PortListView: View {
     @State var selectedId: String?
     @State var expandedIds: Set<String> = []
     @State var isOnScreen = false
-    @ScaledMetric(relativeTo: .body) var gutterWidth: CGFloat = 16
-    @ScaledMetric(relativeTo: .body) var portColumnWidth: CGFloat = 80
-    @ScaledMetric(relativeTo: .body) var memoryColumnWidth: CGFloat = 70
-    @ScaledMetric(relativeTo: .body) var actionColumnWidth: CGFloat = 80
+    @ScaledMetric(relativeTo: .body) var gutterWidth: CGFloat = RowMetrics.gutter
+    @ScaledMetric(relativeTo: .body) var portColumnWidth: CGFloat = RowMetrics.port
+    @ScaledMetric(relativeTo: .body) var memoryColumnWidth: CGFloat = RowMetrics.memory
+    @ScaledMetric(relativeTo: .body) var actionColumnWidth: CGFloat = RowMetrics.action
     @AppStorage(DefaultsKey.didDismissHotkeyTip) var didDismissHotkeyTip = false
     @FocusState var isSearchFocused: Bool
 
@@ -135,11 +135,12 @@ struct PortListView: View {
         return filteredTests.first { $0.id == selectedId }
     }
 
-    /// The popover must stay 500x600 (NSPopover follows the hosting
-    /// controller's ideal size, and an unbounded list would grow with its
-    /// content); only the pinned panel may be resized.
-    private var maxWidth: CGFloat { hostedInPinnedWindow ? .infinity : 500 }
-    private var maxHeight: CGFloat { hostedInPinnedWindow ? .infinity : 600 }
+    /// The popover is pinned to the chosen size (NSPopover follows the
+    /// hosting controller's ideal size, and an unbounded list would grow
+    /// with its content); only the pinned panel may be resized.
+    private var popoverSize: NSSize { portManager.popoverSize.dimensions }
+    private var maxWidth: CGFloat { hostedInPinnedWindow ? .infinity : popoverSize.width }
+    private var maxHeight: CGFloat { hostedInPinnedWindow ? .infinity : popoverSize.height }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -169,7 +170,7 @@ struct PortListView: View {
 
                 footerView
             }
-            .frame(minWidth: 500, maxWidth: maxWidth, minHeight: 600, maxHeight: maxHeight)
+            .frame(minWidth: popoverSize.width, maxWidth: maxWidth, minHeight: popoverSize.height, maxHeight: maxHeight)
 
             if let toastMessage = portManager.toastMessage {
                 VStack {
@@ -177,7 +178,7 @@ struct PortListView: View {
                     ToastView(message: toastMessage)
                         .padding(.bottom, 12)
                 }
-                .frame(minWidth: 500, maxWidth: maxWidth, minHeight: 600, maxHeight: maxHeight)
+                .frame(minWidth: popoverSize.width, maxWidth: maxWidth, minHeight: popoverSize.height, maxHeight: maxHeight)
                 .allowsHitTesting(false)
             }
         }
@@ -218,7 +219,7 @@ struct PortListView: View {
     var portsContentView: some View {
         VStack(spacing: 0) {
             // Column headers; the widths scale with the rows' text size.
-            HStack {
+            HStack(spacing: RowMetrics.spacing) {
                 Spacer().frame(width: gutterWidth)
                 Text("Port")
                     .frame(width: portColumnWidth, alignment: .leading)
@@ -264,7 +265,7 @@ struct PortListView: View {
             // The hide-system filter must never look like missing data
             if portManager.hiddenSystemPortsCount > 0 {
                 Button(action: { portManager.hideSystemProcesses = false }) {
-                    Text("\(portManager.hiddenSystemPortsCount) system port\(portManager.hiddenSystemPortsCount == 1 ? "" : "s") hidden — Show")
+                    Text("Show \(portManager.hiddenSystemPortsCount) hidden system port\(portManager.hiddenSystemPortsCount == 1 ? "" : "s")")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }

@@ -2,59 +2,59 @@ import PortKillaCore
 import SwiftUI
 
 /// Pinned section at the top of the port list showing every watched port and
-/// its live status — including "free", which is the answer users usually
+/// its live status, including "free", which is the answer people usually
 /// opened the app to get.
 struct WatchedSectionView: View {
     @ObservedObject var portManager: PortManager
     let onKillRequest: (PortInfo) -> Void
 
-    @ScaledMetric(relativeTo: .body) private var gutterWidth: CGFloat = 16
-    @ScaledMetric(relativeTo: .body) private var portColumnWidth: CGFloat = 80
-    @ScaledMetric(relativeTo: .body) private var nameCapWidth: CGFloat = 130
-    @ScaledMetric(relativeTo: .body) private var memoryColumnWidth: CGFloat = 70
-    @ScaledMetric(relativeTo: .body) private var actionColumnWidth: CGFloat = 80
+    @ScaledMetric(relativeTo: .body) private var gutterWidth: CGFloat = RowMetrics.gutter
+    @ScaledMetric(relativeTo: .body) private var portColumnWidth: CGFloat = RowMetrics.port
+    @ScaledMetric(relativeTo: .body) private var nameCapWidth: CGFloat = RowMetrics.nameCap
+    @ScaledMetric(relativeTo: .body) private var memoryColumnWidth: CGFloat = RowMetrics.memory
+    @ScaledMetric(relativeTo: .body) private var actionColumnWidth: CGFloat = RowMetrics.action
+    @ScaledMetric(relativeTo: .body) private var tileSize: CGFloat = RowMetrics.tile
 
     var body: some View {
+        let watched = portManager.watchedPorts.sorted()
         VStack(spacing: 0) {
-            HStack {
-                Text("WATCHED")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.secondary)
-                Spacer()
+            SectionHeader(title: "Watched", count: watched.count, tint: .yellow) {
+                if !portManager.guardedPorts.isEmpty {
+                    MascotView(mood: .onGuard, size: 22)
+                        .help("A guard is armed: whatever takes a guarded port is auto-killed")
+                        .accessibilityLabel("A guard is armed")
+                }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.9))
 
-            ForEach(portManager.watchedPorts.sorted(), id: \.self) { port in
+            ForEach(watched, id: \.self) { port in
                 watchedRow(port: port)
                 Divider()
             }
         }
     }
 
-    /// Same columns as the main rows (chevron gutter, 80pt port, flexible
-    /// process, 70pt memory, 80pt actions) so the section reads as part of
-    /// the list rather than a different table stacked on top of it.
+    /// Same columns as the main rows (chevron gutter, port, flexible
+    /// process, memory, actions) so the section reads as part of the list
+    /// rather than a different table stacked on top of it.
     @ViewBuilder
     private func watchedRow(port: Int) -> some View {
         let active = portManager.activePorts.first { $0.port == port }
+        let guarded = portManager.isGuarded(port)
 
-        HStack(spacing: 8) {
+        HStack(spacing: RowMetrics.spacing) {
             Spacer().frame(width: gutterWidth)
 
-            HStack(spacing: 4) {
-                Image(systemName: "star.fill")
-                    .foregroundColor(.yellow)
+            HStack(spacing: 8) {
+                IconTile(icon: guarded ? "shield.fill" : "star.fill", tint: guarded ? .orange : .yellow, size: tileSize)
                 Text(":\(String(port))")
-                    .font(.system(.body, design: .monospaced))
+                    .font(.system(.title3, design: .monospaced).weight(.semibold))
             }
             .frame(width: portColumnWidth, alignment: .leading)
 
             HStack(spacing: 6) {
                 if let active {
                     Text(active.processName)
-                        .font(.body.weight(.medium))
+                        .font(.title3.weight(.medium))
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .frame(maxWidth: nameCapWidth, alignment: .leading)
@@ -68,16 +68,16 @@ struct WatchedSectionView: View {
                 } else {
                     Circle()
                         .fill(Color.green)
-                        .frame(width: 6, height: 6)
+                        .frame(width: 7, height: 7)
                     Text("free")
-                        .font(.body.weight(.medium))
+                        .font(.title3.weight(.medium))
                         .foregroundColor(.green)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(active?.memoryUsage ?? "")
-                .font(.subheadline.monospaced())
+                .font(.body.monospaced())
                 .foregroundColor(.secondary)
                 .frame(width: memoryColumnWidth, alignment: .trailing)
 
@@ -93,15 +93,15 @@ struct WatchedSectionView: View {
                 }
 
                 Button(action: { GuardConfirm.toggle(port, in: portManager) }) {
-                    Image(systemName: portManager.isGuarded(port) ? "bolt.shield.fill" : "bolt.shield")
+                    Image(systemName: guarded ? "shield.fill" : "shield")
                         .font(.subheadline)
-                        .foregroundColor(portManager.isGuarded(port) ? .orange : .secondary)
+                        .foregroundColor(guarded ? .orange : .secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(portManager.isGuarded(port) ? "Disable guard on port \(port)" : "Guard port \(port)")
-                .help(portManager.isGuarded(port)
+                .accessibilityLabel(guarded ? "Disable guard on port \(port)" : "Guard port \(port)")
+                .help(guarded
                       ? "Guard active: anything that takes :\(port) gets auto-killed"
-                      : "Guard :\(port) — auto-kill anything that takes it")
+                      : "Guard :\(port): auto-kill anything that takes it")
 
                 Button(action: { portManager.toggleWatch(port) }) {
                     Image(systemName: "star.slash")
@@ -115,12 +115,12 @@ struct WatchedSectionView: View {
             .frame(width: actionColumnWidth, alignment: .trailing)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
         .contextMenu {
             Button("Open in Browser") { Browser.openLocalhost(port: port) }
             Button("Copy Port") { Pasteboard.copy(":\(port)") }
             Divider()
-            Button(portManager.isGuarded(port) ? "Remove Guard" : "Guard :\(String(port))") {
+            Button(guarded ? "Remove Guard" : "Guard :\(String(port))") {
                 GuardConfirm.toggle(port, in: portManager)
             }
             Button("Stop Watching") { portManager.toggleWatch(port) }

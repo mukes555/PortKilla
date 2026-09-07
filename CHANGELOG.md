@@ -46,7 +46,14 @@ finding fixed, and a test for each defect.
   output unredacted, so a worker started with `--token=...` leaked. The
   redaction also missed digit-bearing names (`S3_SECRET_KEY`), JSON
   secrets, and header secrets.
-- A lease reason is capped and stripped of control characters.
+- A lease reason is capped and stripped of control characters, and so are
+  process names and command lines: a process could name itself with escape
+  sequences that rewrite the terminal reading `portnanny list`.
+- **A tree kill could signal a recycled pid.** Each child was checked
+  against a name read at kill time, which compares the new process with
+  itself and can never fail; the walk now carries the name it saw.
+- Output carries the short session key rather than the full one, so an
+  agent cannot copy what it read and pass as another agent's session.
 - Every GitHub Action is pinned to a commit, the release token is scoped
   to the job that publishes, and the Homebrew cask is pinned to the
   checksum the build wrote rather than to a fresh download that could

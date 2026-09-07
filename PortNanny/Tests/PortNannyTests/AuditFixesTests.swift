@@ -158,6 +158,46 @@ final class AuditFixesTests: XCTestCase {
 
     // MARK: - Security
 
+    func testATreeKillComparesTheNameItSawWhenItWalked() throws {
+        // A recycled pid must fail the check. The walk's snapshot name is the
+        // only thing that can catch that; reading the name again at kill time
+        // compares the new process with itself.
+        let killer = ProcessKiller()
+        let sleeper = Process()
+        sleeper.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        sleeper.arguments = ["30"]
+        try sleeper.run()
+        defer { sleeper.terminate() }
+
+        XCTAssertThrowsError(try killer.killProcess(pid: Int(sleeper.processIdentifier), expectedName: "definitely-not-sleep")) { error in
+            guard case ProcessKiller.KillError.identityMismatch = error else { return XCTFail("expected an identity mismatch, got \(error)") }
+        }
+        XCTAssertTrue(sleeper.isRunning, "a pid whose process is not the one we walked is left alone")
+    }
+
+    func testTheSessionKeyAnAgentReadsCannotBeReplayed() throws {
+        let full = UUID().uuidString
+        let owner = AgentOwner(name: "Claude Code", sessionKey: full, source: .processTree)
+        let published = try JSONSerialization.jsonObject(with: JSONEncoder().encode(owner)) as? [String: Any]
+        let readBack = try XCTUnwrap(published?["sessionKey"] as? String)
+        XCTAssertNotEqual(readBack, full, "the full key is what another agent would copy")
+        XCTAssertEqual(readBack, owner.shortSessionKey)
+
+        let impersonator = AgentOwner(name: "Claude Code", sessionKey: readBack, source: .declared)
+        XCTAssertEqual(impersonator.isSameSession(as: owner), false, "what it read does not pass as the session")
+    }
+
+    func testAProcessCannotSpoofTheTerminalThroughItsOwnName() {
+        let table = ProcessTable(entries: [
+            ProcessTable.Entry(pid: 100, ppid: 1, rssKB: 0, cpuPercent: 0, ageSeconds: nil,
+                               command: "node \u{1b}[2K\rall clear", processName: "node\u{1b}[31m", uid: 0),
+        ], listeners: [NativeScanner.Listener(pid: 100, port: 3000, host: "127.0.0.1", proto: "tcp", connections: 0)])
+        let port = (try? PortScanner().scanActivePorts(processes: table, depth: .full))?.first
+        XCTAssertFalse(port?.processName.contains("\u{1b}") ?? true, port?.processName ?? "no port")
+        XCTAssertFalse(port?.command.contains("\u{1b}") ?? true, port?.command ?? "no port")
+        XCTAssertFalse(port?.command.contains("\r") ?? true, "a carriage return rewrites the line above it")
+    }
+
     func testChildCommandsAreRedactedLikeTheirParent() {
         let table = ProcessTable(entries: [
             ProcessTable.Entry(pid: 100, ppid: 1, rssKB: 0, cpuPercent: 0, ageSeconds: nil,

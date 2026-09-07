@@ -29,6 +29,18 @@ public struct AgentOwner: Codable, Equatable {
     /// the server any more, so anyone may stop it.
     public var sessionEnded: Bool
 
+    /// Output carries the short key: `isSameSession` compares full keys, so
+    /// an agent that copies what it read cannot pass as another session.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encodeIfPresent(sessionPid, forKey: .sessionPid)
+        try container.encodeIfPresent(shortSessionKey, forKey: .sessionKey)
+        try container.encode(source, forKey: .source)
+        try container.encode(confidence, forKey: .confidence)
+        try container.encode(sessionEnded, forKey: .sessionEnded)
+    }
+
     public init(name: String, sessionPid: Int? = nil, sessionKey: String? = nil, source: Source,
          confidence: Confidence = .agent, sessionEnded: Bool = false) {
         self.name = name

@@ -14,6 +14,17 @@
 </p>
 
 <p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#the-popover">Popover</a> ·
+  <a href="#the-workbench">Workbench</a> ·
+  <a href="#for-ai-agents">AI agents</a> ·
+  <a href="#the-cli">CLI</a> ·
+  <a href="#keyboard">Keyboard</a> ·
+  <a href="#settings">Settings</a> ·
+  <a href="#privacy-and-safety">Privacy</a>
+</p>
+
+<p align="center">
   <b>Every listening port, who started it, and the right way to stop it.</b><br>
   A menu bar app, a Workbench window, a <code>portnanny</code> CLI, and an MCP server,<br>
   so you free ports in one keystroke and your AI agents never kill each other's servers.
@@ -25,6 +36,14 @@
     <img src="assets/screenshot-light.png" width="580" alt="The PortNanny popover: watched ports on top, then every listening port with its type, process, exposure, connected clients, the agent session that started it, project, memory, and CPU trend">
   </picture>
 </p>
+
+## Three moments
+
+- **`EADDRINUSE: address already in use`**, and nothing tells you what has the port or whether stopping it is safe.
+- **A server that will not stay dead.** pm2, launchd, Docker, nodemon, `next dev`, `uvicorn --reload`: a plain kill is undone a second later.
+- **Two AI agents on one Mac.** `kill -9 $(lsof -ti:3000)` eventually takes down the other one's server, mid-task, with no trace of who did it.
+
+PortNanny answers all three: it names the owner, stops a supervised server the way its supervisor expects, and refuses an agent that reaches for another agent's port.
 
 ## In twenty seconds
 
@@ -158,7 +177,7 @@ cd PortNanny/PortNanny            # the Swift package is nested
 ./scripts/build.sh                # dist/PortNanny.app; add --dmg for a disk image
 ```
 
-`swift run PortNanny` launches the app and `swift test --disable-sandbox` runs the suite. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the module map in [ARCHITECTURE.md](ARCHITECTURE.md). Security reports: [SECURITY.md](SECURITY.md). What changed when: [CHANGELOG.md](CHANGELOG.md).
+`swift run PortNanny` launches the app and `swift test --disable-sandbox` runs the suite. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the module map in [ARCHITECTURE.md](ARCHITECTURE.md). How the quokka is drawn and wired up: [docs/ARTWORK.md](docs/ARTWORK.md). Security reports: [SECURITY.md](SECURITY.md). What changed when: [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

@@ -139,6 +139,11 @@ swift scripts/make_artwork.swift mascot path/to/waving.png assets/mascot/quokka-
 Moods are `happy`, `sleepy`, and `guard`; `build.sh` copies them into the
 bundle and `MascotView` falls back to a symbol when one is missing.
 
+`quokka-happy.png` is load-bearing: the header avatar is cut from it and
+the menu bar glyph is traced from that crop, so its framing has rules.
+The prompts that draw the character, the rules, and how to check the
+result are in [docs/ARTWORK.md](docs/ARTWORK.md).
+
 ## Coding style
 
 The project favors code written **for human brains**: early returns over nested

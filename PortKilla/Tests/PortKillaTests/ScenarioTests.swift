@@ -98,12 +98,13 @@ final class ScenarioTests: XCTestCase {
         return shell
     }
 
-    /// Spawns `portkilla __serve <port>` with the given environment and waits
-    /// until it listens.
-    private func startServer(port: Int, environment: [String: String]) throws -> Process {
+    /// Spawns `portkilla __serve <port>` with the given environment (and
+    /// working directory) and waits until it listens.
+    private func startServer(port: Int, environment: [String: String], cwd: URL? = nil) throws -> Process {
         let process = Process()
         process.executableURL = Self.cli
         process.arguments = ["__serve", "\(port)"]
+        process.currentDirectoryURL = cwd
         var env = ProcessInfo.processInfo.environment
         // Start from a clean slate: the test runner itself runs under an agent.
         for key in AgentSignatures.markerKeys { env[key] = nil }
@@ -418,6 +419,29 @@ final class ScenarioTests: XCTestCase {
         XCTAssertTrue(ManagedRuntime.waitForPortsFree([port], timeout: 5).isEmpty, "the child died with exec")
         let after = try XCTUnwrap(try json(try portkilla(["reservations", "--json"], owner: nil).stdout) as? [[String: Any]])
         XCTAssertFalse(after.contains { $0["port"] as? Int == port }, "the lease is released")
+    }
+
+    func testAServerOffItsConfiguredPortShowsTheDrift() throws {
+        let wanted = 47045
+        let project = FileManager.default.temporaryDirectory.appendingPathComponent("portkilla-drift-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+        try "PORT=\(wanted)\n".write(to: project.appendingPathComponent(".env"), atomically: true, encoding: .utf8)
+        // __serve is "Other" to the classifier; a package.json makes the folder a Node project.
+        try #"{"name": "drift-scenario", "scripts": {"dev": "node server.js"}}"#.write(to: project.appendingPathComponent("package.json"), atomically: true, encoding: .utf8)
+
+        _ = try startServer(port: wanted + 1, environment: ["PORTKILLA_OWNER": "scenario-bot"], cwd: project)
+        let listed = try portkilla(["list", "--json"], owner: nil)
+        let row = try XCTUnwrap((try json(listed.stdout) as? [[String: Any]])?.first { $0["port"] as? Int == wanted + 1 })
+        let expected = try XCTUnwrap(row["expectedPort"] as? [String: Any], "the project's .env names the port it meant: \(row)")
+        XCTAssertEqual(expected["port"] as? Int, wanted)
+        XCTAssertEqual(expected["source"] as? String, ".env PORT")
+
+        let drift = try portkilla(["drift", "--json"], owner: nil)
+        let drifted = try XCTUnwrap((try json(drift.stdout) as? [String: Any])?["drifted"] as? [[String: Any]])
+        XCTAssertTrue(drifted.contains { $0["port"] as? Int == wanted + 1 }, drift.stdout)
+        let text = try portkilla(["drift"], owner: nil)
+        XCTAssertTrue(text.stdout.contains("runs on :\(wanted + 1); .env PORT says :\(wanted), which is free now"), text.stdout)
     }
 
     func testRealKillFreesThePortAndRecordsHistory() throws {

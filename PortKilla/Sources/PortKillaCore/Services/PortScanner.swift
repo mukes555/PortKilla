@@ -191,6 +191,13 @@ public class PortScanner {
 
             let type = determinePortType(processName: processName, command: rawCommand)
             let containerName = isFull ? DockerService.shared.getContainerName(forPort: raw.port) : nil
+            // Servers have a port their project meant for them; databases,
+            // Docker, and editor helpers do not.
+            var expectedPort: ExpectedPort?
+            let couldDrift = type.category == .web || type == .other
+            if isFull, couldDrift, let projectPath {
+                expectedPort = ProjectConfig.drift(from: ProjectConfig.shared.expectedPorts(in: projectPath), actual: raw.port)
+            }
             return PortInfo(
                 port: raw.port,
                 pid: raw.pid,
@@ -211,7 +218,8 @@ public class PortScanner {
                 agentOwner: isFull ? agentOwner(for: raw, type: type, containerName: containerName, processes: processes) : nil,
                 connections: raw.connections,
                 managedBy: isFull ? ManagedRuntime.detect(pid: raw.pid, containerName: containerName, type: type, in: processes) : nil,
-                reservation: leases[raw.port]
+                reservation: leases[raw.port],
+                expectedPort: expectedPort
             )
         }
 

@@ -80,7 +80,7 @@ black wayfarer sunglasses, a white ruffled maid headband, and a black
 dress with a white ruffled pinafore collar. Friendly 3D render, soft
 studio lighting, slight smile, no outline.
 
-Transparent background, portrait 800x1024, no text. Full body, standing,
+Transparent background, portrait 1024x1536, no text. Full body, standing,
 facing the camera, one paw raised in a friendly stop gesture at chest
 height, a silver laptop held under the other arm.
 
@@ -99,7 +99,7 @@ black wayfarer sunglasses, a white ruffled maid headband, and a black
 dress with a white ruffled pinafore collar. Friendly 3D render, soft
 studio lighting, no outline.
 
-Transparent background, portrait 800x1024, no text. Asleep in an office
+Transparent background, portrait 1024x1536, no text. Asleep in an office
 chair, slumped comfortably, sunglasses pushed up onto her forehead so her
 closed eyes show, a closed silver laptop on her lap, a black mug on the
 armrest. A small "zzz" curl above her head, drawn as shapes rather than
@@ -150,7 +150,7 @@ black wayfarer sunglasses, a white ruffled maid headband, and a black
 dress with a white ruffled pinafore collar. Friendly 3D render, soft
 studio lighting, no outline.
 
-Transparent background, landscape 1400x1024, no text. At a desk in front
+Transparent background, landscape 1536x1024, no text. At a desk in front
 of several glowing monitors full of scrolling code and port numbers, one
 paw on a trackpad, the black mug beside the keyboard, sunglasses reflecting
 the screens. Focused and cheerful, on top of it rather than swamped.
@@ -184,7 +184,7 @@ black wayfarer sunglasses, a white ruffled maid headband, and a black
 dress with a white ruffled pinafore collar. Friendly 3D render, soft
 studio lighting, no outline.
 
-Wide banner 2400x560 on a near-black background (#171A1F) with a soft blue
+Wide banner, as wide as the tool allows (1536x640 works), on a near-black background (#171A1F) with a soft blue
 glow (#4085F7) behind the character. Quokka bust inside a blue circle on
 the left third, waving, a silver laptop under her arm. On the right, the
 wordmark "PortNanny" with "Port" in white and "Nanny" in blue, and under

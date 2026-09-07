@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "portkilla": {
-      "command": "portkilla",
-      "args": ["mcp"]
-    }
-  }
-}

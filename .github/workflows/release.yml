@@ -27,32 +27,32 @@ jobs:
           swift --version
 
       - name: Tag, build.sh, and CHANGELOG must agree on the version
-        run: bash PortKilla/scripts/check-version.sh "$GITHUB_REF_NAME"
+        run: bash PortNanny/scripts/check-version.sh "$GITHUB_REF_NAME"
 
       - name: Build and Package
         run: |
-          cd PortKilla
+          cd PortNanny
           chmod +x scripts/build.sh
           ./scripts/build.sh --dmg
-          ditto -c -k --sequesterRsrc --keepParent dist/PortKilla.app dist/PortKilla.app.zip
+          ditto -c -k --sequesterRsrc --keepParent dist/PortNanny.app dist/PortNanny.app.zip
           ls -la dist
 
       - name: Verify what is about to ship
         run: |
-          cd PortKilla
+          cd PortNanny
           VERSION="${GITHUB_REF_NAME#v}"
-          ARCHS="$(lipo -archs dist/PortKilla.app/Contents/MacOS/PortKilla)"
+          ARCHS="$(lipo -archs dist/PortNanny.app/Contents/MacOS/PortNanny)"
           echo "archs: $ARCHS"
           case "$ARCHS" in *x86_64*arm64*|*arm64*x86_64*) ;; *) echo "not universal" >&2; exit 1;; esac
-          CLI=dist/PortKilla.app/Contents/Helpers/portkilla
+          CLI=dist/PortNanny.app/Contents/Helpers/portnanny
           test -x "$CLI" || { echo "standalone CLI missing from the bundle" >&2; exit 1; }
           CLI_ARCHS="$(lipo -archs "$CLI")"
           case "$CLI_ARCHS" in *x86_64*arm64*|*arm64*x86_64*) ;; *) echo "CLI not universal: $CLI_ARCHS" >&2; exit 1;; esac
           if otool -L "$CLI" | grep -q AppKit; then echo "the standalone CLI links AppKit" >&2; exit 1; fi
-          codesign --verify --strict --verbose=2 dist/PortKilla.app
-          PLIST_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' dist/PortKilla.app/Contents/Info.plist)"
+          codesign --verify --strict --verbose=2 dist/PortNanny.app
+          PLIST_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' dist/PortNanny.app/Contents/Info.plist)"
           test "$PLIST_VERSION" = "$VERSION" || { echo "Info.plist says $PLIST_VERSION, tag says $VERSION" >&2; exit 1; }
-          (cd dist && shasum -a 256 PortKilla.app.zip "PortKilla-$VERSION.dmg" | tee SHA256SUMS)
+          (cd dist && shasum -a 256 PortNanny.app.zip "PortNanny-$VERSION.dmg" | tee SHA256SUMS)
 
       - name: Pre-release tags stay out of "latest"
         id: kind
@@ -62,7 +62,7 @@ jobs:
       - name: Build release notes from CHANGELOG
         run: |
           VERSION="${GITHUB_REF_NAME#v}"      # v1.6.0 -> 1.6.0
-          bash PortKilla/scripts/release-notes.sh "$VERSION" > release-notes.md
+          bash PortNanny/scripts/release-notes.sh "$VERSION" > release-notes.md
           echo "----- release notes preview -----"
           cat release-notes.md
 
@@ -70,9 +70,9 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            PortKilla/dist/*.zip
-            PortKilla/dist/*.dmg
-            PortKilla/dist/SHA256SUMS
+            PortNanny/dist/*.zip
+            PortNanny/dist/*.dmg
+            PortNanny/dist/SHA256SUMS
           draft: false
           prerelease: ${{ steps.kind.outputs.prerelease }}
           body_path: release-notes.md
@@ -90,7 +90,7 @@ jobs:
     env:
       HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
     steps:
-      - name: Checkout PortKilla (for the cask template)
+      - name: Checkout PortNanny (for the cask template)
         if: env.HAS_TAP_TOKEN == 'true'
         uses: actions/checkout@v7
 
@@ -107,13 +107,13 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           case "$GITHUB_REF_NAME" in *-rc*|*-beta*|*-alpha*) echo "pre-release: tap not updated"; exit 0;; esac
-          SHA="$(curl -sSL "https://github.com/mukes555/PortKilla/releases/download/v$VERSION/PortKilla.app.zip" | shasum -a 256 | cut -d' ' -f1)"
-          sed -e "s/__VERSION__/$VERSION/" -e "s/__SHA256__/$SHA/" packaging/homebrew/portkilla.rb.tmpl > tap/Casks/portkilla.rb
+          SHA="$(curl -sSL "https://github.com/mukes555/PortNanny/releases/download/v$VERSION/PortNanny.app.zip" | shasum -a 256 | cut -d' ' -f1)"
+          sed -e "s/__VERSION__/$VERSION/" -e "s/__SHA256__/$SHA/" packaging/homebrew/portnanny.rb.tmpl > tap/Casks/portnanny.rb
           cd tap
-          git config user.name "portkilla-release"
-          git config user.email "release@portkilla.invalid"
-          git add Casks/portkilla.rb
-          git commit -m "portkilla $VERSION" || { echo "no change"; exit 0; }
+          git config user.name "portnanny-release"
+          git config user.email "release@portnanny.invalid"
+          git add Casks/portnanny.rb
+          git commit -m "portnanny $VERSION" || { echo "no change"; exit 0; }
           git push
 
       - name: Skipped

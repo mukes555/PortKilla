@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "portnanny": {
+      "command": "portnanny",
+      "args": ["mcp"]
+    }
+  }
+}

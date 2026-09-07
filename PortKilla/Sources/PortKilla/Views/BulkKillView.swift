@@ -167,21 +167,26 @@ struct BulkKillView: View {
                 .buttonStyle(.bordered)
 
                 Button("Kill \(matchingPorts.count)") {
-                    let count = matchingPorts.count
+                    let (killable, supervised) = KillFlow.bulkTargets(matchingPorts, isProtected: portManager.isProtectedProcessName)
+                    let count = killable.count
                     if count == 0 {
+                        if !supervised.isEmpty {
+                            KillConfirm.inform(title: "Nothing to Kill", message: KillFlow.skippedNote(supervised))
+                        }
                         return
                     }
 
-                    let listText = matchingPorts.prefix(12).map { "• \($0.processName) (:\($0.port))" }.joined(separator: "\n")
+                    let listText = killable.prefix(12).map { "• \($0.processName) (:\($0.port))" }.joined(separator: "\n")
                     let suffix = count > 12 ? "\n\n…and \(count - 12) more." : ""
-                    let agentNote = KillDecision.liveAgentNote(for: matchingPorts.map(\.agentOwner)).map { "\n\n\($0)" } ?? ""
+                    let agentNote = KillDecision.liveAgentNote(for: killable.map(\.agentOwner)).map { "\n\n\($0)" } ?? ""
+                    let skipped = supervised.isEmpty ? "" : "\n\n" + KillFlow.skippedNote(supervised)
 
                     let confirmed = KillConfirm.run(
                         title: "Kill \(count) Process\(count == 1 ? "" : "es")?",
-                        message: "This will terminate the following:\n\n\(listText)\(suffix)\(agentNote)\n\nAre you sure?"
+                        message: "This will terminate the following:\n\n\(listText)\(suffix)\(agentNote)\(skipped)\n\nAre you sure?"
                     )
                     if confirmed {
-                        portManager.killPorts(matchingPorts, force: forceKill)
+                        portManager.killPorts(killable, force: forceKill)
                         dismiss()
                     }
                 }

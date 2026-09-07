@@ -28,7 +28,7 @@ public enum CLISetup {
 
         print("PortKilla setup for \(project.path)\n")
         if !interactive && !options.yes {
-            for step in steps { print(describe(step, applied: false)) }
+            for step in steps { print(describe(step)) }
             print("\nNo terminal to ask on; run with --yes to apply the steps above.")
             return CLIExit.ok
         }
@@ -36,7 +36,7 @@ public enum CLISetup {
         for step in steps {
             switch step.kind {
             case .note:
-                print(describe(step, applied: false))
+                print(describe(step))
             case .writeRules, .runCommand:
                 let wanted = options.yes || ask(step)
                 guard wanted else {
@@ -93,18 +93,13 @@ public enum CLISetup {
         return steps
     }
 
-    static func describe(_ step: Step, applied: Bool) -> String {
-        let marker: String
-        switch step.kind {
-        case .note: marker = "  "
-        case .writeRules: marker = "* "
-        case .runCommand: marker = "* "
-        }
+    static func describe(_ step: Step) -> String {
+        let marker = step.kind == .note ? "  " : "* "
         return "\(marker)\(step.title)\n    \(step.detail.replacingOccurrences(of: "\n", with: "\n    "))"
     }
 
     private static func ask(_ step: Step) -> Bool {
-        print(describe(step, applied: false))
+        print(describe(step))
         print("  Apply? [y/N] ", terminator: "")
         guard let answer = readLine()?.trimmingCharacters(in: .whitespaces).lowercased() else { return false }
         return answer == "y" || answer == "yes"

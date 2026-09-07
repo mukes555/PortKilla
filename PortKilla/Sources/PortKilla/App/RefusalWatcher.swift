@@ -22,12 +22,28 @@ final class RefusalWatcher: NSObject, UNUserNotificationCenterDelegate {
         DistributedNotificationCenter.default().removeObserver(self)
     }
 
+    /// Any local process can post the signal; only a refusal the CLI wrote
+    /// to the shared store moments ago is believed, and its own words are
+    /// what the notification shows.
     @objc private func refused(_ notification: Notification) {
-        guard let payload = RefusalSignal.Payload(userInfo: notification.userInfo) else { return }
-        // The History window may be open; the CLI wrote to the shared store.
-        HistoryManager.shared.reload()
+        guard let posted = RefusalSignal.Payload(userInfo: notification.userInfo) else { return }
+        portManager.history.reload()
+        guard let recorded = Self.recordedRefusal(matching: posted, in: portManager.history.refusals) else {
+            Log.kill.info("ignored a refusal signal with no matching record for :\(posted.port)")
+            return
+        }
         guard portManager.notificationsEnabled else { return }
-        Notifier.sendRefusal(payload, sound: portManager.notificationSound)
+        Notifier.sendRefusal(recorded, sound: portManager.notificationSound)
+    }
+
+    static func recordedRefusal(matching posted: RefusalSignal.Payload, in refusals: [PortHistoryItem], now: Date = Date()) -> RefusalSignal.Payload? {
+        let match = refusals.first { item in
+            item.action == .refused && item.port == posted.port && item.processName == posted.processName
+                && now.timeIntervalSince(item.timestamp) < 60
+        }
+        guard let match else { return nil }
+        return RefusalSignal.Payload(port: match.port, processName: AgentSignatures.cleanedLabel(match.processName),
+                                     owner: match.owner.map(AgentSignatures.cleanedLabel), caller: AgentSignatures.cleanedLabel(match.killedBy ?? "an agent"))
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
@@ -41,8 +57,13 @@ final class RefusalWatcher: NSObject, UNUserNotificationCenterDelegate {
         guard let payload = RefusalSignal.Payload(userInfo: response.notification.request.content.userInfo) else { return }
         switch response.actionIdentifier {
         case Notifier.stopAnywayAction:
-            // The person chose; a fresh scan finds the current occupant.
-            portManager.killPortNumber(payload.port, initiator: .user)
+            // A fresh scan finds the current occupant; the usual confirmation
+            // (owner, clients, lease, supervisor) applies before anything dies.
+            let manager = portManager
+            manager.killPortNumber(payload.port, respectProtected: true, initiator: .user) { target in
+                KillFlow(portManager: manager).requestKill(target, force: false, killTree: false)
+                return false
+            }
         default:
             reveal()
         }

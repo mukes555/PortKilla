@@ -18,7 +18,12 @@ public enum CommandRedaction {
     private static let urlPassword = try! NSRegularExpression(pattern: "(://[^/\\s:@]+:)([^@\\s]+)(@)")
     private static let bearer = try! NSRegularExpression(pattern: "(?i)(bearer\\s+)" + value)
 
+    /// Most command lines carry nothing sensitive; one scan decides that
+    /// before the four replacements run on every listener, every refresh.
+    private static let anySensitive = try! NSRegularExpression(pattern: "(?i)" + sensitiveNames + "|bearer\\s|://[^/\\s:@]+:[^@\\s]+@")
+
     public static func redact(_ command: String) -> String {
+        guard anySensitive.firstMatch(in: command, range: NSRange(command.startIndex..., in: command)) != nil else { return command }
         var text = command
         text = replace(flagValue, in: text, with: "$1$2$3" + mask)
         text = replace(envValue, in: text, with: "$1$2$3" + mask)

@@ -59,10 +59,11 @@ extension CLIArguments {
             Blocks until nothing listens on the port. Exit 0 when free, 5 on timeout.
             """
         case "history": return """
-            portkilla history [--json] [--port <port>] [--limit 20]
+            portkilla history [--json] [--port <port>] [--limit 20] [--all]
 
             Recent kills from the app and the CLI, newest first, with who started
-            and who stopped each process.
+            and who stopped each process. --all adds the guard's refusals (action
+            "Refused"; there, killedBy names the agent that was refused).
             """
         case "whoami": return """
             portkilla whoami [--json]
@@ -180,7 +181,7 @@ extension CLIArguments {
       portkilla drift [--json]           servers not on the port their project configured
       portkilla wait <port> [--timeout 30] [--json]
       portkilla open <port>
-      portkilla history [--json] [--port <port>] [--limit 20]
+      portkilla history [--json] [--port <port>] [--limit 20] [--all]
       portkilla whoami [--json]
       portkilla free-port [--prefer 3000] [--range 3000-3999] [--json]
       portkilla schema [command]         JSON output contracts

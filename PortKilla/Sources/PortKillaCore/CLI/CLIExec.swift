@@ -25,7 +25,8 @@ public enum CLIExec {
         if let session { environment[AgentSignatures.declaredSessionKey] = session }
 
         if options.reserve {
-            let lease = Reservation(port: port, owner: owner ?? Reservation.currentUser, sessionKey: session, sessionPid: caller?.sessionPid,
+            // Pinned to exec's own pid: if exec is killed outright, the lease goes with it.
+            let lease = Reservation(port: port, owner: owner ?? Reservation.currentUser, sessionKey: session, sessionPid: Int(getpid()),
                                     reason: "exec: \(options.command.joined(separator: " ").prefix(60))", ttl: Reservation.maxTTL)
             try? store.reserve(lease, by: caller)
         }

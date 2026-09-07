@@ -160,7 +160,7 @@ struct HistoryView: View {
         
         panel.begin { response in
             if response == .OK, let url = panel.url {
-                let csvContent = CSV.historyDocument(history.history, formatter: Self.exportFormatter)
+                let csvContent = CSV.historyDocument(history.events, formatter: Self.exportFormatter)
                 do {
                     try csvContent.write(to: url, atomically: true, encoding: .utf8)
                 } catch {

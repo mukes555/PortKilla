@@ -10,11 +10,13 @@ public enum HTTPPeek {
         public let server: String?
         public let contentType: String?
         public let title: String?
-        public let finalURL: String?
+        /// Where a redirect pointed; it is reported, never followed.
+        public let redirect: String?
 
-        /// "200 · text/html · Vite App"
+        /// "200 · text/html · Vite App", or "302 → https://…"
         public var summary: String {
-            [String(status), contentType?.split(separator: ";").first.map(String.init), title].compactMap { $0 }.joined(separator: " · ")
+            if let redirect, (300..<400).contains(status) { return "\(status), redirects to \(redirect)" }
+            return [String(status), contentType?.split(separator: ";").first.map(String.init), title].compactMap { $0 }.joined(separator: " · ")
         }
     }
 
@@ -23,35 +25,78 @@ public enum HTTPPeek {
         case notHTTP
     }
 
-    /// Reads at most 64 KB and waits at most 1.5 s; a dev server that hangs
-    /// must not hang the inspector.
-    public static func probe(port: Int, timeout: TimeInterval = 1.5, completion: @escaping (Swift.Result<Result, Failure>) -> Void) {
+    /// The most of a body worth reading for a title.
+    public static let byteLimit = 65536
+
+    /// Waits at most 1.5 s and reads at most `byteLimit` bytes; a dev server
+    /// that hangs or streams must not hang the inspector. Redirects are
+    /// reported, not followed: a local server must not send the app elsewhere.
+    public static func probe(port: Int, timeout: TimeInterval = 1.5, configuration: URLSessionConfiguration = .ephemeral,
+                             completion: @escaping (Swift.Result<Result, Failure>) -> Void) {
         guard let url = URL(string: "http://127.0.0.1:\(port)/") else { return completion(.failure(.notHTTP)) }
-        let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = timeout
         configuration.timeoutIntervalForResource = timeout
         configuration.httpShouldSetCookies = false
         var request = URLRequest(url: url)
         request.setValue("PortKilla", forHTTPHeaderField: "User-Agent")
-        request.setValue("bytes=0-65535", forHTTPHeaderField: "Range")
+        request.setValue("bytes=0-\(byteLimit - 1)", forHTTPHeaderField: "Range")
 
-        let session = URLSession(configuration: configuration)
-        let task = session.dataTask(with: request) { data, response, error in
+        let collector = Collector(completion: completion)
+        let session = URLSession(configuration: configuration, delegate: collector, delegateQueue: nil)
+        collector.session = session
+        session.dataTask(with: request).resume()
+    }
+
+    /// Gathers the response, stops at the byte limit, refuses redirects, and
+    /// answers exactly once.
+    final class Collector: NSObject, URLSessionDataDelegate {
+        private let completion: (Swift.Result<Result, Failure>) -> Void
+        private var response: HTTPURLResponse?
+        private var body = Data()
+        private var answered = false
+        var session: URLSession?
+
+        init(completion: @escaping (Swift.Result<Result, Failure>) -> Void) {
+            self.completion = completion
+        }
+
+        func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                        newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+            self.response = response
+            completionHandler(nil)
+        }
+
+        func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+                        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+            self.response = response as? HTTPURLResponse
+            completionHandler(.allow)
+        }
+
+        func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+            body.append(data)
+            if body.count >= HTTPPeek.byteLimit {
+                dataTask.cancel()
+            }
+        }
+
+        func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
             defer { session.finishTasksAndInvalidate() }
-            if let error {
+            guard !answered else { return }
+            answered = true
+            let cancelled = (error as? URLError)?.code == .cancelled
+            if let error, !cancelled {
                 return completion(.failure(.unreachable(error.localizedDescription)))
             }
-            guard let http = response as? HTTPURLResponse else { return completion(.failure(.notHTTP)) }
-            let body = String(decoding: (data ?? Data()).prefix(65536), as: UTF8.self)
+            guard let http = response else { return completion(.failure(.notHTTP)) }
+            let text = String(decoding: body.prefix(HTTPPeek.byteLimit), as: UTF8.self)
             completion(.success(Result(
                 status: http.statusCode,
                 server: http.value(forHTTPHeaderField: "Server"),
                 contentType: http.value(forHTTPHeaderField: "Content-Type"),
-                title: title(in: body),
-                finalURL: http.url?.absoluteString
+                title: HTTPPeek.title(in: text),
+                redirect: http.value(forHTTPHeaderField: "Location")
             )))
         }
-        task.resume()
     }
 
     /// The first <title>, whitespace collapsed, capped; nil when there is none.

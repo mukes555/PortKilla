@@ -54,8 +54,18 @@ public final class ProjectConfig {
         let ports = read(projectPath)
         lock.lock()
         cache[projectPath] = Entry(readAt: now, stamps: stamps, ports: ports)
+        // Projects that stopped listening a while ago drop out of the cache.
+        cache = cache.filter { now.timeIntervalSince($0.value.readAt) < Self.forgetAfter }
         lock.unlock()
         return ports
+    }
+
+    static let forgetAfter: TimeInterval = 10 * 60
+
+    var cachedProjectPaths: Set<String> {
+        lock.lock()
+        defer { lock.unlock() }
+        return Set(cache.keys)
     }
 
     /// The expected port closest to where the server actually runs, when

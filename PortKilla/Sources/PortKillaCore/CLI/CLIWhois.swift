@@ -68,10 +68,16 @@ public enum CLIWhois {
                       exitCode: dossiers.isEmpty ? CLIExit.notFound : CLIExit.ok)
     }
 
-    static func dossier(for port: PortInfo, caller: AgentOwner?, table: ProcessTable, cwd: String, ports: [PortInfo] = []) -> Dossier {
-        let decision = KillDecision.forAgent(caller: caller, target: port.agentOwner)
+    static func dossier(for port: PortInfo, caller: AgentOwner?, table: ProcessTable, cwd: String, ports: [PortInfo] = [],
+                        lease: Reservation? = nil) -> Dossier {
+        // The same two questions kill asks: the owner, then the lease.
         var reason: String?
-        if case .refuse(let why) = decision { reason = why }
+        if case .refuse(let why) = KillDecision.forAgent(caller: caller, target: port.agentOwner) {
+            reason = why
+        } else if case .refuse(let why) = KillDecision.forReservation(caller: caller, reservation: lease ?? port.reservation, asAgent: true) {
+            reason = why
+        }
+        let verdict = reason == nil ? KillDecision.verdict(caller: caller, target: port.agentOwner, forced: false) : "refused"
         let holder = port.expectedPort.flatMap { expected in ports.first { $0.port == expected.port } }
             .map { "\($0.processName) (PID \($0.pid)\($0.agentOwner.map { ", \($0.label)" } ?? ""))" }
         return Dossier(
@@ -86,7 +92,7 @@ public enum CLIWhois {
             expectedPort: port.expectedPort,
             expectedHeldBy: holder,
             evidence: evidence(for: port, table: table),
-            verdict: KillDecision.verdict(caller: caller, target: port.agentOwner, forced: false),
+            verdict: verdict,
             reason: reason,
             sameProject: CLIKill.isSameProject(port.projectPath, cwd: cwd)
         )

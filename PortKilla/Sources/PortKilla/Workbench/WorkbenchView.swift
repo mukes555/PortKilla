@@ -101,13 +101,14 @@ struct WorkbenchView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// Counts only: the groupings themselves are built by the pane that shows them.
     private func badge(for item: Section) -> Int {
         switch item {
         case .ports: return portManager.visiblePorts.count
-        case .projects: return WorkbenchModel.projects(from: portManager.visiblePorts).count
-        case .agents: return WorkbenchModel.agentSessions(from: portManager.visiblePorts).count
-        case .watchlist: return portManager.watchedPorts.union(portManager.guardedPorts).count + ReservationStore.appStore().all().count
-        case .history: return history.events.count
+        case .projects: return WorkbenchModel.projectCount(of: portManager.visiblePorts)
+        case .agents: return WorkbenchModel.sessionCount(of: portManager.visiblePorts)
+        case .watchlist: return portManager.watchedPorts.union(portManager.guardedPorts).count + ReservationStore.shared.recent().count
+        case .history: return history.history.count + history.refusals.count
         }
     }
 }

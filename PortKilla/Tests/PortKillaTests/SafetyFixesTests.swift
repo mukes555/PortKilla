@@ -30,11 +30,24 @@ final class SafetyFixesTests: XCTestCase {
     func testGuardStandsDownAfterRepeatedStrikes() {
         let manager = PortManager.forTesting()
         defer { manager.discardTestDefaults() }
-        XCTAssertFalse(manager.guardHasStruckOut(on: 3000))
-        XCTAssertFalse(manager.guardHasStruckOut(on: 3000))
-        XCTAssertFalse(manager.guardHasStruckOut(on: 3000))
-        XCTAssertTrue(manager.guardHasStruckOut(on: 3000), "fourth strike within the window stands the guard down")
-        XCTAssertFalse(manager.guardHasStruckOut(on: 3001), "ports are counted independently")
+        XCTAssertFalse(manager.registerGuardStrike(on: 3000))
+        XCTAssertFalse(manager.registerGuardStrike(on: 3000))
+        XCTAssertFalse(manager.registerGuardStrike(on: 3000))
+        XCTAssertFalse(manager.guardIsStruckOut(on: 3000), "three strikes are within the limit")
+        XCTAssertTrue(manager.registerGuardStrike(on: 3000), "fourth strike within the window stands the guard down")
+        XCTAssertTrue(manager.guardIsStruckOut(on: 3000))
+        XCTAssertFalse(manager.registerGuardStrike(on: 3001), "ports are counted independently")
+    }
+
+    func testAskingWhetherAGuardStruckOutRecordsNothing() {
+        // The watchlist row asks on every render; a question must never count
+        // as a strike (looking at a guard used to disarm it).
+        let manager = PortManager.forTesting()
+        defer { manager.discardTestDefaults() }
+        for _ in 0..<20 {
+            XCTAssertFalse(manager.guardIsStruckOut(on: 3000))
+        }
+        XCTAssertFalse(manager.registerGuardStrike(on: 3000), "the first real strike is still the first")
     }
 
     // MARK: - Update check distinguishes failure from "up to date"

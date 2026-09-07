@@ -112,5 +112,6 @@ enum PortSearch {
             || contains(port.containerName)
             || contains(port.agentOwner?.name)
             || contains(port.managedBy?.name)
+            || contains(port.reservation?.owner)
     }
 }

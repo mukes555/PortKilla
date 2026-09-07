@@ -111,6 +111,9 @@ which enforces a hard timeout and safe pipe handling.
 - `MetricsHistory`, one CPU and memory sample per process per scan, which
   only the sparkline views observe.
 
+`ReservationStore` keeps port leases in the shared preference domain, so
+the CLI and the app agree on who has claimed which free port.
+
 Kills go through [`ProcessKiller`](PortKilla/Sources/PortKillaCore/Services/ProcessKiller.swift),
 which verifies process identity before signalling (PID reuse protection) and
 never silently escalates SIGTERM to SIGKILL.
@@ -125,8 +128,9 @@ PortKilla/Sources/
     Models/            PortInfo, TestProcessInfo, PortHistory, DefaultsKey
     Services/          Scanning, attribution, KillDecision, killing, Docker,
                        redaction, login item, notifications, update check
-    CLI/               Argument parsing, commands, output schemas, MCP server,
-                       and the debug-only `__serve` test server
+    CLI/               Argument parsing, commands (kill, whois, reserve, exec,
+                       ...), output schemas, MCP server, and the debug-only
+                       `__serve` test server
   PortKilla/           The menu-bar app
     App/               AppDelegate (@main), RefusalWatcher (CLI refusals
                        become actionable notifications), DemoReel (dev-only)

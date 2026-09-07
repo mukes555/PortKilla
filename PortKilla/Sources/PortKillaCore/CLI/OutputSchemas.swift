@@ -4,7 +4,13 @@ import Foundation
 /// a test checks that what the encoders emit stays within it. Fields are only
 /// ever added within a schema version.
 public enum OutputSchemas {
-    public static let commands = ["list", "kill", "whois", "whoami", "wait", "history", "version", "doctor", "agents", "free-port"]
+    public static let commands = ["list", "kill", "whois", "whoami", "wait", "history", "version", "doctor", "agents", "free-port", "reserve", "release", "reservations"]
+
+    public static let reservation: [String: String] = [
+        "port": "the leased port", "owner": "holder's display name: an agent, or the user name", "sessionKey": "holder's session id, when known",
+        "sessionPid": "holder's session pid, when known", "reason": "what the lease is for, when given",
+        "createdAt": "ISO 8601", "expiresAt": "ISO 8601; the lease is gone after this",
+    ]
 
     public static let agentOwner: [String: String] = [
         "name": "agent display name, e.g. \"Claude Code\"",
@@ -23,6 +29,7 @@ public enum OutputSchemas {
         "bindAddress": "\"*\" / \"0.0.0.0\" / \"::\" mean all interfaces", "proto": "\"tcp\" | \"udp\"", "cpuPercent": "CPU between scans",
         "age": "human-readable process age, when known", "agentOwner": "AgentOwner or absent", "connections": "established TCP connections on this port",
         "managedBy": "ManagedRuntime or absent: a supervisor that would undo a plain kill",
+        "reservation": "Reservation or absent: a live lease on this port",
     ]
 
     public static let managedRuntime: [String: String] = [
@@ -83,15 +90,25 @@ public enum OutputSchemas {
         "version": ["schema": "1", "version": "semver", "bundleIdentifier": "com.mukes555.PortKilla", "installSource": "Homebrew | Applications (DMG) | development build", "architecture": "arm64 | x86_64"],
         "doctor": ["<object>": "label -> value, one entry per diagnostic line"],
         "agents": ["schema": "1", "caller": "AgentOwner of the caller, or absent", "agents": "[AgentStatus] the compatibility matrix against this machine (fields below)"],
-        "free-port": ["schema": "1", "port": "first free port, absent when none", "preferred": "requested port", "range": "\"A-B\"", "exitCode": "0 found, 1 none"],
+        "free-port": ["schema": "1", "port": "first free port that no one else has leased, absent when none", "preferred": "requested port", "range": "\"A-B\"", "exitCode": "0 found, 1 none"],
+        "reserve": [
+            "schema": "1", "action": "reserved | renewed | in-use | refused | failed", "port": "requested port",
+            "reservation": "the lease (yours, or the other holder's when refused)", "occupant": "PortInfo when the port is in use",
+            "reasons": "why not, when not", "exitCode": "0 leased, 1 in use, 3 someone else holds it",
+        ],
+        "release": ["schema": "1", "action": "released | refused | not-reserved", "port": "port", "reservation": "the lease released or refused", "exitCode": "0 released, 1 not reserved, 3 someone else holds it (use --force)"],
+        "reservations": ["<array>": "Reservation objects, live ones only, by port"],
     ]
 
     /// Sub-objects a command's output embeds, printed under it.
     static let nested: [String: [(String, [String: String])]] = [
-        "list": [("AgentOwner", agentOwner), ("ManagedRuntime", managedRuntime)],
+        "list": [("AgentOwner", agentOwner), ("ManagedRuntime", managedRuntime), ("Reservation", reservation)],
         "kill": [("AgentOwner", agentOwner), ("ManagedRuntime", managedRuntime)],
         "whoami": [("AgentOwner", agentOwner)],
         "whois": [("Dossier", whoisTarget), ("AttributionEvidence", evidence), ("AgentOwner", agentOwner), ("ManagedRuntime", managedRuntime)],
+        "reserve": [("Reservation", reservation)],
+        "release": [("Reservation", reservation)],
+        "reservations": [("Reservation", reservation)],
         "agents": [("AgentStatus", agentStatus), ("AgentOwner", agentOwner)],
     ]
 

@@ -3,7 +3,7 @@ import Foundation
 /// Static shell completions: the command set is small enough to spell out.
 /// `portkilla completions zsh > ~/.zfunc/_portkilla` (or let the cask do it).
 public enum CLICompletions {
-    public static let commands = ["list", "kill", "free", "wait", "open", "history", "whois", "whoami", "free-port", "schema", "doctor", "agent-docs", "mcp", "completions", "version", "help"]
+    public static let commands = ["list", "kill", "free", "wait", "open", "history", "whois", "whoami", "reserve", "release", "reservations", "exec", "free-port", "schema", "doctor", "agent-docs", "mcp", "completions", "version", "help"]
 
     public static func script(for shell: String) -> String? {
         switch shell {
@@ -26,6 +26,10 @@ public enum CLICompletions {
       'history:recent kills, who started and who stopped them'
       'whois:who started what is on a port, and why PortKilla thinks so'
       'whoami:how the friendly-fire guard identifies you'
+      'reserve:lease a free port for a while'
+      'release:give a lease back'
+      'reservations:live leases'
+      'exec:run a command with PORT set to a free, leased port'
       'free-port:first free port in a range'
       'schema:JSON output contracts'
       'doctor:environment and scanner diagnostics'
@@ -43,9 +47,13 @@ public enum CLICompletions {
       kill|free) _arguments '--force' '-9' '--dry-run' '--json' '--orphaned' '--pid[process id]:pid' ;;
       wait) _arguments '--json' '--timeout[seconds]:seconds' ;;
       free-port) _arguments '--json' '--prefer[port]:port' '--range[A-B]:range' ;;
-      schema) _values 'command' list kill whois whoami wait history version doctor agents free-port ;;
+      schema) _values 'command' list kill whois whoami wait history version doctor agents free-port reserve release reservations ;;
       history) _arguments '--json' '--port[port]:port' '--limit[count]:count' ;;
       whois) _arguments '--json' '--pid[process id]:pid' ;;
+      reserve) _arguments '--json' '--for[duration, e.g. 10m]:duration' '--reason[why]:reason' ;;
+      release) _arguments '--json' '--force' ;;
+      reservations) _arguments '--json' ;;
+      exec) _arguments '--port[port]:port' '--free-port' '--prefer[port]:port' '--range[A-B]:range' '--no-reserve' '--owner[name]:name' '--session[key]:key' ;;
       doctor) _arguments '--json' '--agents' ;;
       whoami|version) _arguments '--json' ;;
       mcp) _arguments '--setup[registration for an agent]:agent:(claude cursor codex)' ;;
@@ -65,9 +73,13 @@ public enum CLICompletions {
         kill|free) COMPREPLY=( $(compgen -W "--force -9 --dry-run --json --orphaned --pid" -- "$cur") ) ;;
         wait) COMPREPLY=( $(compgen -W "--json --timeout" -- "$cur") ) ;;
         free-port) COMPREPLY=( $(compgen -W "--json --prefer --range" -- "$cur") ) ;;
-        schema) COMPREPLY=( $(compgen -W "list kill whois whoami wait history version doctor agents free-port" -- "$cur") ) ;;
+        schema) COMPREPLY=( $(compgen -W "list kill whois whoami wait history version doctor agents free-port reserve release reservations" -- "$cur") ) ;;
         history) COMPREPLY=( $(compgen -W "--json --port --limit" -- "$cur") ) ;;
         whois) COMPREPLY=( $(compgen -W "--json --pid" -- "$cur") ) ;;
+        reserve) COMPREPLY=( $(compgen -W "--json --for --reason" -- "$cur") ) ;;
+        release) COMPREPLY=( $(compgen -W "--json --force" -- "$cur") ) ;;
+        reservations) COMPREPLY=( $(compgen -W "--json" -- "$cur") ) ;;
+        exec) COMPREPLY=( $(compgen -W "--port --free-port --prefer --range --no-reserve --owner --session" -- "$cur") ) ;;
         doctor) COMPREPLY=( $(compgen -W "--json --agents" -- "$cur") ) ;;
         whoami|version) COMPREPLY=( $(compgen -W "--json" -- "$cur") ) ;;
         mcp) COMPREPLY=( $(compgen -W "--setup claude cursor codex" -- "$cur") ) ;;
@@ -84,9 +96,13 @@ public enum CLICompletions {
     complete -c portkilla -n '__fish_seen_subcommand_from kill free' -l force -l dry-run -l json -l orphaned -l pid
     complete -c portkilla -n '__fish_seen_subcommand_from wait' -l json -l timeout
     complete -c portkilla -n '__fish_seen_subcommand_from free-port' -l json -l prefer -l range
-    complete -c portkilla -n '__fish_seen_subcommand_from schema' -a 'list kill whois whoami wait history version doctor agents free-port'
+    complete -c portkilla -n '__fish_seen_subcommand_from schema' -a 'list kill whois whoami wait history version doctor agents free-port reserve release reservations'
     complete -c portkilla -n '__fish_seen_subcommand_from history' -l json -l port -l limit
     complete -c portkilla -n '__fish_seen_subcommand_from whois' -l json -l pid
+    complete -c portkilla -n '__fish_seen_subcommand_from reserve' -l json -l for -l reason
+    complete -c portkilla -n '__fish_seen_subcommand_from release' -l json -l force
+    complete -c portkilla -n '__fish_seen_subcommand_from reservations' -l json
+    complete -c portkilla -n '__fish_seen_subcommand_from exec' -l port -l free-port -l prefer -l range -l no-reserve -l owner -l session
     complete -c portkilla -n '__fish_seen_subcommand_from doctor' -l json -l agents
     complete -c portkilla -n '__fish_seen_subcommand_from whoami version' -l json
     complete -c portkilla -n '__fish_seen_subcommand_from mcp' -l setup -a 'claude cursor codex'

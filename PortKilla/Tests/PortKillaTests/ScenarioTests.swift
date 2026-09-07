@@ -354,6 +354,72 @@ final class ScenarioTests: XCTestCase {
         XCTAssertTrue(text.stdout.contains("refused: other-bot via CLI"), text.stdout)
     }
 
+    func testLeasesKeepFreePortAndKillHonest() throws {
+        let port = 47043
+        let taken = try portkilla(["reserve", "\(port)", "--for", "5m", "--reason", "scenario", "--json"], owner: "scenario-bot", session: "s1")
+        XCTAssertEqual(taken.exitCode, 0, taken.stderr)
+        XCTAssertEqual((try json(taken.stdout) as? [String: Any])?["action"] as? String, "reserved")
+
+        // Another agent cannot take it, and free-port walks past it.
+        let refused = try portkilla(["reserve", "\(port)", "--json"], owner: "other-bot")
+        XCTAssertEqual(refused.exitCode, CLIExit.refused)
+        let skipped = try portkilla(["free-port", "--prefer", "\(port)", "--range", "\(port)-\(port + 3)"], owner: "other-bot")
+        XCTAssertEqual(skipped.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "\(port + 1)", skipped.stderr)
+        // The holder's own session gets it back from free-port and can renew.
+        let mine = try portkilla(["free-port", "--prefer", "\(port)", "--range", "\(port)-\(port + 3)"], owner: "scenario-bot", session: "s1")
+        XCTAssertEqual(mine.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "\(port)")
+        XCTAssertEqual((try json(try portkilla(["reserve", "\(port)", "--json"], owner: "scenario-bot", session: "s1").stdout) as? [String: Any])?["action"] as? String, "renewed")
+
+        // A server on the leased port: another agent's kill is refused because of the lease.
+        _ = try startServer(port: port, environment: [:])
+        let kill = try portkilla(["kill", "\(port)", "--dry-run", "--json"], owner: "other-bot")
+        XCTAssertEqual(kill.exitCode, CLIExit.refused)
+        XCTAssertTrue((try json(kill.stdout) as? [String: Any])?["reasons"].debugDescription.contains("reserved by scenario-bot") == true, kill.stdout)
+
+        XCTAssertEqual(try portkilla(["release", "\(port)"], owner: "other-bot").exitCode, CLIExit.refused)
+        XCTAssertEqual(try portkilla(["release", "\(port)"], owner: "scenario-bot", session: "s1").exitCode, 0)
+        XCTAssertEqual(try portkilla(["release", "\(port)"], owner: "scenario-bot").exitCode, CLIExit.notFound)
+    }
+
+    func testExecLeasesThePortAndAttributesTheServer() throws {
+        let port = 47044
+        let runner = Process()
+        runner.executableURL = Self.cli
+        runner.arguments = ["exec", "--port", "\(port)", "--owner", "exec-bot", "--session", "run-1", "--", Self.cli.path, "__serve", "\(port)"]
+        var env = ProcessInfo.processInfo.environment
+        for key in AgentSignatures.markerKeys { env[key] = nil }
+        env["PORTKILLA_DEFAULTS_SUITE"] = Self.suite
+        runner.environment = env
+        runner.standardError = FileHandle.nullDevice
+        try runner.run()
+        servers.append(runner)
+
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline, !(NativeScanner.allListeners() ?? []).contains(where: { $0.port == port }) {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        if let listener = (NativeScanner.allListeners() ?? []).first(where: { $0.port == port }) {
+            detachedPids.append(Int32(listener.pid))
+        }
+
+        let leases = try XCTUnwrap(try json(try portkilla(["reservations", "--json"], owner: nil).stdout) as? [[String: Any]])
+        let lease = try XCTUnwrap(leases.first { $0["port"] as? Int == port }, "exec leases the port for the run")
+        XCTAssertEqual(lease["owner"] as? String, "exec-bot")
+        XCTAssertEqual(lease["sessionKey"] as? String, "run-1")
+
+        let who = try portkilla(["whois", "\(port)", "--json"], owner: nil)
+        let target = try XCTUnwrap((try json(who.stdout) as? [String: Any])?["targets"] as? [[String: Any]]).first
+        XCTAssertEqual((target?["agentOwner"] as? [String: Any])?["name"] as? String, "exec-bot", "the child carries the identity exec exported")
+        XCTAssertEqual((target?["agentOwner"] as? [String: Any])?["sessionKey"] as? String, "run-1")
+
+        // Stopping exec stops the child and gives the lease back.
+        runner.terminate()
+        waitForExit(runner, timeout: 5)
+        XCTAssertTrue(ManagedRuntime.waitForPortsFree([port], timeout: 5).isEmpty, "the child died with exec")
+        let after = try XCTUnwrap(try json(try portkilla(["reservations", "--json"], owner: nil).stdout) as? [[String: Any]])
+        XCTAssertFalse(after.contains { $0["port"] as? Int == port }, "the lease is released")
+    }
+
     func testRealKillFreesThePortAndRecordsHistory() throws {
         let port = 47034
         let server = try startServer(port: port, environment: ["PORTKILLA_OWNER": "scenario-bot"])

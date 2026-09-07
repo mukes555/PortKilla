@@ -19,11 +19,16 @@ struct KillFlow {
         if port.connections > 0 {
             message += "\n\n\(port.connections) client\(port.connections == 1 ? " is" : "s are") connected to it right now."
         }
+        var leased = false
+        if case .warn(let reason) = KillDecision.forReservation(caller: nil, reservation: port.reservation, asAgent: false) {
+            message += "\n\n\(reason)"
+            leased = true
+        }
         let confirmed = confirmIfNeeded(
             title: "Kill Process on :\(port.port)?",
             message: message,
             owner: port.agentOwner,
-            alwaysAsk: port.connections > 0
+            alwaysAsk: port.connections > 0 || leased
         )
         guard confirmed else { return false }
         portManager.killPort(port, force: force, killTree: killTree)

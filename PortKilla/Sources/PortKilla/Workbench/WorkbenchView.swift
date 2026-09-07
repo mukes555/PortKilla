@@ -100,7 +100,7 @@ struct WorkbenchView: View {
         case .ports: return portManager.visiblePorts.count
         case .projects: return WorkbenchModel.projects(from: portManager.visiblePorts).count
         case .agents: return WorkbenchModel.agentSessions(from: portManager.visiblePorts).count
-        case .watchlist: return portManager.watchedPorts.union(portManager.guardedPorts).count
+        case .watchlist: return portManager.watchedPorts.union(portManager.guardedPorts).count + ReservationStore.appStore().all().count
         case .history: return history.events.count
         }
     }

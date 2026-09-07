@@ -94,6 +94,28 @@ public final class MCPServer {
             ]],
         ],
         [
+            "name": "free_port",
+            "description": "The first port that nothing listens on, nobody else has leased, and that can be bound right now, starting at prefer (default 3000).",
+            "inputSchema": ["type": "object", "properties": [
+                "prefer": ["type": "integer", "default": 3000],
+                "range_end": ["type": "integer"],
+            ]],
+        ],
+        [
+            "name": "reserve_port",
+            "description": "Lease a free port for a while (default 10 minutes) so free_port does not hand it to another agent and kill_port refuses others. Renews your own lease; fails when someone else holds it.",
+            "inputSchema": ["type": "object", "properties": [
+                "port": ["type": "integer"],
+                "minutes": ["type": "number", "default": 10],
+                "reason": ["type": "string"],
+            ], "required": ["port"]],
+        ],
+        [
+            "name": "release_port",
+            "description": "Give back a lease you took with reserve_port.",
+            "inputSchema": ["type": "object", "properties": ["port": ["type": "integer"]], "required": ["port"]],
+        ],
+        [
             "name": "whoami",
             "description": "How PortKilla identifies the calling agent for the friendly-fire guard.",
             "inputSchema": ["type": "object", "properties": [:]],
@@ -136,6 +158,36 @@ public final class MCPServer {
             let outcome = CLIKill.perform(options)
             let refused = outcome.report.exitCode == CLIExit.refused
             return toolResult(text: outcome.text, structured: outcome.report, isError: refused || outcome.report.exitCode == CLIExit.killFailed)
+
+        case "free_port":
+            let prefer = arguments["prefer"] as? Int ?? 3000
+            let end = arguments["range_end"] as? Int ?? min(prefer + 999, 65535)
+            guard PortManager.isValidPortNumber(prefer), PortManager.isValidPortNumber(end), end >= prefer else {
+                return toolResult(text: "free_port needs a valid prefer and range_end", structured: nil as String?, isError: true)
+            }
+            let listening = Set((NativeScanner.allListeners() ?? []).map(\.port))
+            let reserved = ReservationStore.appStore().portsReservedByOthers(for: PortKillaCLI.callerIdentity())
+            let port = PortKillaCLI.firstFreePort(prefer: prefer, range: prefer...end, listening: listening.union(reserved))
+            let report = PortKillaCLI.FreePortReport(port: port, preferred: prefer, range: "\(prefer)-\(end)", exitCode: port == nil ? CLIExit.notFound : CLIExit.ok)
+            return toolResult(text: port.map { "\($0)" } ?? "no free port in \(prefer)-\(end)", structured: report, isError: port == nil)
+
+        case "reserve_port":
+            guard let port = arguments["port"] as? Int, PortManager.isValidPortNumber(port) else {
+                return toolResult(text: "reserve_port needs a port", structured: nil as String?, isError: true)
+            }
+            var options = CLICommand.ReserveOptions(port: port)
+            options.ttl = (arguments["minutes"] as? Double ?? 10) * 60
+            options.reason = arguments["reason"] as? String
+            let report = CLIReserve.performReserve(options)
+            let text = report.reservation.map { "\(report.action) :\(port) as \($0.describedHolder), \($0.expiryDescription())" } ?? report.reasons.joined(separator: "\n")
+            return toolResult(text: text, structured: report, isError: report.exitCode != CLIExit.ok)
+
+        case "release_port":
+            guard let port = arguments["port"] as? Int, PortManager.isValidPortNumber(port) else {
+                return toolResult(text: "release_port needs a port", structured: nil as String?, isError: true)
+            }
+            let report = CLIReserve.performRelease(port: port, force: false)
+            return toolResult(text: "\(report.action) :\(port)", structured: report, isError: report.exitCode == CLIExit.refused)
 
         case "whois_port":
             var options = CLICommand.WhoisOptions()

@@ -24,6 +24,9 @@ extension WorkbenchInspector {
                 DetailRow(label: "Managed", value: "\(managed.label); \(managed.consequence)")
                 if let command = managed.stopCommand { DetailRow(label: "Stop with", value: command) }
             }
+            if let lease = port.reservation {
+                DetailRow(label: "Reserved", value: "by \(lease.describedHolder) \(lease.expiryDescription())" + (lease.reason.map { ", for \($0)" } ?? ""))
+            }
             if port.type.category == .web {
                 webRow
             }

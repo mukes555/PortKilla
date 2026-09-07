@@ -9,12 +9,10 @@ extension PortManager {
         "/System/", "/usr/libexec/", "/usr/sbin/", "/sbin/", "/Library/Apple/"
     ]
 
-    private static let currentUser = NSUserName()
-
     /// True for ports owned by other users (root, _daemons) or by binaries
     /// living in system locations.
     public func isSystemPort(_ port: PortInfo) -> Bool {
-        if port.user != Self.currentUser {
+        if port.user != currentUser {
             return true
         }
         return Self.systemPathPrefixes.contains { port.command.hasPrefix($0) }

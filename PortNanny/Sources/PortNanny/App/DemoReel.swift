@@ -18,10 +18,11 @@ extension AppDelegate {
         demoDefaults.set(true, forKey: DefaultsKey.didDismissHotkeyTip)
         let manager = PortManager(defaults: demoDefaults, history: HistoryManager(defaults: demoDefaults), autoStart: false)
         manager.hasCompletedFirstScan = true // no live scan: skip the loading state
+        manager.currentUser = DemoData.user
         manager.hideSystemProcesses = true
-        manager.activeTests = [Self.demoTest]
+        manager.activeTests = [DemoData.test]
         manager.watchedPorts = [3000]
-        manager.activePorts = Self.demoPorts(includePort3000: true)
+        manager.activePorts = DemoData.ports(includePort3000: true)
         manager.clock.lastUpdated = Date()
 
         let selectedNodeId = manager.activePorts.first { $0.port == 3000 }!.id
@@ -44,7 +45,7 @@ extension AppDelegate {
         addFrame(search: "3000", selected: selectedNodeId, delay: 1.6)
 
         // 5. Kill: port gone, toast up, search shows the "free" answer state
-        manager.activePorts = Self.demoPorts(includePort3000: false)
+        manager.activePorts = DemoData.ports(includePort3000: false)
         manager.toastMessage = "Killed :3000"
         addFrame(search: "3000", delay: 2.0)
 
@@ -93,57 +94,6 @@ extension AppDelegate {
             CGImageDestinationAddImage(destination, cgImage, frameProperties)
         }
         CGImageDestinationFinalize(destination)
-    }
-
-    // MARK: - Demo data
-
-    private static let demoTest = TestProcessInfo(
-        pid: 4101, processName: "node", command: "node node_modules/.bin/vitest --watch",
-        memoryUsage: "312MB", memorySizeKB: 319_488, cpuPercent: 46, type: .vitest
-    )
-
-    private static func demoPorts(includePort3000: Bool) -> [PortInfo] {
-        var ports: [PortInfo] = [
-            PortInfo(
-                port: 5173, pid: 2002, processName: "node",
-                command: "node /Users/dev/projects/my-app/node_modules/.bin/vite",
-                user: NSUserName(), memoryUsage: "84MB", memorySizeKB: 86_016, type: .nodejs,
-                projectName: "my-app", projectPath: "/Users/dev/projects/my-app",
-                bindAddress: "127.0.0.1", cpuPercent: 1.2, age: "2h 14m"
-            ),
-            PortInfo(
-                port: 8080, pid: 2003, processName: "api-server",
-                command: "/Users/dev/projects/api/bin/api-server --dev",
-                user: NSUserName(), memoryUsage: "24MB", memorySizeKB: 24_576, type: .go,
-                projectName: "api", projectPath: "/Users/dev/projects/api",
-                bindAddress: "*", cpuPercent: 0.4, age: "3h 2m"
-            ),
-            PortInfo(
-                port: 5432, pid: 903, processName: "postgres",
-                command: "/opt/homebrew/opt/postgresql@16/bin/postgres -D /opt/homebrew/var/postgresql@16",
-                user: NSUserName(), memoryUsage: "6MB", memorySizeKB: 6_144, type: .database,
-                bindAddress: "127.0.0.1", cpuPercent: 0.0, age: "2d 5h"
-            ),
-            PortInfo(
-                port: 6379, pid: 2005, processName: "com.docker.backend",
-                command: "/Applications/Docker.app/Contents/MacOS/com.docker.backend",
-                user: NSUserName(), memoryUsage: "120MB", memorySizeKB: 122_880, type: .docker,
-                containerName: "redis-dev", bindAddress: "127.0.0.1", cpuPercent: 0.8, age: "1d 3h"
-            ),
-        ]
-
-        if includePort3000 {
-            ports.insert(PortInfo(
-                port: 3000, pid: 2001, processName: "node",
-                command: "node /Users/dev/projects/my-app/node_modules/.bin/next dev",
-                user: NSUserName(), memoryUsage: "512MB", memorySizeKB: 524_288, type: .nodejs,
-                projectName: "my-app", projectPath: "/Users/dev/projects/my-app",
-                children: [PortInfo.ProcessInfo(pid: 2010, name: "node", command: "next-render-worker")],
-                bindAddress: "*", cpuPercent: 12.5, age: "4h 32m"
-            ), at: 0)
-        }
-
-        return ports
     }
 }
 #endif

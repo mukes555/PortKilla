@@ -81,7 +81,8 @@ screen-recording permission needed. CI uses the first one as a smoke test.
 | Env var | Effect |
 |---|---|
 | `PORTNANNY_SNAPSHOT=/path.png` | Render a view offscreen to PNG, then quit |
-| `PORTNANNY_SNAPSHOT_VIEW=main\|bulkkill\|protected\|detail\|settings\|workbench\|workbench-live\|tour` | Which view to render (default `main`); `workbench-live` opens the real window for a moment so the sidebar material draws |
+| `PORTNANNY_SNAPSHOT_VIEW=main\|bulkkill\|protected\|detail\|settings\|workbench\|workbench-live\|tour\|avatar\|menubar\|menubar-strip` | Which view to render (default `main`); `workbench-live` opens the real window for a moment so the sidebar material draws; `menubar-strip` is a made-up menu bar around the glyph |
+| `PORTNANNY_SNAPSHOT_DATA=demo` | Render the scripted demo ports instead of this Mac's. Every README image uses it: a live scan shows your projects, paths, and user name |
 | `PORTNANNY_SNAPSHOT_SEARCH="kill 3000"` | Seed the popover's search field, so the palette bar renders |
 | `PORTNANNY_SNAPSHOT_SECTION=ports\|projects\|agents\|watchlist\|history` | Which Workbench view to render |
 | `PORTNANNY_SNAPSHOT_SELECT=3000` | Select that port in the Workbench, so the inspector renders |
@@ -97,15 +98,19 @@ screen-recording permission needed. CI uses the first one as a smoke test.
 sleeps forever; the scenario tests use it as a stand-in for an agent's dev
 server, with whatever environment the scenario needs.
 
-Regenerate the README assets:
+Regenerate the README assets. Always with `PORTNANNY_SNAPSHOT_DATA=demo`
+(the scripted ports in DemoData.swift): a live scan would put your project
+folders, paths, and user name into the repository, and the images are public.
 
 ```bash
 # main-view screenshot
-PORTNANNY_DEFAULTS_SUITE=com.mukes555.PortNanny.readme PORTNANNY_MASCOT_DIR=assets/mascot PORTNANNY_SNAPSHOT=../assets/screenshot-dark.png PORTNANNY_SNAPSHOT_APPEARANCE=dark PORTNANNY_SNAPSHOT_DENSITY=advanced PORTNANNY_SNAPSHOT_WATCH=3000 .build/debug/PortNanny
+PORTNANNY_SNAPSHOT_DATA=demo PORTNANNY_DEFAULTS_SUITE=com.mukes555.PortNanny.readme PORTNANNY_MASCOT_DIR=assets/mascot PORTNANNY_SNAPSHOT=../assets/screenshot-dark.png PORTNANNY_SNAPSHOT_APPEARANCE=dark PORTNANNY_SNAPSHOT_DENSITY=advanced PORTNANNY_SNAPSHOT_WATCH=3000 .build/debug/PortNanny
 # (the same with APPEARANCE=light for screenshot-light.png; PORTNANNY_SNAPSHOT_SEARCH="kill 4400" for palette.png)
 # the Workbench: a real window, photographed (needs Screen Recording permission
 # for the debug binary; the offscreen render leaves the sidebar column blank)
-PORTNANNY_DEFAULTS_SUITE=com.mukes555.PortNanny.readme PORTNANNY_MASCOT_DIR=assets/mascot PORTNANNY_SNAPSHOT=../assets/workbench.png PORTNANNY_SNAPSHOT_VIEW=workbench-live PORTNANNY_SNAPSHOT_SELECT=3000 .build/debug/PortNanny
+PORTNANNY_SNAPSHOT_DATA=demo PORTNANNY_DEFAULTS_SUITE=com.mukes555.PortNanny.readme PORTNANNY_MASCOT_DIR=assets/mascot PORTNANNY_SNAPSHOT=../assets/workbench.png PORTNANNY_SNAPSHOT_VIEW=workbench-live PORTNANNY_SNAPSHOT_SELECT=3000 .build/debug/PortNanny
+# the menu bar strip (made up, so no other app's icon ends up in the README)
+PORTNANNY_SNAPSHOT_DATA=demo PORTNANNY_DEFAULTS_SUITE=com.mukes555.PortNanny.readme PORTNANNY_MASCOT_DIR=assets/mascot PORTNANNY_SNAPSHOT=../assets/menubar.png PORTNANNY_SNAPSHOT_VIEW=menubar-strip .build/debug/PortNanny
 # animated demo
 PORTNANNY_DEFAULTS_SUITE=com.mukes555.PortNanny.readme PORTNANNY_MASCOT_DIR=assets/mascot PORTNANNY_DEMO_GIF=../assets/demo.gif .build/debug/PortNanny
 ```

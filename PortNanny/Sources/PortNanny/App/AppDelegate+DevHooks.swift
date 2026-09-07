@@ -19,9 +19,19 @@ extension AppDelegate {
 
         if let snapshotPath = env["PORTNANNY_SNAPSHOT"] {
             let viewName = env["PORTNANNY_SNAPSHOT_VIEW"] ?? "main"
-            // Render what an open popover shows: full scans, not the light
-            // hidden-state ones.
-            portManager.setUIVisible(true)
+            if portManager.usesDemoData {
+                // PORTNANNY_SNAPSHOT_DATA=demo: the scripted ports instead of
+                // this Mac's, so a README image never shows a real project.
+                portManager.hasCompletedFirstScan = true
+                portManager.currentUser = DemoData.user
+                portManager.activeTests = [DemoData.test]
+                portManager.activePorts = DemoData.ports(includePort3000: true)
+                portManager.clock.lastUpdated = Date()
+            } else {
+                // Render what an open popover shows: full scans, not the light
+                // hidden-state ones.
+                portManager.setUIVisible(true)
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
                 self?.writeSnapshot(of: viewName, to: snapshotPath)
                 // The live capture quits on its own once it has drawn.
@@ -107,6 +117,8 @@ extension AppDelegate {
             return
         case "avatar":
             view = NSHostingView(rootView: AvatarSheet())
+        case "menubar-strip":
+            view = NSHostingView(rootView: MenuBarStrip())
         case "menubar":
             // Both menu bar glyphs, active and idle, on a light and a dark
             // bar, at 4x and at their real size.
@@ -203,5 +215,31 @@ struct AvatarSheet: View {
         }
         .padding(24)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+}
+
+/// PORTNANNY_SNAPSHOT_VIEW=menubar-strip: a made-up menu bar around the glyph
+/// and its count, for the README. A photograph of the real bar would show
+/// whatever else is running on this Mac.
+struct MenuBarStrip: View {
+    var body: some View {
+        HStack(spacing: 14) {
+            HStack(spacing: 4) {
+                Image(nsImage: MenuBarGlyph.image(.mono, active: true))
+                    .renderingMode(.template)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: MenuBarGlyph.pointSize, height: MenuBarGlyph.pointSize)
+                Text("22").font(.system(size: 13, weight: .medium))
+            }
+            Image(systemName: "wifi")
+            Image(systemName: "battery.75percent")
+            Text("Mon 9:41").font(.system(size: 13))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 12)
+        .frame(width: 210, height: 28)
+        .background(LinearGradient(colors: [Color(red: 0.56, green: 0.33, blue: 0.64), Color(red: 0.44, green: 0.24, blue: 0.53)],
+                                   startPoint: .leading, endPoint: .trailing))
     }
 }

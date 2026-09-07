@@ -16,20 +16,19 @@ struct WorkbenchPortsTable: View {
         return filtered.sorted(using: sortOrder)
     }
 
-    private var selectedPort: PortInfo? {
-        rows.first { $0.id == selection }
-    }
-
     var body: some View {
+        // Filtered and sorted once per render, shared by the toolbar and the table.
+        let rows = self.rows
         VStack(spacing: 0) {
-            toolbar
+            toolbar(rows: rows)
             Divider()
-            table
+            table(rows: rows)
         }
     }
 
-    private var toolbar: some View {
-        HStack(spacing: 10) {
+    private func toolbar(rows: [PortInfo]) -> some View {
+        let selectedPort = rows.first { $0.id == selection }
+        return HStack(spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").foregroundColor(.secondary)
                 TextField("Filter ports, processes, projects, agents", text: $searchText)
@@ -62,7 +61,7 @@ struct WorkbenchPortsTable: View {
         .padding(10)
     }
 
-    private var table: some View {
+    private func table(rows: [PortInfo]) -> some View {
         Table(rows, selection: $selection, sortOrder: $sortOrder) {
             TableColumn("Port", value: \.port) { port in
                 HStack(spacing: 4) {
@@ -95,8 +94,7 @@ struct WorkbenchPortsTable: View {
 
             TableColumn("Agent", value: \.agentLabel) { port in
                 if let agent = port.agentOwner {
-                    Chip(icon: agent.sessionEnded ? "moon.zzz" : "sparkles", text: agent.label,
-                         tint: agent.isLiveAgentSession ? .chipTeal : .secondary)
+                    AgentChip(agent: agent)
                 }
             }
             .width(min: 96, ideal: 104)

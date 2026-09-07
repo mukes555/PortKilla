@@ -34,8 +34,11 @@ struct PaletteAction: Equatable {
             }
             return PaletteAction(kind: .command(first), title: first.rawValue, detail: nil, icon: first.icon, isDestructive: first == .quit)
         case .freePort(let near):
-            let listening = Set(ports.map(\.port))
-            guard let free = PortKillaCLI.firstFreePort(prefer: near, range: near...min(near + 999, 65535), listening: listening) else {
+            // Leases others hold are taken too; no bind probe here, this runs
+            // on every render, and the CLI probes when it matters.
+            let leased = ReservationStore.shared.recent().filter { !$0.isHeld(by: nil) }.map(\.port)
+            let listening = Set(ports.map(\.port)).union(leased)
+            guard let free = PortKillaCLI.firstFreePort(prefer: near, range: near...min(near + 999, 65535), listening: listening, probe: false) else {
                 return PaletteAction(kind: .nothing, title: "No free port near \(near)", detail: nil, icon: "xmark.circle", isDestructive: false)
             }
             return PaletteAction(kind: .copyFreePort(free), title: ":\(free) is free", detail: "Return copies it", icon: "number", isDestructive: false)

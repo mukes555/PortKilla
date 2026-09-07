@@ -7,6 +7,10 @@ import Foundation
 /// project's passive charter. Only responses go to stdout; everything else
 /// goes to stderr or the unified log.
 public final class MCPServer {
+    /// Refused, failed, still running, or blocked by a supervisor: the port
+    /// is not free, so the tool result is an error the agent must read.
+    static let killNotDone: Set<Int32> = [CLIExit.refused, CLIExit.killFailed, CLIExit.stillRunning, CLIExit.managed]
+
     public static let protocolVersion = "2024-11-05"
 
     public func serve() -> Int32 {
@@ -156,8 +160,7 @@ public final class MCPServer {
                 return toolResult(text: "kill_port needs a port or a pid", structured: nil as String?, isError: true)
             }
             let outcome = CLIKill.perform(options)
-            let refused = outcome.report.exitCode == CLIExit.refused
-            return toolResult(text: outcome.text, structured: outcome.report, isError: refused || outcome.report.exitCode == CLIExit.killFailed)
+            return toolResult(text: outcome.text, structured: outcome.report, isError: Self.killNotDone.contains(outcome.report.exitCode))
 
         case "free_port":
             let prefer = arguments["prefer"] as? Int ?? 3000

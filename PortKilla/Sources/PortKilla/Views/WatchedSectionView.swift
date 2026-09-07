@@ -63,9 +63,7 @@ struct WatchedSectionView: View {
                         Chip(icon: "wifi.exclamationmark", text: "exposed", tint: .chipOrange)
                     }
                     if let agent = active.agentOwner {
-                        Chip(icon: agent.sessionEnded ? "moon.zzz" : "sparkles", text: agent.name,
-                             tint: agent.isLiveAgentSession ? .chipTeal : .secondary)
-                            .help(agent.detail)
+                        AgentChip(agent: agent)
                     }
                 } else {
                     Circle()

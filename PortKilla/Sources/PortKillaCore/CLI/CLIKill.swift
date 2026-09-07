@@ -75,36 +75,16 @@ public enum CLIKill {
             let exit = options.freeIsSuccess && options.pid == nil ? CLIExit.ok : CLIExit.notFound
             return finish(&report, action: exit == CLIExit.ok ? "already-free" : "not-found", exit: exit, text: what)
         }
-        report.guardVerdict = targets.map { KillDecision.verdict(caller: scan.caller, target: $0.agentOwner, forced: options.force) }
-            .first { $0 != "allowed" } ?? "allowed"
         var notes: [String] = []
         if scan.caller == nil, let owned = targets.first(where: { $0.agentOwner?.isLiveAgentSession == true }) {
             // The guard can't protect what it can't compare against.
             notes.append("note: :\(owned.port) belongs to \(owned.agentOwner?.described ?? "an agent") and you are not identified as an agent, so the friendly-fire guard did not apply. Run `portkilla whoami` or export PORTKILLA_OWNER=<name>.")
         }
 
-        // The guard: refuse the whole request if any target is another agent's.
-        let guardRefusals = targets.compactMap { target -> String? in
-            if case .refuse(let reason) = KillDecision.forAgent(caller: scan.caller, target: target.agentOwner) {
-                // A hint, not a permission: the caller's own project is where
-                // its own unclaimed server would be, and also the user's.
-                let location = isSameProject(target.projectPath, cwd: cwd) ? " (it runs in your working directory)" : ""
-                return ":\(target.port) (PID \(target.pid)) is \(reason)\(location)"
-            }
-            return nil
-        }
-        // A lease by someone else counts like an owner: agents are refused.
-        let leases = ReservationStore.appStore()
-        let reservedRefusals = targets.compactMap { target -> String? in
-            if case .refuse(let why) = KillDecision.forReservation(caller: scan.caller, reservation: leases.reservation(for: target.port), asAgent: true) {
-                return ":\(target.port) (PID \(target.pid)) is \(why)"
-            }
-            return nil
-        }
-        let refusals = guardRefusals + reservedRefusals
-        if !reservedRefusals.isEmpty {
-            report.guardVerdict = options.force ? "overridden" : "refused"
-        }
+        let plans = targets.map { plan(for: $0, force: options.force, table: scan.table, ports: scan.ports) }
+        let judged = plans.flatMap { [$0.target] + $0.alsoStops }
+        let refusals = Self.refusals(caller: scan.caller, plans: plans, leases: ReservationStore.appStore(), cwd: cwd)
+        report.guardVerdict = verdict(caller: scan.caller, targets: judged, refused: !refusals.isEmpty, forced: options.force)
         report.reasons = refusals
         if !refusals.isEmpty && !options.force {
             let text = refusals.joined(separator: "\n")
@@ -121,7 +101,6 @@ public enum CLIKill {
             report.reasons = []
         }
 
-        let plans = targets.map { plan(for: $0, force: options.force, table: scan.table) }
         if options.dryRun {
             let blocked = plans.compactMap(\.blocked)
             if !blocked.isEmpty {
@@ -131,8 +110,9 @@ public enum CLIKill {
             let text = plans.map { plan -> String in
                 let target = plan.target
                 let clients = target.connections > 0 ? " It has \(target.connections) connected client\(target.connections == 1 ? "" : "s")." : ""
+                let also = plan.alsoStops.isEmpty ? "" : " That also stops " + plan.alsoStops.map { ":\($0.port) (\($0.processName), PID \($0.pid))" }.joined(separator: ", ") + "."
                 if let substitution = plan.substitution {
-                    return "Would \(substitution).\(clients)"
+                    return "Would \(substitution).\(clients)\(also)"
                 }
                 return "Would \(options.force ? "force-" : "")kill \(target.processName) (PID \(target.pid)) on :\(target.port).\(clients)"
             }.joined(separator: "\n")
@@ -146,6 +126,27 @@ public enum CLIKill {
         return outcome
     }
 
+    /// The guard: the whole request is refused if any target, or anything a
+    /// supervisor would take down with it, is another agent's or leased.
+    static func refusals(caller: AgentOwner?, plans: [Plan], leases: ReservationStore, cwd: String) -> [String] {
+        let asked = Set(plans.map(\.target.pid))
+        let judged = plans.flatMap { [$0.target] + $0.alsoStops }
+        return judged.flatMap { target -> [String] in
+            let subject = ":\(target.port) (PID \(target.pid))" + (asked.contains(target.pid) ? "" : ", which its supervisor would take down too,")
+            var reasons: [String] = []
+            if case .refuse(let reason) = KillDecision.forAgent(caller: caller, target: target.agentOwner) {
+                // A hint, not a permission: the caller's own project is where
+                // its own unclaimed server would be, and also the user's.
+                let location = isSameProject(target.projectPath, cwd: cwd) ? " (it runs in your working directory)" : ""
+                reasons.append("\(subject) is \(reason)\(location)")
+            }
+            if case .refuse(let why) = KillDecision.forReservation(caller: caller, reservation: leases.reservation(for: target.port), asAgent: true) {
+                reasons.append("\(subject) is \(why)")
+            }
+            return reasons
+        }
+    }
+
     /// A refusal is an event the person may want to act on: it goes into
     /// History and, at once, to the running app.
     private static func recordRefusals(_ targets: [PortInfo], caller: AgentOwner?) {
@@ -155,6 +156,17 @@ public enum CLIKill {
             store.addRefusal(port: target.port, processName: target.processName, owner: target.agentOwner?.name, refused: actor)
             RefusalSignal.post(RefusalSignal.Payload(port: target.port, processName: target.processName, owner: target.agentOwner?.name, caller: actor))
         }
+    }
+
+    /// "refused", "overridden", "allowed", or why the guard could not judge:
+    /// an agent must tell "checked and cleared" from "could not check".
+    static func verdict(caller: AgentOwner?, targets: [PortInfo], refused: Bool, forced: Bool) -> String {
+        if refused { return forced ? "overridden" : "refused" }
+        if caller == nil, targets.contains(where: { $0.agentOwner?.isLiveAgentSession == true }) { return "not-evaluated: caller unknown" }
+        if targets.allSatisfy({ $0.agentOwner == nil }) {
+            return caller == nil ? "not-evaluated: target unknown" : (caller?.confidence == .agent ? "allowed" : "allowed: caller is not an agent")
+        }
+        return "allowed"
     }
 
     /// Every distinct process on the port, the one pid asked for, or with

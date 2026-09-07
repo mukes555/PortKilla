@@ -46,9 +46,17 @@ final class KillDecisionTests: XCTestCase {
         XCTAssertTrue(KillDecision.forAgent(caller: AgentOwner(name: "my-bot", source: .declared), target: nil).isRefusal, "declared owners are agents")
     }
 
-    func testSameNameUnknownSessionAllowed() {
+    func testANameAloneCannotClaimAKnownSession() {
+        // Anyone can export a name; a target whose session is known is only
+        // the caller's when the caller can show the same session.
         let declared = AgentOwner(name: "Claude Code", source: .declared)
-        XCTAssertEqual(KillDecision.forAgent(caller: declared, target: agent("Claude Code", session: 55)), .allow)
+        if case .refuse(let reason) = KillDecision.forAgent(caller: declared, target: agent("Claude Code", session: 55)) {
+            XCTAssertTrue(reason.contains("PORTKILLA_SESSION"), reason)
+        } else {
+            XCTFail("a declared name must not claim a session it cannot show")
+        }
+        XCTAssertEqual(KillDecision.forAgent(caller: declared, target: agent("Claude Code")), .allow, "two unknown sessions of one tool are not known to differ")
+        XCTAssertEqual(KillDecision.forAgent(caller: agent("Claude Code", session: 55), target: agent("Claude Code")), .allow, "nothing on the target to compare against")
     }
 
     func testEndedSessionNeverBlocks() {

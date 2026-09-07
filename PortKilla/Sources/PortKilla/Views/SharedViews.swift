@@ -104,6 +104,19 @@ struct Chip: View {
     }
 }
 
+/// The agent chip, the friendly-fire signal: a live session is teal, an
+/// ended session or a plain editor terminal is grey (safe to kill). One
+/// view, so the rule cannot drift between the popover and the Workbench.
+struct AgentChip: View {
+    let agent: AgentOwner
+
+    var body: some View {
+        Chip(icon: agent.sessionEnded ? "moon.zzz" : "sparkles", text: agent.label,
+             tint: agent.isLiveAgentSession ? .chipTeal : .secondary)
+            .help(agent.detail)
+    }
+}
+
 private extension Chip {
     /// Blending goes through AppKit; done once per tint, not once per render.
     static var darkenedLabels: [Color: Color] = [:]

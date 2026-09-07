@@ -45,11 +45,20 @@ public struct Reservation: Codable, Equatable, Identifiable {
     }
 
     /// True when `caller` is the one who took the lease: same name, and the
-    /// same session where both know theirs.
+    /// same session when the lease has one. A lease without a session (a
+    /// person's, or a declared owner with nothing to attach) matches by name.
     public func isHeld(by caller: AgentOwner?, user: String = Reservation.currentUser) -> Bool {
         guard let caller else { return owner == user }
         guard caller.name == owner else { return false }
-        return caller.isSameSession(as: holder) ?? true
+        guard holder.hasKnownSession else { return true }
+        return caller.isSameSession(as: holder) == true
+    }
+
+    /// A lease pinned to a process that has exited is over, whatever its
+    /// clock says; `exec` leases carry exec's own pid for exactly this.
+    public func isOrphaned() -> Bool {
+        guard let pid = sessionPid else { return false }
+        return kill(pid_t(pid), 0) != 0 && errno == ESRCH
     }
 
     /// "until 12:30 (8m left)"
@@ -57,7 +66,7 @@ public struct Reservation: Codable, Equatable, Identifiable {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         let left = max(0, Int(expiresAt.timeIntervalSince(now)))
-        return "until \(formatter.string(from: expiresAt)) (\(Reservation.describe(seconds: left)) left)"
+        return "until \(formatter.string(from: expiresAt)) (\(ElapsedFormat.humanize(seconds: left) ?? "0s") left)"
     }
 
     enum CodingKeys: String, CodingKey {
@@ -107,27 +116,59 @@ public struct Reservation: Codable, Equatable, Identifiable {
         return number * (multipliers[unit] ?? 60)
     }
 
-    public static func describe(seconds: Int) -> String {
-        if seconds >= 3600 { return "\(seconds / 3600)h \((seconds % 3600) / 60)m" }
-        if seconds >= 60 { return "\(seconds / 60)m" }
-        return "\(seconds)s"
-    }
 }
 
 /// The leases, pruned of expired ones on every read, in the shared domain.
 public final class ReservationStore {
     private let defaults: UserDefaults
+    /// Every portkilla process that touches the same domain takes the same
+    /// advisory lock around its read-modify-write, so two agents leasing at
+    /// the same instant cannot both win a port or lose each other's leases.
+    private let lockPath: String
 
-    public init(defaults: UserDefaults) {
+    public init(defaults: UserDefaults, lockName: String = UUID().uuidString) {
         self.defaults = defaults
+        self.lockPath = (NSTemporaryDirectory() as NSString).appendingPathComponent("portkilla-\(lockName).lock")
     }
 
     public static func appStore() -> ReservationStore {
-        ReservationStore(defaults: UserDefaults(suiteName: HistoryManager.appSuiteName) ?? .standard)
+        let suite = HistoryManager.appSuiteName
+        return ReservationStore(defaults: UserDefaults(suiteName: suite) ?? .standard, lockName: suite)
     }
 
+    /// One instance for the app: the scanner, the views, and the badges read
+    /// through it, and it remembers the last read for a couple of seconds so
+    /// a render never decodes JSON on the main thread.
+    public static let shared = appStore()
+    private var cached: (at: Date, leases: [Reservation])?
+    private let cacheLock = NSLock()
+    static let cacheLifetime: TimeInterval = 2
+
     public func all(now: Date = Date()) -> [Reservation] {
-        load().filter { !$0.isExpired(at: now) }.sorted { $0.port < $1.port }
+        load().filter { !$0.isExpired(at: now) && !$0.isOrphaned() }.sorted { $0.port < $1.port }
+    }
+
+    /// `all()` as of the last couple of seconds; cheap enough for a view body.
+    public func recent(now: Date = Date()) -> [Reservation] {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if let cached, now.timeIntervalSince(cached.at) < Self.cacheLifetime {
+            return cached.leases
+        }
+        let leases = all(now: now)
+        cached = (now, leases)
+        return leases
+    }
+
+    private func withLock<T>(_ body: () throws -> T) rethrows -> T {
+        let descriptor = open(lockPath, O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
+        guard descriptor >= 0 else { return try body() }
+        flock(descriptor, LOCK_EX)
+        defer {
+            flock(descriptor, LOCK_UN)
+            close(descriptor)
+        }
+        return try body()
     }
 
     public func reservation(for port: Int, now: Date = Date()) -> Reservation? {
@@ -141,14 +182,16 @@ public final class ReservationStore {
     /// Takes or renews a lease. A live lease held by someone else conflicts.
     @discardableResult
     public func reserve(_ reservation: Reservation, by caller: AgentOwner?, now: Date = Date()) throws -> Reservation {
-        var current = all(now: now)
-        if let existing = current.first(where: { $0.port == reservation.port }), !existing.isHeld(by: caller) {
-            throw Conflict.heldByAnother(existing)
+        try withLock {
+            var current = all(now: now)
+            if let existing = current.first(where: { $0.port == reservation.port }), !existing.isHeld(by: caller) {
+                throw Conflict.heldByAnother(existing)
+            }
+            current.removeAll { $0.port == reservation.port }
+            current.append(reservation)
+            save(current)
+            return reservation
         }
-        current.removeAll { $0.port == reservation.port }
-        current.append(reservation)
-        save(current)
-        return reservation
     }
 
     /// Drops a lease. Another holder's lease needs `force`. False when there
@@ -160,12 +203,14 @@ public final class ReservationStore {
     }
 
     public func release(port: Int, by caller: AgentOwner?, force: Bool = false, now: Date = Date()) -> ReleaseOutcome {
-        var current = all(now: now)
-        guard let existing = current.first(where: { $0.port == port }) else { return .none }
-        if !existing.isHeld(by: caller) && !force { return .heldByAnother(existing) }
-        current.removeAll { $0.port == port }
-        save(current)
-        return .released(existing)
+        withLock {
+            var current = all(now: now)
+            guard let existing = current.first(where: { $0.port == port }) else { return .none }
+            if !existing.isHeld(by: caller) && !force { return .heldByAnother(existing) }
+            current.removeAll { $0.port == port }
+            save(current)
+            return .released(existing)
+        }
     }
 
     /// Ports another live lease keeps off the table for `caller`.
@@ -180,6 +225,9 @@ public final class ReservationStore {
     }
 
     private func save(_ reservations: [Reservation]) {
+        cacheLock.lock()
+        cached = nil
+        cacheLock.unlock()
         if reservations.isEmpty {
             defaults.removeObject(forKey: DefaultsKey.reservations)
         } else if let data = try? JSONEncoder().encode(reservations) {

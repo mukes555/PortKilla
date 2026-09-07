@@ -69,6 +69,8 @@ extension CLICommand {
         var json = false
         var port: Int?
         var limit = 20
+        /// Refusals too; kills only by default, so `killedBy` keeps meaning who killed.
+        var all = false
     }
 
     public struct ListOptions: Equatable {

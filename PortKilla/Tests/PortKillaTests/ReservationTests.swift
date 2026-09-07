@@ -18,8 +18,10 @@ final class ReservationTests: XCTestCase {
         UserDefaults.standard.removePersistentDomain(forName: suite)
     }
 
-    private let claude = AgentOwner(name: "Claude Code", sessionPid: 10, sessionKey: "abc", source: .processTree)
-    private let otherClaude = AgentOwner(name: "Claude Code", sessionPid: 20, sessionKey: "def", source: .processTree)
+    // A lease pinned to a session pid ends with that process, so the sessions
+    // here are processes that outlive the test: this one and its parent.
+    private let claude = AgentOwner(name: "Claude Code", sessionPid: Int(getpid()), sessionKey: "abc", source: .processTree)
+    private let otherClaude = AgentOwner(name: "Claude Code", sessionPid: Int(getppid()), sessionKey: "def", source: .processTree)
     private let cursor = AgentOwner(name: "Cursor", sessionPid: 30, source: .processTree)
 
     private func lease(_ port: Int, by owner: AgentOwner, ttl: TimeInterval = 600, at date: Date = Date()) -> Reservation {
@@ -36,8 +38,8 @@ final class ReservationTests: XCTestCase {
         XCTAssertNil(Reservation.parseTTL("0m"))
         let long = Reservation(port: 1, owner: "x", ttl: 10 * 86400)
         XCTAssertEqual(long.expiresAt.timeIntervalSince(long.createdAt), Reservation.maxTTL, "a day at most")
-        XCTAssertEqual(Reservation.describe(seconds: 3900), "1h 5m")
-        XCTAssertEqual(Reservation.describe(seconds: 90), "1m")
+        XCTAssertEqual(ElapsedFormat.humanize(seconds: 3900), "1h 5m")
+        XCTAssertEqual(ElapsedFormat.humanize(seconds: 90), "1m")
     }
 
     func testLeasesRoundTripWithISODates() throws {
@@ -57,7 +59,9 @@ final class ReservationTests: XCTestCase {
         XCTAssertTrue(mine.isHeld(by: claude))
         XCTAssertFalse(mine.isHeld(by: otherClaude), "another session of the same tool is a stranger")
         XCTAssertFalse(mine.isHeld(by: cursor))
-        XCTAssertTrue(mine.isHeld(by: AgentOwner(name: "Claude Code", source: .declared)), "an unknown session is not known to be different")
+        XCTAssertFalse(mine.isHeld(by: AgentOwner(name: "Claude Code", source: .declared)), "a lease pinned to a session needs that session, not just the name")
+        let nameOnly = Reservation(port: 3002, owner: "Claude Code")
+        XCTAssertTrue(nameOnly.isHeld(by: AgentOwner(name: "Claude Code", source: .declared)), "a lease without a session matches by name")
         XCTAssertFalse(mine.isHeld(by: nil, user: "mbp"))
         let personal = Reservation(port: 3001, owner: "mbp")
         XCTAssertTrue(personal.isHeld(by: nil, user: "mbp"))

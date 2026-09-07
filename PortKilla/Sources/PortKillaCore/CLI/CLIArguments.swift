@@ -31,6 +31,7 @@ public enum CLICommand: Equatable {
     case reservations(json: Bool)
     case exec(ExecOptions)
     case drift(json: Bool)
+    case setup(SetupOptions)
     case completions(shell: String)
     case mcp
     case freePort(prefer: Int, range: ClosedRange<Int>, json: Bool)
@@ -41,63 +42,6 @@ public enum CLICommand: Equatable {
     /// Print the registration for one agent (or all when nil).
     case mcpSetup(agent: String?)
 
-    public struct AgentDocsOptions: Equatable {
-        /// Append the snippet to `file` (default CLAUDE.md) instead of printing it.
-        var write = false
-        var file = "CLAUDE.md"
-        /// Print a Claude Code PreToolUse hook that redirects lsof-based kills.
-        var claudeHook = false
-    }
-
-    public struct ReserveOptions: Equatable {
-        var port: Int
-        var ttl: TimeInterval = Reservation.defaultTTL
-        var reason: String?
-        var json = false
-    }
-
-    public struct ExecOptions: Equatable {
-        var port: Int?
-        var prefer = 3000
-        var range: ClosedRange<Int> = 3000...3999
-        var reserve = true
-        var owner: String?
-        var session: String?
-        var command: [String] = []
-    }
-
-    public struct WhoisOptions: Equatable {
-        var port: Int?
-        var pid: Int?
-        var json = false
-    }
-
-    public struct HistoryOptions: Equatable {
-        var json = false
-        var port: Int?
-        var limit = 20
-    }
-
-    public struct ListOptions: Equatable {
-        var json = false
-        var mine = false
-        var unowned = false
-        var orphaned = false
-        var agent: String?
-    }
-
-    public struct KillOptions: Equatable {
-        var port: Int?
-        var pid: Int?
-        var force = false
-        var dryRun = false
-        var json = false
-        /// `free`: an already-free port is success, so `portkilla free 3000
-        /// && npm run dev` works under `set -e`.
-        var freeIsSuccess = false
-        /// Every server whose agent session has ended, instead of a port.
-        var orphaned = false
-    }
 }
 
 /// Strict argument parsing: an option the command doesn't know is an error,
@@ -156,6 +100,7 @@ public enum CLIArguments {
             if rest.isEmpty { return .success(.reservations(json: false)) }
             return rest == ["--json"] ? .success(.reservations(json: true)) : .failure(.unknownOption(rest[0], command: "reservations"))
         case "exec": return parseExec(rest)
+        case "setup": return parseSetup(rest)
         case "drift":
             if rest.isEmpty { return .success(.drift(json: false)) }
             return rest == ["--json"] ? .success(.drift(json: true)) : .failure(.unknownOption(rest[0], command: "drift"))
@@ -285,6 +230,27 @@ public enum CLIArguments {
         return .success(.whois(options))
     }
 
+    private static func parseSetup(_ args: [String]) -> Result<CLICommand, ParseError> {
+        var options = CLICommand.SetupOptions()
+        var index = 0
+        while index < args.count {
+            let arg = args[index]
+            if arg == "--yes" || arg == "-y" {
+                options.yes = true
+            } else if arg == "--project" {
+                guard index + 1 < args.count else { return .failure(.missingValue(arg)) }
+                index += 1
+                options.project = args[index]
+            } else if let value = valueOf(option: "--project", in: arg) {
+                options.project = value
+            } else {
+                return .failure(.unknownOption(arg, command: "setup"))
+            }
+            index += 1
+        }
+        return .success(.setup(options))
+    }
+
     private static func parseDoctor(_ args: [String]) -> Result<CLICommand, ParseError> {
         var json = false
         var agents = false
@@ -377,6 +343,10 @@ public enum CLIArguments {
                 options.file = args[index]
             } else if let value = valueOf(option: "--file", in: arg) {
                 options.file = value
+            } else if arg.hasPrefix("--"), let target = CLICommand.RuleTarget(rawValue: String(arg.dropFirst(2))) {
+                // --cursor writes the rule file that tool reads.
+                options.write = true
+                options.file = target.path
             } else {
                 return .failure(.unknownOption(arg, command: "agent-docs"))
             }

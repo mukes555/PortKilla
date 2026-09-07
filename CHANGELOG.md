@@ -14,6 +14,20 @@ release, rename it to the version and date.
 <!-- next -->
 
 ### Added
+- **`portkilla setup`** walks through setting up the AI tools on this Mac:
+  checks `portkilla` on PATH, and for each tool found offers to register
+  the MCP server with Claude Code (`claude mcp add`), write its rule file
+  into the project, and shows the rest (Cursor's mcp.json, Codex's
+  config.toml, shell completions). Asks before every change; `--yes`
+  applies all; without a terminal it prints the plan.
+- **Rule files for every tool.** `portkilla agent-docs --cursor` writes
+  `.cursor/rules/portkilla.mdc` (with frontmatter), `--windsurf` writes
+  `.windsurf/rules/portkilla.md`, `--codex` writes AGENTS.md, `--claude`
+  CLAUDE.md; folders are created, existing files keep their content.
+- **A Claude Code plugin** in `plugins/portkilla`: the MCP server, the lsof
+  hook, a `portkilla` skill, and `/portkilla:ports` and `/portkilla:free`
+  commands. Install with `claude plugin marketplace add mukes555/PortKilla`
+  then `claude plugin install portkilla@portkilla`.
 - **Leases on free ports.** `portkilla reserve <port> [--for 10m]
   [--reason ...]` takes a lease that `free-port` and `exec` skip for
   everyone else and that makes `kill` refuse other agents on the port

@@ -104,6 +104,15 @@ PORTKILLA_SNAPSHOT=../assets/screenshot.png .build/debug/PortKilla
 PORTKILLA_DEMO_GIF=../assets/demo.gif .build/debug/PortKilla
 ```
 
+## The Claude Code plugin
+
+`plugins/portkilla` is a Claude Code plugin (manifest in `.claude-plugin/`,
+MCP registration in `.mcp.json`, the lsof hook in `hooks/`, the skill in
+`skills/portkilla/SKILL.md`, slash commands in `commands/`), listed by the
+marketplace file at the repository root. A test keeps the skill's command
+list in step with `portkilla agent-docs`. Try a working copy with
+`claude --plugin-dir plugins/portkilla`.
+
 ## Coding style
 
 The project favors code written **for human brains**: early returns over nested

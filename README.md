@@ -131,6 +131,26 @@ portkilla kill 3000
 *   **Open Project in your editor**: VS Code, Cursor, Zed, Sublime Text, and Trae are auto-detected.
 *   **Configurable hotkey**: Settings → Shortcuts (default ⌥⌘P).
 
+## 🤖 Set up your agents
+
+```bash
+portkilla setup                      # asks, tool by tool; --yes applies everything
+```
+
+Or piece by piece: `portkilla agent-docs --claude|--codex|--cursor|--windsurf`
+writes the rule file each tool reads (CLAUDE.md, AGENTS.md,
+`.cursor/rules/portkilla.mdc`, `.windsurf/rules/portkilla.md`);
+`portkilla mcp --setup` prints the MCP registration for Claude Code, Cursor,
+and Codex. Claude Code users can take the plugin instead, which bundles the
+MCP server, the lsof hook, a skill, and `/portkilla:ports` and `/portkilla:free`:
+
+```bash
+claude plugin marketplace add mukes555/PortKilla
+claude plugin install portkilla@portkilla
+```
+
+The full compatibility matrix, tool by tool, is in [docs/AGENTS.md](docs/AGENTS.md).
+
 ## ⌨️ CLI Companion
 
 The app bundle ships a standalone `portkilla` CLI (no AppKit, starts in a few

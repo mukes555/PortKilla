@@ -9,12 +9,16 @@ struct MascotView: View {
         case happy
         case sleepy
         case onGuard = "guard"
+        case searching
 
+        /// Drawn when the artwork is missing, so a build without the assets
+        /// still says the same thing.
         var symbol: String {
             switch self {
             case .happy: return "face.smiling"
             case .sleepy: return "moon.zzz"
             case .onGuard: return "hand.raised"
+            case .searching: return "magnifyingglass"
             }
         }
     }

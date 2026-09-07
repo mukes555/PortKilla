@@ -16,27 +16,38 @@ as the reference image:
 
 ## Two rules
 
-**Transparent background, or pure white.** `scripts/make_artwork.swift
-mascot` keys out white by flood-filling from the edges, so a white studio
-background works and interior whites (the headband, the pinafore, her
-teeth) survive. Any other colour has to be keyed out by hand.
+**Transparent background, or pure white.** Either works.
+`scripts/make_artwork.swift mascot` keeps an alpha channel the source
+already has, and otherwise keys out white by flood-filling from the edges,
+so interior whites (the headband, the pinafore, her teeth) survive. Any
+other colour has to be keyed out by hand.
 
 **No text anywhere.** No wordmark, no signature, no generator watermark.
-The 2.1 artwork shipped with a watermark in the corner that had to be
-cropped out, which is why the mascots are 393 px wide instead of square.
+Prompt 8 is the only exception, because the banner is meant to carry the
+wordmark.
+
+**Expect a watermark anyway.** Most image tools stamp the bottom-right
+corner whatever the prompt says, and it survives into the app: the 2.1
+artwork shipped with one. Check every file before importing it. Where the
+corner is a flat colour, painting the mark out is safe; where it is not,
+regenerate. The mascots came through clean because a watermark on a
+transparent corner keys out with the background.
 
 ## What each file feeds
 
+Four files ship inside the app, as `MascotView.Mood` cases:
+
 | File | Size | Where it shows | What constrains it |
 | --- | --- | --- | --- |
-| `assets/AppIcon.icns` | 1024 square | Dock, Finder, About, the colour menu bar icon | Corners get rounded off |
+| `PortNanny/assets/AppIcon.icns` | 1024 square | Dock, Finder, About, the colour menu bar icon | Corners get rounded off |
 | `PortNanny/assets/mascot/quokka-happy.png` | 512 tall | Header avatar, menu bar glyph, tour | Load-bearing, see below |
-| `PortNanny/assets/mascot/quokka-sleepy.png` | 512 tall | "All quiet: nothing is listening" | Read at 88 to 96 pt |
-| `PortNanny/assets/mascot/quokka-guard.png` | 512 tall | Guard badge, tour, README | Read at **22 pt** |
+| `PortNanny/assets/mascot/quokka-sleepy.png` | 512 tall | "All quiet: nothing is listening" | Read at 88 pt |
+| `PortNanny/assets/mascot/quokka-guard.png` | 512 tall | Guard badge, tour | Read at **22 pt** |
+| `PortNanny/assets/mascot/quokka-searching.png` | 512 tall | "No results found" | Read at 96 pt |
 
-The three mascot files are currently the same image, so the sleepy empty
-state and the guard badge both show a waving quokka. Prompts 3 and 4 fix
-that.
+Three more are documentation only, so they never reach the bundle:
+`assets/banner.png` heads the README, `assets/refused.png` illustrates the
+agent guard, and `assets/busy.png` sits beside the opening.
 
 ### Why `quokka-happy.png` is load-bearing
 
@@ -123,9 +134,7 @@ chin. Bold simple shapes and strong contrast: this is shown as a badge
 
 ### 5. Refused
 
-Not wired up yet. It belongs on the refusal notification and in the
-Workbench's Agents view, where one agent has been stopped from killing
-another's server.
+README only, in the section about the agent guard.
 
 ```
 Same character and style as the reference: a quokka with warm brown fur,
@@ -142,7 +151,7 @@ keeping two things apart.
 
 ### 6. Busy
 
-Not wired up yet. For the Workbench when many ports are listening.
+README only, beside the opening.
 
 ```
 Same character and style as the reference: a quokka with warm brown fur,
@@ -158,7 +167,8 @@ the screens. Focused and cheerful, on top of it rather than swamped.
 
 ### 7. Nothing found
 
-Not wired up yet. For a search that matches no port.
+Becomes `quokka-searching.png`, shown when a search matches no port, in
+both the popover and the Workbench.
 
 ```
 Same character and style as the reference: a quokka with warm brown fur,
@@ -174,9 +184,7 @@ a little amused, not disappointed.
 
 ### 8. README banner
 
-The banner is generated from the happy mascot by
-`swift scripts/make_logo.swift`, which sets the wordmark and tagline in the
-app's own typeface. Use this only to replace that with a drawn one.
+The one prompt that wants text. Becomes `assets/banner.png`.
 
 ```
 Same character and style as the reference: a quokka with warm brown fur,
@@ -201,6 +209,21 @@ cd PortNanny
 swift scripts/make_artwork.swift mascot ~/Downloads/happy.png assets/mascot/quokka-happy.png
 swift scripts/make_artwork.swift mascot ~/Downloads/sleepy.png assets/mascot/quokka-sleepy.png
 swift scripts/make_artwork.swift mascot ~/Downloads/guard.png assets/mascot/quokka-guard.png
+swift scripts/make_artwork.swift mascot ~/Downloads/nothing-found.png assets/mascot/quokka-searching.png
+```
+
+It prints "source already keyed" when it kept the file's own alpha. If it
+does not say that for a transparent source, stop: it has recomputed the
+alpha from whiteness, which makes the background opaque black and the
+pinafore see-through.
+
+The three documentation images are copied in as they are, since nothing
+crops them:
+
+```bash
+cp ~/Downloads/refused.png assets/refused.png
+cp ~/Downloads/busy.png assets/busy.png
+cp ~/Downloads/banner.png assets/banner.png
 ```
 
 The icon is masked to the macOS rounded square and written as an `.icns`,
@@ -210,10 +233,9 @@ with a 256 px copy for the README:
 swift scripts/make_artwork.swift icon ~/Downloads/icon-1024.png assets/AppIcon.icns ../assets/icon.png
 ```
 
-Then the banner, and a look at the results:
+Then a look at the results:
 
 ```bash
-swift scripts/make_logo.swift
 PORTNANNY_SNAPSHOT_DATA=demo PORTNANNY_MASCOT_DIR=assets/mascot PORTNANNY_SNAPSHOT=/tmp/avatar.png PORTNANNY_SNAPSHOT_VIEW=avatar .build/debug/PortNanny
 PORTNANNY_SNAPSHOT_DATA=demo PORTNANNY_MASCOT_DIR=assets/mascot PORTNANNY_SNAPSHOT=/tmp/glyphs.png PORTNANNY_SNAPSHOT_VIEW=menubar .build/debug/PortNanny
 ```

@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.png">
-    <img src="assets/logo-light.png" width="820" alt="PortNanny: the macOS port manager that knows whose server it is">
-  </picture>
+  <img src="assets/banner.png" width="820" alt="PortNanny: the macOS port manager that knows whose server it is">
 </p>
 
 <p align="center">
@@ -38,6 +35,8 @@
 </p>
 
 ## Three moments
+
+<img src="assets/busy.png" width="300" align="right" alt="The quokka at a desk in front of six monitors of scrolling code">
 
 - **`EADDRINUSE: address already in use`**, and nothing tells you what has the port or whether stopping it is safe.
 - **A server that will not stay dead.** pm2, launchd, Docker, nodemon, `next dev`, `uvicorn --reload`: a plain kill is undone a second later.
@@ -98,7 +97,7 @@ portnanny completions zsh            # also bash and fish
 
 ## For AI agents
 
-<img src="PortNanny/assets/mascot/quokka-guard.png" width="150" align="right" alt="The quokka on guard">
+<img src="assets/refused.png" width="180" align="right" alt="The quokka standing in front of a server rack, one paw out to hold someone back">
 
 Running Claude Code, Codex, Cursor, and friends side by side means `kill -9 $(lsof -ti:3000)` eventually kills the wrong server. PortNanny attributes every dev server to the agent session that started it, from two passive signals: the process tree, and the environment markers agents leave on their children (`CLAUDECODE=1` and the like), which survive `nohup`, pm2, and reparenting. No launcher, no registry.
 

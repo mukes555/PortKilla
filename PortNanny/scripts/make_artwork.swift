@@ -85,10 +85,35 @@ func makeIcon(source: String, output: String, preview: String?) {
 
 // MARK: - Mascot
 
+/// The size that keeps the aspect ratio at the asked-for height.
+func scaledSize(width: Int, height: Int, to target: Int) -> CGSize {
+    let scale = Double(target) / Double(height)
+    return CGSize(width: Int(Double(width) * scale), height: target)
+}
+
 /// Alpha for a pixel by how close it is to white, so the flood-filled edge
 /// fades instead of cutting the fur.
 func whiteness(_ r: UInt8, _ g: UInt8, _ b: UInt8) -> Double {
     Double(min(r, g, b)) / 255
+}
+
+/// True when the source already carries an alpha channel worth keeping.
+/// Guessing one from whiteness instead would make its background opaque
+/// black (transparent draws as black here) and turn the white pinafore
+/// see-through. A white studio photograph has no transparent pixels at all,
+/// so any real amount of them settles it. The border alone would not: a
+/// server rack or a desk that runs off the edge of the frame is opaque
+/// there and still transparent everywhere around the subject.
+func isAlreadyKeyed(_ pixels: UnsafeMutablePointer<UInt8>, width: Int, height: Int) -> Bool {
+    var transparent = 0
+    var sampled = 0
+    for y in stride(from: 0, to: height, by: 3) {
+        for x in stride(from: 0, to: width, by: 3) {
+            sampled += 1
+            if pixels[(y * width + x) * 4 + 3] < 8 { transparent += 1 }
+        }
+    }
+    return sampled > 0 && Double(transparent) / Double(sampled) > 0.05
 }
 
 func makeMascot(source: String, output: String, height: Int) {
@@ -98,6 +123,12 @@ func makeMascot(source: String, output: String, height: Int) {
     ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: high))
     guard let data = ctx.data else { fail("no pixel data") }
     let pixels = data.bindMemory(to: UInt8.self, capacity: width * high * 4)
+
+    if isAlreadyKeyed(pixels, width: width, height: high) {
+        writePNG(scaled(ctx.makeImage()!, to: scaledSize(width: width, height: high, to: height)), to: output)
+        print("wrote \(output) (source already keyed)")
+        return
+    }
 
     // Flood fill from every border pixel through near-white pixels.
     var background = [Bool](repeating: false, count: width * high)
@@ -146,8 +177,7 @@ func makeMascot(source: String, output: String, height: Int) {
         pixels[offset + 3] = UInt8(alpha * 255)
     }
     let cut = ctx.makeImage()!
-    let scale = Double(height) / Double(high)
-    let result = scaled(cut, to: CGSize(width: Int(Double(width) * scale), height: height))
+    let result = scaled(cut, to: scaledSize(width: width, height: high, to: height))
     writePNG(result, to: output)
     print("wrote \(output) (\(result.width)x\(result.height))")
 }

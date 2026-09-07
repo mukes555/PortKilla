@@ -1,8 +1,8 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
-  "name": "portkilla",
-  "title": "PortKilla",
-  "description": "See and kill processes occupying ports, powered by the PortKilla CLI",
+  "name": "portnanny",
+  "title": "PortNanny",
+  "description": "See and kill processes occupying ports, powered by the PortNanny CLI",
   "icon": "icon.png",
   "author": "mukes555",
   "categories": ["Developer Tools"],
@@ -11,7 +11,7 @@
     {
       "name": "kill-port",
       "title": "Kill Port",
-      "subtitle": "PortKilla",
+      "subtitle": "PortNanny",
       "description": "List listening ports and kill the one in your way",
       "mode": "view"
     }

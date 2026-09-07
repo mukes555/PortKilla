@@ -1,12 +1,12 @@
 {
-  "name": "portkilla",
+  "name": "portnanny",
   "owner": { "name": "mukes555", "url": "https://github.com/mukes555" },
-  "metadata": { "description": "PortKilla's Claude Code plugin: the MCP server, the lsof hook, and the port skill." },
+  "metadata": { "description": "PortNanny's Claude Code plugin: the MCP server, the lsof hook, and the port skill." },
   "plugins": [
     {
-      "name": "portkilla",
-      "source": "./plugins/portkilla",
-      "description": "Free ports through PortKilla, which knows which AI agent owns each server.",
+      "name": "portnanny",
+      "source": "./plugins/portnanny",
+      "description": "Free ports through PortNanny, which knows which AI agent owns each server.",
       "category": "productivity"
     }
   ]

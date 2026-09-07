@@ -1,4 +1,4 @@
-<!-- Thanks for contributing to PortKilla! -->
+<!-- Thanks for contributing to PortNanny! -->
 
 ## What & why
 
@@ -10,7 +10,7 @@
 - [ ] `swift test --disable-sandbox` passes
 - [ ] `swift build` is clean (no new warnings)
 - [ ] Updated `CHANGELOG.md` under an "Unreleased" heading (if user-facing)
-- [ ] For UI changes: verified with a snapshot (`PORTKILLA_SNAPSHOT=…`) or a screenshot
+- [ ] For UI changes: verified with a snapshot (`PORTNANNY_SNAPSHOT=…`) or a screenshot
 
 ## Notes for reviewers
 

@@ -1,12 +1,12 @@
-# PortKilla and AI agents
+# PortNanny and AI agents
 
-How PortKilla tells agents apart, what each tool gets, and what to export
-when PortKilla cannot see you. `portkilla doctor --agents` prints the same
+How PortNanny tells agents apart, what each tool gets, and what to export
+when PortNanny cannot see you. `portnanny doctor --agents` prints the same
 matrix checked against your machine.
 
 ## The rules
 
-- **Agents are refused, people are warned.** `portkilla kill` refuses (exit
+- **Agents are refused, people are warned.** `portnanny kill` refuses (exit
   3) to stop a server owned by a different agent, by a different running
   session of the same agent, or by nobody it can name when the caller is an
   agent (the app's Settings > Agents can turn that last part off for this
@@ -19,12 +19,12 @@ matrix checked against your machine.
   tool is "another agent" to the guard.
 - **Ended sessions block nobody.** When the session that started a server
   has exited, the server shows as "(ended)" and anyone may stop it.
-  `portkilla kill --orphaned` sweeps all of them.
+  `portnanny kill --orphaned` sweeps all of them.
 - **Editor terminals are people.** A server started from a VS Code, Cursor,
   Windsurf, Trae, or Zed terminal never locks a port. A `kill` typed in one
   is treated as a person's, except against another agent's running server,
   where it needs `--force`: the editor's own agent leaves no marker.
-- **Unknown stays unknown.** PortKilla never guesses an owner. `portkilla
+- **Unknown stays unknown.** PortNanny never guesses an owner. `portnanny
   whois <port>` shows the evidence it used: the ancestry it walked, the
   markers it found, and what was declared.
 
@@ -50,48 +50,50 @@ tools' documentation or source and are marked as such.
 
 ## Setting the tools up
 
-`portkilla setup` finds the tools on this Mac and offers each step: register
+`portnanny setup` finds the tools on this Mac and offers each step: register
 the MCP server with Claude Code, write the rule file each tool reads into
 the project, and print what has to be pasted by hand. Nothing is written or
 run without a yes (`--yes` says yes to everything).
 
 | Tool | Rules | MCP |
 |---|---|---|
-| Claude Code | `portkilla agent-docs --claude` (CLAUDE.md), or the plugin: `claude plugin marketplace add mukes555/PortKilla && claude plugin install portkilla@portkilla` | `claude mcp add portkilla -- portkilla mcp`, or the plugin |
-| Codex CLI | `portkilla agent-docs --codex` (AGENTS.md) | `[mcp_servers.portkilla]` in `~/.codex/config.toml` (`portkilla mcp --setup codex`) |
-| Cursor | `portkilla agent-docs --cursor` (`.cursor/rules/portkilla.mdc`) | `.cursor/mcp.json` (`portkilla mcp --setup cursor`) |
-| Windsurf | `portkilla agent-docs --windsurf` (`.windsurf/rules/portkilla.md`) | its MCP settings, same command and args |
-| Gemini CLI, Copilot CLI, OpenCode, Aider | `portkilla agent-docs --write --file <their rules file>` | where they read MCP servers from, same command and args |
+| Claude Code | `portnanny agent-docs --claude` (CLAUDE.md), or the plugin: `claude plugin marketplace add mukes555/PortNanny && claude plugin install portnanny@portnanny` | `claude mcp add portnanny -- portnanny mcp`, or the plugin |
+| Codex CLI | `portnanny agent-docs --codex` (AGENTS.md) | `[mcp_servers.portnanny]` in `~/.codex/config.toml` (`portnanny mcp --setup codex`) |
+| Cursor | `portnanny agent-docs --cursor` (`.cursor/rules/portnanny.mdc`) | `.cursor/mcp.json` (`portnanny mcp --setup cursor`) |
+| Windsurf | `portnanny agent-docs --windsurf` (`.windsurf/rules/portnanny.md`) | its MCP settings, same command and args |
+| Gemini CLI, Copilot CLI, OpenCode, Aider | `portnanny agent-docs --write --file <their rules file>` | where they read MCP servers from, same command and args |
 
 The plugin's hook turns `kill -9 $(lsof -ti:PORT)` into a nudge toward
-`portkilla free`; `portkilla agent-docs --claude-hook` prints the same hook
+`portnanny free`; `portnanny agent-docs --claude-hook` prints the same hook
 for a settings.json.
 
-## Declare yourself: PORTKILLA_OWNER and PORTKILLA_SESSION
+## Declare yourself: PORTNANNY_OWNER and PORTNANNY_SESSION
 
 Any tool, wrapper, or person can label what it starts:
 
 ```bash
-export PORTKILLA_OWNER=copilot          # who (aliases: claude, codex, cursor, ...; any name works)
-export PORTKILLA_SESSION=$(uuidgen)     # which session, for tools that export none
+export PORTNANNY_OWNER=copilot          # who (aliases: claude, codex, cursor, ...; any name works)
+export PORTNANNY_SESSION=$(uuidgen)     # which session, for tools that export none
 npm run dev
 ```
 
 A declared owner wins over the process tree, for the server and for the
 caller, so a bot started from inside another agent's session keeps its own
-name. `PORTKILLA_SESSION` is any string that is unique per session; two
+name. `PORTNANNY_SESSION` is any string that is unique per session; two
 servers with different values belong to different sessions, and a caller
 without one is "unknown session", which never blocks a same-name kill.
+The names from before 2.1, `PORTKILLA_OWNER` and `PORTKILLA_SESSION`, are
+read as well, so nothing written for PortKilla needs to change.
 
 What to export, by tool:
 
 - **Claude Code**: nothing. It already stamps every process.
-- **Codex CLI, Gemini CLI**: `PORTKILLA_SESSION`, so detached servers stay
+- **Codex CLI, Gemini CLI**: `PORTNANNY_SESSION`, so detached servers stay
   tied to the session that started them.
-- **Copilot CLI, OpenCode, Aider**: `PORTKILLA_OWNER` and
-  `PORTKILLA_SESSION`; nothing of theirs survives reparenting.
+- **Copilot CLI, OpenCode, Aider**: `PORTNANNY_OWNER` and
+  `PORTNANNY_SESSION`; nothing of theirs survives reparenting.
 - **Copilot in VS Code, Cascade in Windsurf, Trae's agent**:
-  `PORTKILLA_OWNER` in the terminal they run in, or they count as the
+  `PORTNANNY_OWNER` in the terminal they run in, or they count as the
   editor's terminal (a person).
 
 ## Leases: reserve a port before you use it
@@ -100,40 +102,40 @@ Two agents about to start servers can race for the same free port. A lease
 settles it:
 
 ```bash
-portkilla exec --free-port --prefer 3000 -- npm run dev   # port, PORT, lease, identity, in one go
-portkilla reserve 3000 --for 10m --reason "e2e run"       # by hand; release with portkilla release 3000
-portkilla reservations                                     # who holds what, until when
+portnanny exec --free-port --prefer 3000 -- npm run dev   # port, PORT, lease, identity, in one go
+portnanny reserve 3000 --for 10m --reason "e2e run"       # by hand; release with portnanny release 3000
+portnanny reservations                                     # who holds what, until when
 ```
 
 `free-port` and `exec` skip ports others have leased; `kill` refuses other
 agents on a leased port (exit 3) until the lease expires (a day at most)
-or is released. `exec` also exports `PORTKILLA_OWNER` and
-`PORTKILLA_SESSION`, so a server started through it is attributed to you
+or is released. `exec` also exports `PORTNANNY_OWNER` and
+`PORTNANNY_SESSION`, so a server started through it is attributed to you
 even when your tool leaves no marker.
 
 ## What agents should run
 
-- `portkilla free <port>` to stop what is on a port (exit 0 if already
-  free), `portkilla kill <port> --dry-run --json` to see the decision first.
-- `portkilla whois <port>` when a kill is refused: who owns it and why
-  PortKilla thinks so, and whether it runs in your working directory.
+- `portnanny free <port>` to stop what is on a port (exit 0 if already
+  free), `portnanny kill <port> --dry-run --json` to see the decision first.
+- `portnanny whois <port>` when a kill is refused: who owns it and why
+  PortNanny thinks so, and whether it runs in your working directory.
 - Exit 6 means a supervisor (pm2, launchd, Docker, a reloader such as
   nodemon) would undo a plain kill and its tool is not on PATH; stderr names
   the command to run. When the tool is there, `kill` runs it for you and
   reports `action: "stopped"`.
-- `portkilla free-port --prefer 3000` to pick a port instead of fighting
+- `portnanny free-port --prefer 3000` to pick a port instead of fighting
   for one.
-- `portkilla drift` when "the app is not where I expect": servers that
+- `portnanny drift` when "the app is not where I expect": servers that
   ended up off the port their project's .env, package.json, or vite.config
   names, and who holds that port.
-- `portkilla kill --orphaned` to clean up servers left behind by sessions
+- `portnanny kill --orphaned` to clean up servers left behind by sessions
   that have ended.
-- `portkilla list --mine` for the servers you may stop without `--force`.
-- `portkilla doctor --agents` to see how this machine's tools are
+- `portnanny list --mine` for the servers you may stop without `--force`.
+- `portnanny doctor --agents` to see how this machine's tools are
   recognised and what to export.
-- `portkilla mcp` for the same through MCP: `list_ports`, `kill_port`,
-  `whois_port`, `whoami`, `wait_for_port_free`. `portkilla mcp --setup`
+- `portnanny mcp` for the same through MCP: `list_ports`, `kill_port`,
+  `whois_port`, `whoami`, `wait_for_port_free`. `portnanny mcp --setup`
   prints the registration for Claude Code, Cursor, and Codex.
 
-`portkilla agent-docs --write` puts a short version of this into CLAUDE.md
-or AGENTS.md; `portkilla schema <command>` documents every `--json` field.
+`portnanny agent-docs --write` puts a short version of this into CLAUDE.md
+or AGENTS.md; `portnanny schema <command>` documents every `--json` field.

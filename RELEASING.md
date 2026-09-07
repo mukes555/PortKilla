@@ -1,4 +1,4 @@
-# Releasing PortKilla
+# Releasing PortNanny
 
 Releases are automated: pushing a `v*` tag builds a universal DMG + zip and
 publishes a GitHub Release whose notes come straight from `CHANGELOG.md`.
@@ -7,7 +7,7 @@ publishes a GitHub Release whose notes come straight from `CHANGELOG.md`.
 
 Every release's notes are the **matching `CHANGELOG.md` section**, so there is
 one source of truth. `.github/workflows/release.yml` runs
-`PortKilla/scripts/release-notes.sh <version>`, which:
+`PortNanny/scripts/release-notes.sh <version>`, which:
 
 1. Extracts the `## <version>` section from `CHANGELOG.md`.
 2. Wraps it in a standard **"⚡ What's new in vX.Y.Z"** header + an **Install**
@@ -21,7 +21,7 @@ Changed / Fixed / Security / Distribution**. Accumulate them under
 ## Cutting a release
 
 1. Move the `[Unreleased]` notes into a new `## <version> — <YYYY-MM-DD>` section.
-2. Bump `VERSION=` in `PortKilla/scripts/build.sh` and the DMG reference in
+2. Bump `VERSION=` in `PortNanny/scripts/build.sh` and the DMG reference in
    `README.md`.
 3. Merge to `main` (via PR — never push to `main` directly).
 4. Tag and push:
@@ -39,21 +39,21 @@ Changed / Fixed / Security / Distribution**. Accumulate them under
 
 With a `HOMEBREW_TAP_TOKEN` repository secret (a fine-grained personal access
 token with *Contents: read and write* on `mukes555/homebrew-tap`), the release
-workflow renders `packaging/homebrew/portkilla.rb.tmpl` with the version and
-the zip's SHA-256 and pushes it to the tap, so `brew upgrade --cask portkilla`
+workflow renders `packaging/homebrew/portnanny.rb.tmpl` with the version and
+the zip's SHA-256 and pushes it to the tap, so `brew upgrade --cask portnanny`
 sees new releases and Homebrew verifies the download. Without the secret the
 job skips and the tap keeps its `version :latest` cask, which needs
 `brew reinstall` to update. Add the secret under Settings → Secrets and
-variables → Actions in the PortKilla repository.
+variables → Actions in the PortNanny repository.
 
 ## Preview release notes locally
 
 ```bash
-bash PortKilla/scripts/release-notes.sh 1.6.0
+bash PortNanny/scripts/release-notes.sh 1.6.0
 ```
 
 ## Versioning
 
 Semantic-ish: **minor** bump for new features (1.5 → 1.6), **patch** for
 fixes-only (1.6.0 → 1.6.1). The version lives in `scripts/build.sh` and is
-surfaced in the app's Info.plist and the `portkilla version` CLI command.
+surfaced in the app's Info.plist and the `portnanny version` CLI command.

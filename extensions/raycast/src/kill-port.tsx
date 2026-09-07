@@ -5,9 +5,9 @@ import { useEffect, useState } from "react";
 
 const run = promisify(execFile);
 
-// The app binary doubles as the CLI. Symlinking it as `portkilla` on PATH
+// The app binary doubles as the CLI. Symlinking it as `portnanny` on PATH
 // also works; the bundle path is the zero-setup default.
-const CLI = "/Applications/PortKilla.app/Contents/MacOS/PortKilla";
+const CLI = "/Applications/PortNanny.app/Contents/MacOS/PortNanny";
 
 interface Port {
   port: number;
@@ -31,8 +31,8 @@ export default function KillPort() {
     } catch (error) {
       await showToast({
         style: Toast.Style.Failure,
-        title: "PortKilla CLI not found",
-        message: "Install PortKilla.app to /Applications first",
+        title: "PortNanny CLI not found",
+        message: "Install PortNanny.app to /Applications first",
       });
     } finally {
       setIsLoading(false);

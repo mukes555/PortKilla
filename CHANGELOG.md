@@ -4,7 +4,7 @@ All notable changes are documented here. The GitHub Release notes for each
 version are generated automatically from the matching section below, so keep
 entries user-facing and concise.
 
-Format: one `## <version> — <date>` heading per release, with changes grouped
+Format: one `## <version> (<date>)` heading per release, with changes grouped
 under **Added**, **Changed**, **Fixed**, **Security**, or **Distribution**.
 Accumulate work-in-progress notes under **[Unreleased]** as you land PRs; on
 release, rename it to the version and date.
@@ -12,6 +12,40 @@ release, rename it to the version and date.
 ## [Unreleased]
 
 <!-- next -->
+
+## 2.1.0 (2026-09-07)
+
+PortKilla is now PortNanny. The old name said "killer" for an app that
+spends most of its time keeping servers alive and attributed, and it sat
+one letter from a much larger project. Nothing written for the old name
+stops working.
+
+### Changed
+- **Renamed to PortNanny.** New app name and bundle id
+  (`com.mukes555.PortNanny`), `portnanny` command, `PORTNANNY_OWNER` and
+  `PORTNANNY_SESSION`, `portnanny://` links, repository
+  (github.com/mukes555/PortNanny; the old URL redirects), Homebrew cask
+  `portnanny`, and Claude Code plugin `portnanny@portnanny`.
+- **The maid quokka.** New artwork for the icon, the menu bar, the header,
+  the tour, and the banner: a quokka with a cap, a mug, and a laptop.
+- The README and the app's update banner say `brew upgrade` rather than
+  `brew reinstall`, since the cask has been pinned per release since 2.0.
+
+### Added
+- **The old name keeps working**, for at least a year: the `portkilla`
+  command (Homebrew links it next to `portnanny`), `PORTKILLA_OWNER` and
+  `PORTKILLA_SESSION` (read wherever the new names are; `exec` exports
+  both), and `portkilla://kill/3000`.
+- **Preferences move over.** The first launch copies settings, watched
+  ports, guards, history, refusals, and leases from the PortKilla domain
+  into the new one, once, and never over a value the new app has already
+  written. The CLI does the same for the domain it shares with the app.
+
+### Distribution
+- `brew upgrade --cask portnanny` follows the rename (the tap carries
+  `cask_renames.json`): PortKilla.app goes, PortNanny.app comes, and macOS
+  asks again for notifications and Launch at login because it keys both to
+  the bundle id. Every step is in docs/FIRST-RUN.md.
 
 ## 2.0.0 (2026-09-07)
 

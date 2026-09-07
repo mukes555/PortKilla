@@ -1,26 +1,26 @@
-# PortKilla Architecture
+# PortNanny Architecture
 
 A tour of how the app is put together, for anyone touching the code.
 
 ## 10,000-ft view: one core, three front-ends
 
-Everything that knows about ports lives in the **`PortKillaCore`** library
+Everything that knows about ports lives in the **`PortNannyCore`** library
 (Foundation only, no AppKit): the models, the scanners, the kill path, the
 agent guard, the CLI commands and the MCP server. Three executables sit on
 top of it:
 
-- **`PortKilla`**, the menu-bar app. `AppDelegate` is the `@main` entry point,
+- **`PortNanny`**, the menu-bar app. `AppDelegate` is the `@main` entry point,
   but before the GUI launches it hands `argv` to
-  [`PortKillaCLI`](PortKilla/Sources/PortKillaCore/CLI/CLI.swift): a known
+  [`PortNannyCLI`](PortNanny/Sources/PortNannyCore/CLI/CLI.swift): a known
   subcommand runs and exits, anything else starts the app.
-- **`portkilla-cli`** ([Sources/portkilla-cli](PortKilla/Sources/portkilla-cli/main.swift),
-  one file): the same commands without AppKit, so `portkilla list` from a
+- **`portnanny-cli`** ([Sources/portnanny-cli](PortNanny/Sources/portnanny-cli/main.swift),
+  one file): the same commands without AppKit, so `portnanny list` from a
   script or an agent starts in a few milliseconds. `scripts/build.sh` copies
-  it into the bundle as `Contents/Helpers/portkilla`, which is what Homebrew
-  links onto PATH. (The product is not called `portkilla` because on a
-  case-insensitive volume that is the same file as the app's `PortKilla`.)
-- **`PortKillaTests`** links both, so the suite can drive the core directly
-  and spawn the debug `portkilla` as a real process.
+  it into the bundle as `Contents/Helpers/portnanny`, which is what Homebrew
+  links onto PATH. (The product is not called `portnanny` because on a
+  case-insensitive volume that is the same file as the app's `PortNanny`.)
+- **`PortNannyTests`** links both, so the suite can drive the core directly
+  and spawn the debug `portnanny` as a real process.
 
 Subcommands: `list`, `kill`, `free`, `free-port`, `wait`, `open`, `history`,
 `whoami`, `doctor`, `schema`, `agent-docs`, `mcp`, `completions`, `version`,
@@ -54,7 +54,7 @@ per port:
 
 1. **`ProcessTable.capture()`**: one process snapshot for the whole refresh.
    It calls **`NativeScanner`** first.
-2. **`NativeScanner`** ([Services/NativeScanner.swift](PortKilla/Sources/PortKillaCore/Services/NativeScanner.swift))
+2. **`NativeScanner`** ([Services/NativeScanner.swift](PortNanny/Sources/PortNannyCore/Services/NativeScanner.swift))
    walks the pid list once for both the process table and the listening
    sockets (`NativeScanner+Sockets.swift`, which also counts the established
    connections behind each listener). Facts that cannot change after exec
@@ -63,22 +63,22 @@ per port:
    raw `libproc`/`proc_info` syscalls via the **`CLibProc`** C target: PIDs,
    sockets, memory, CPU, working directories, and command lines with **no
    subprocesses** (~19 ms for ~480 processes). This is the fast path.
-3. **`PortScanner`** ([Services/PortScanner.swift](PortKilla/Sources/PortKillaCore/Services/PortScanner.swift))
+3. **`PortScanner`** ([Services/PortScanner.swift](PortNanny/Sources/PortNannyCore/Services/PortScanner.swift))
    asks `NativeScanner` for listeners; if that returns empty (e.g. sandbox or
    an unexpected OS), it **falls back to `/usr/sbin/lsof`** and parses its text
    output. Both paths converge on the same `[PortInfo]`. Command lines pass
    through `CommandRedaction` on the way (`--token=...`, `KEY=...`, URL
-   passwords, bearer tokens), so nothing PortKilla shows, exports, or hands
+   passwords, bearer tokens), so nothing PortNanny shows, exports, or hands
    to an agent carries a secret.
 4. **`DockerService`** decorates ports that map to running containers.
-5. **`ManagedRuntime`** ([Services/ManagedRuntime.swift](PortKilla/Sources/PortKillaCore/Services/ManagedRuntime.swift))
+5. **`ManagedRuntime`** ([Services/ManagedRuntime.swift](PortNanny/Sources/PortNannyCore/Services/ManagedRuntime.swift))
    names the supervisor that would undo a plain kill (a Docker container,
    the outermost pm2 or launchd job, the nearest reloader) and the verb that
    stops it for real. Every kill path plans around it: the CLI in
    `CLIKill+Managed.swift`, the app in `PortManager+Managed.swift`.
-6. **`AgentAttribution`** ([Services/AgentAttribution.swift](PortKilla/Sources/PortKillaCore/Services/AgentAttribution.swift))
+6. **`AgentAttribution`** ([Services/AgentAttribution.swift](PortNanny/Sources/PortNannyCore/Services/AgentAttribution.swift))
    names the AI agent that spawned each listener: a declared
-   `PORTKILLA_OWNER` first, then process ancestry, then the allowlisted
+   `PORTNANNY_OWNER` first, then process ancestry, then the allowlisted
    environment markers agents leave on children (read from the same
    `KERN_PROCARGS2` buffer as the command line). `KillDecision` turns the
    caller's and the target's owners into allow / warn / refuse; every kill
@@ -92,12 +92,12 @@ per port:
 > guard this.
 
 All subprocess calls (lsof/ps/pgrep/docker) go through
-[`CommandRunner`](PortKilla/Sources/PortKillaCore/Services/CommandRunner.swift),
+[`CommandRunner`](PortNanny/Sources/PortNannyCore/Services/CommandRunner.swift),
 which enforces a hard timeout and safe pipe handling.
 
 ## `PortManager`, the hub
 
-[Services/PortManager.swift](PortKilla/Sources/PortKillaCore/Services/PortManager.swift)
+[Services/PortManager.swift](PortNanny/Sources/PortNannyCore/Services/PortManager.swift)
 (+ `PortManagerKills.swift`, `PortManager+WatchGuard.swift`) is the
 `ObservableObject` the entire UI binds to. It owns:
 
@@ -114,16 +114,16 @@ which enforces a hard timeout and safe pipe handling.
 `ReservationStore` keeps port leases in the shared preference domain, so
 the CLI and the app agree on who has claimed which free port.
 
-Kills go through [`ProcessKiller`](PortKilla/Sources/PortKillaCore/Services/ProcessKiller.swift),
+Kills go through [`ProcessKiller`](PortNanny/Sources/PortNannyCore/Services/ProcessKiller.swift),
 which verifies process identity before signalling (PID reuse protection) and
 never silently escalates SIGTERM to SIGKILL.
 
 ## Directory map
 
 ```
-PortKilla/Sources/
+PortNanny/Sources/
   CLibProc/            C shim exposing Darwin libproc/proc_info to Swift
-  PortKillaCore/       The library: Foundation, OSLog, ServiceManagement,
+  PortNannyCore/       The library: Foundation, OSLog, ServiceManagement,
                        UserNotifications; no AppKit
     Models/            PortInfo, TestProcessInfo, PortHistory, DefaultsKey
     Services/          Scanning, attribution, KillDecision, killing, Docker,
@@ -131,7 +131,7 @@ PortKilla/Sources/
     CLI/               Argument parsing, commands (kill, whois, reserve, exec,
                        setup, ...), output schemas, MCP server, the rule-file
                        installer, and the debug-only `__serve` test server
-  PortKilla/           The menu-bar app
+  PortNanny/           The menu-bar app
     App/               AppDelegate (@main), RefusalWatcher (CLI refusals
                        become actionable notifications), DemoReel (dev-only)
     Services/          GlobalHotKey
@@ -142,8 +142,8 @@ PortKilla/Sources/
                        SparklineView
     Workbench/         The full-size window: sidebar, table, projects, agent
                        sessions, watchlist, inspector (WorkbenchModel groups)
-  portkilla-cli/       main.swift, the standalone CLI
-PortKilla/Tests/PortKillaTests/
+  portnanny-cli/       main.swift, the standalone CLI
+PortNanny/Tests/PortNannyTests/
                        Unit tests, plus ScenarioTests which spawn real servers
                        and drive the guard through the CLI as a process
 ```
@@ -152,12 +152,12 @@ PortKilla/Tests/PortKillaTests/
 
 - **macOS-only.** AppKit + SwiftUI + Darwin syscalls. No cross-platform path.
 - **Zero third-party dependencies.**
-- **The package is in a nested dir** (`PortKilla/PortKilla/`), see
+- **The package is in a nested dir** (`PortNanny/PortNanny/`), see
   [CONTRIBUTING.md](CONTRIBUTING.md).
-- **`PortKillaCore` must not import AppKit.** Colors and other UI-only
+- **`PortNannyCore` must not import AppKit.** Colors and other UI-only
   extensions of the models live in the app target (`Views/ModelColors.swift`).
-- **Dev-only hooks** (`PORTKILLA_SNAPSHOT`, `PORTKILLA_DEMO_GIF`,
-  `portkilla __serve <port>`) are compiled only in debug builds and documented
+- **Dev-only hooks** (`PORTNANNY_SNAPSHOT`, `PORTNANNY_DEMO_GIF`,
+  `portnanny __serve <port>`) are compiled only in debug builds and documented
   in CONTRIBUTING.md.
 - Pure, testable logic is deliberately factored into `static` functions
   (`watchEvents`, `parsePortMap`, `namesMatch`, `stableSignature`, ...) so the

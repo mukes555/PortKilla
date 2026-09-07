@@ -18,10 +18,10 @@ labels: bug
 ## Environment
 
 - **macOS version:**
-- **PortKilla version:** <!-- gear → About, or `portkilla version` -->
+- **PortNanny version:** <!-- gear → About, or `portnanny version` -->
 - **Which port(s)/process(es) involved (if relevant):**
-- **Scanner path:** <!-- If a port is missing/wrong: does it show up in `lsof -iTCP -sTCP:LISTEN -n -P`? PortKilla uses a native libproc scanner with an lsof fallback. -->
+- **Scanner path:** <!-- If a port is missing/wrong: does it show up in `lsof -iTCP -sTCP:LISTEN -n -P`? PortNanny uses a native libproc scanner with an lsof fallback. -->
 
 ## Logs / screenshots
 
-<!-- Optional. `portkilla list --json` output can help for scan issues. -->
+<!-- Optional. `portnanny list --json` output can help for scan issues. -->

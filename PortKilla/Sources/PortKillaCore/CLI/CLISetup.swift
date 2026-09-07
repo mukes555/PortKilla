@@ -88,7 +88,7 @@ public enum CLISetup {
         let shellName = (shell as NSString).lastPathComponent
         let completions: String
         switch shellName {
-        case "zsh": completions = "portkilla completions zsh > ~/.zfunc/_portkilla   (with ~/.zfunc in fpath)"
+        case "zsh": completions = "portkilla completions zsh > ~/.zfunc/_portkilla\n(with ~/.zfunc in fpath)"
         case "bash": completions = "portkilla completions bash >> ~/.bash_completion"
         case "fish": completions = "portkilla completions fish > ~/.config/fish/completions/portkilla.fish"
         default: completions = "portkilla completions zsh|bash|fish"
@@ -132,7 +132,8 @@ public enum CLISetup {
             }
             do {
                 let output = try CommandRunner.run(tool, Array(command.dropFirst()), timeout: 30).trimmingCharacters(in: .whitespacesAndNewlines)
-                return Outcome(ok: true, message: output.isEmpty ? "done" : output.replacingOccurrences(of: "\n", with: "\n  "))
+                let said = output.isEmpty ? "" : "\n  " + output.replacingOccurrences(of: "\n", with: "\n  ")
+                return Outcome(ok: true, message: "ran \(tool)\(said)")
             } catch {
                 return Outcome(ok: false, message: "\(command.joined(separator: " ")) failed: \(error.localizedDescription)")
             }

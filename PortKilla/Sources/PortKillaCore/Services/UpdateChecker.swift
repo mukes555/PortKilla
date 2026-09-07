@@ -8,6 +8,11 @@ import Foundation
 public enum UpdateChecker {
 
     public static let releasesPageURL = URL(string: "https://github.com/mukes555/PortKilla/releases/latest")!
+
+    /// The page for one release: a beta is never "latest".
+    public static func releasePage(for version: String) -> URL {
+        URL(string: "https://github.com/mukes555/PortKilla/releases/tag/v\(version)") ?? releasesPageURL
+    }
     private static let latestURL = URL(string: "https://api.github.com/repos/mukes555/PortKilla/releases/latest")!
     /// Betas never become "latest" on GitHub, so opting into them means
     /// reading the recent releases and choosing.
@@ -76,9 +81,10 @@ public enum UpdateChecker {
         guard let data else { return .failed("unexpected response") }
         let candidates = parseTagNames(data)
         guard !candidates.isEmpty else { return .failed("unexpected response") }
-        let newest = candidates.filter { isVersion($0, newerThan: current, includePrereleases: includePrereleases) }
-            .max { isVersion($1, newerThan: $0, includePrereleases: true) }
-        return newest.map { .newer($0) } ?? .upToDate
+        let offered = candidates.filter { isVersion($0, newerThan: current, includePrereleases: includePrereleases) }
+        let newest = offered.compactMap { candidate in Version(candidate).map { (text: candidate, version: $0) } }
+            .max { $0.version < $1.version }
+        return newest.map { .newer($0.text) } ?? .upToDate
     }
 
     /// Rate limiter for the automatic check on launch.

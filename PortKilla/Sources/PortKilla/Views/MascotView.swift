@@ -61,12 +61,13 @@ struct MascotView: View {
         guard let data = context.data else { return nil }
         let pixels = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
         func opaque(_ x: Int, _ row: Int) -> Bool {
-            // The context is bottom-up; rows here count from the top.
-            pixels[((height - 1 - row) * width + x) * 4 + 3] > 128
+            // A bitmap context's memory runs top-down: row 0 is the ear tips.
+            pixels[(row * width + x) * 4 + 3] > 128
         }
         guard let top = (0..<height).first(where: { row in (0..<width).contains { opaque($0, row) } }) else { return nil }
-        // The upper head (ears, brow, eyes): the widest rows are the cheeks.
-        let upperRows = top..<min(height, top + height * 3 / 10)
+        // The upper head only (ears, brow, the shades): further down the
+        // waving hand joins the outline and would widen the box.
+        let upperRows = top..<min(height, top + height * 18 / 100)
         var left = width
         var right = 0
         for row in upperRows {

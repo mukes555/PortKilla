@@ -103,7 +103,7 @@ final class PerformanceFixesTests: XCTestCase {
         manager.activePorts = [mine, daemon]
         manager.hideSystemProcesses = true
         XCTAssertEqual(manager.visiblePorts.map(\.port), [3000])
-        XCTAssertEqual(manager.hiddenSystemPortsCount, 1)
+        XCTAssertEqual(manager.hiddenPortsCount, 1)
         XCTAssertEqual(manager.menuBarBadgeCount, 1)
         manager.hideSystemProcesses = false
         XCTAssertEqual(manager.visiblePorts.map(\.port), [3000, 5353])

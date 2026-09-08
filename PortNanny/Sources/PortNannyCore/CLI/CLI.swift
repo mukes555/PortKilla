@@ -83,7 +83,8 @@ public enum PortNannyCLI {
 
     /// One scan plus the caller's own identity, which the guard compares
     /// against each target's owner. Container names come from a synchronous
-    /// `docker ps` only when asked: `list` prints them, `kill` doesn't need them.
+    /// `docker ps` only when asked, because it costs about a tenth of a
+    /// second; `kill` asks for it only once it has a container in its sights.
     public static func scan(refreshDocker: Bool) -> Scan {
         let table = ProcessTable.capture()
         if refreshDocker {

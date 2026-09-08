@@ -55,11 +55,24 @@ public enum CLIKill {
         return outcome.report.exitCode
     }
 
+    /// Docker publishes every container's port through one backend process,
+    /// so the container's name is the only thing that makes `docker stop`
+    /// possible; without it a kill can only refuse. Naming costs a
+    /// `docker ps`, so it is worth paying for exactly when a target is a
+    /// container we cannot name yet.
+    static func needsContainerNames(_ targets: [PortInfo]) -> Bool {
+        targets.contains { $0.type == .docker && $0.containerName == nil }
+    }
+
     /// The whole kill decision and action, without touching stdout: the CLI
     /// prints the outcome, the MCP server wraps it in a tool result.
     public static func perform(_ options: CLICommand.KillOptions, cwd: String = FileManager.default.currentDirectoryPath) -> Outcome {
-        let scan = PortNannyCLI.scan(refreshDocker: false)
-        let targets = select(from: scan.ports, options: options)
+        var scan = PortNannyCLI.scan(refreshDocker: false)
+        var targets = select(from: scan.ports, options: options)
+        if needsContainerNames(targets) {
+            scan = PortNannyCLI.scan(refreshDocker: true)
+            targets = select(from: scan.ports, options: options)
+        }
         var report = Report(
             action: "", port: options.port, force: options.force, caller: scan.caller,
             targets: targets.map { Report.Target(pid: $0.pid, processName: $0.processName, port: $0.port, proto: $0.proto, agentOwner: $0.agentOwner, connections: $0.connections, projectPath: $0.projectPath, managedBy: $0.managedBy) },

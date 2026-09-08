@@ -20,6 +20,38 @@ final class ManagedRuntimeTests: XCTestCase {
 
     // MARK: - Reloaders
 
+    /// End-to-end testing found `portnanny kill` on a Docker-published port
+    /// answering "a container `docker ps` can name" and stopping nothing,
+    /// because it scanned without asking for container names and so never
+    /// had one. whois asked, and printed the very command kill would not run.
+    func testAKillOnADockerPortAsksForTheContainerName() {
+        let unnamed = PortInfo(port: 45016, pid: 9, processName: "com.docker.backend",
+                               command: "/Applications/Docker.app/Contents/MacOS/com.docker.backend", user: "me",
+                               memoryUsage: "1MB", memorySizeKB: 1024, type: .docker)
+        XCTAssertTrue(CLIKill.needsContainerNames([unnamed]), "a nameless container is exactly when the name is worth fetching")
+
+        let named = PortInfo(port: 45016, pid: 9, processName: "com.docker.backend",
+                             command: "/Applications/Docker.app/Contents/MacOS/com.docker.backend", user: "me",
+                             memoryUsage: "1MB", memorySizeKB: 1024, type: .docker, containerName: "web")
+        XCTAssertFalse(CLIKill.needsContainerNames([named]), "already named, so no second scan")
+
+        let node = PortInfo(port: 3000, pid: 10, processName: "node", command: "node server.js", user: "me",
+                            memoryUsage: "1MB", memorySizeKB: 1024, type: .nodejs)
+        XCTAssertFalse(CLIKill.needsContainerNames([node]), "no docker in sight, no docker ps")
+        XCTAssertFalse(CLIKill.needsContainerNames([]), "nothing to kill, nothing to ask")
+    }
+
+    /// The name is what turns a refusal into a runnable stop command.
+    func testTheContainerNameIsWhatMakesADockerStopPossible() {
+        let named = ManagedRuntime.detect(pid: 9, containerName: "web", type: .docker, in: .empty)
+        XCTAssertEqual(named?.stopCommand(force: false), "docker stop -- web")
+        XCTAssertEqual(named?.stopCommand(force: true), "docker kill -- web")
+
+        let nameless = ManagedRuntime.detect(pid: 9, containerName: nil, type: .docker, in: .empty)
+        XCTAssertEqual(nameless?.kind, .docker, "still recognised as Docker")
+        XCTAssertNil(nameless?.stopCommand(force: false), "but nothing to run, which is why kill must ask for the name")
+    }
+
     func testNodemonParentIsAReloader() throws {
         let t = table([(100, 1, "/bin/zsh"), (700, 100, "node /app/node_modules/.bin/nodemon server.js"), (812, 700, "node /app/server.js")])
         let managed = try XCTUnwrap(detect(812, in: t))

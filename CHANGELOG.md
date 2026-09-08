@@ -12,6 +12,13 @@ release, rename it to the version and date.
 ## [Unreleased]
 
 ### Fixed
+- **`portnanny kill` could not stop a Docker container.** It scanned
+  without asking for container names, so it never had one, and every
+  Docker-published port answered "a container `docker ps` can name" and
+  stopped nothing, while `portnanny whois` on the same port printed the
+  exact `docker stop` command it would not run. The MCP `kill_port` had it
+  too. A kill now fetches the name when a target is a container it cannot
+  name yet, and pays the `docker ps` only then.
 - **Command-Return force killed a selected row but not a typed one.** With
   `kill 3000` in the search field it sent a plain SIGTERM, contradicting
   the keyboard help and the code's own comment.

@@ -21,11 +21,14 @@
   <a href="#privacy-and-safety">Privacy</a>
 </p>
 
-<p align="center">
-  <b>Every listening port, who started it, and the right way to stop it.</b><br>
-  A menu bar app, a Workbench window, a <code>portnanny</code> CLI, and an MCP server,<br>
-  so you free ports in one keystroke and your AI agents never kill each other's servers.
-</p>
+Every listening port on your Mac, who started it, and the right way to stop it.
+A menu bar app, a Workbench window, a `portnanny` CLI, and an MCP server.
+
+`EADDRINUSE` never says what has the port. A server under pm2 or nodemon comes
+straight back when you kill it. And with two AI agents on one machine,
+`kill -9 $(lsof -ti:3000)` eventually takes down the wrong one's work.
+PortNanny names the owner, stops a supervised server the way its supervisor
+expects, and refuses an agent reaching for another agent's port.
 
 <p align="center">
   <picture>
@@ -34,27 +37,10 @@
   </picture>
 </p>
 
-## Three moments
-
-<img src="assets/busy.png" width="300" align="right" alt="The quokka at a desk in front of six monitors of scrolling code">
-
-- **`EADDRINUSE: address already in use`**, and nothing tells you what has the port or whether stopping it is safe.
-- **A server that will not stay dead.** pm2, launchd, Docker, nodemon, `next dev`, `uvicorn --reload`: a plain kill is undone a second later.
-- **Two AI agents on one Mac.** `kill -9 $(lsof -ti:3000)` eventually takes down the other one's server, mid-task, with no trace of who did it.
-
-PortNanny answers all three: it names the owner, stops a supervised server the way its supervisor expects, and refuses an agent that reaches for another agent's port.
-
-## In twenty seconds
-
-<p align="center"><img src="assets/demo.gif" width="580" alt="Press the hotkey, type 3000, press Return: the port is free"></p>
-
-1. <kbd>⌥</kbd><kbd>⌘</kbd><kbd>P</kbd> opens PortNanny from any app. The search field already has focus.
-2. Type what you mean: `3000`, `vite`, `kill 3000`, `open 5173`, `watch 8080`, `free port`, or `>` for commands.
-3. <kbd>⏎</kbd> does it. A server with clients, a lease, or a running agent behind it asks first.
-
-<img src="assets/menubar.png" width="210" align="right" alt="The quokka in the menu bar, next to the number of dev ports">
-
-It lives in the menu bar as the quokka with the count of your dev ports (not every macOS daemon). Pin it as a floating window when you want it to stay, or open the Workbench when you want the whole picture.
+<p align="center">
+  <img src="assets/demo.gif" width="580" alt="Typing 3000 into the search field, pressing Return, and the port is free">
+  <br><sub>Type <code>3000</code>, press Return, the port is free.</sub>
+</p>
 
 ## Install
 
@@ -63,28 +49,21 @@ brew tap mukes555/tap
 brew install --cask portnanny        # later: brew upgrade --cask portnanny
 ```
 
-The cask installs the universal build, clears the Gatekeeper quarantine, and puts `portnanny` on your PATH. Prefer a download? Grab the DMG from [Releases](https://github.com/mukes555/PortNanny/releases/latest); the app is ad-hoc signed, not notarized, so macOS asks once (System Settings > Privacy & Security > Open Anyway on macOS 15, right-click > Open on 13 and 14). Details and uninstall steps: [docs/FIRST-RUN.md](docs/FIRST-RUN.md).
+The cask installs the universal build, clears the Gatekeeper quarantine, and puts `portnanny` on your PATH. There is a DMG in [Releases](https://github.com/mukes555/PortNanny/releases/latest) too; the app is ad-hoc signed rather than notarized, so macOS asks once. Those steps, uninstalling, and [upgrading from PortKilla](docs/FIRST-RUN.md#upgrading-from-portkilla) (the old command, variables, and links all still work) are in [docs/FIRST-RUN.md](docs/FIRST-RUN.md).
 
-**Coming from PortKilla?** Same app, new name since 2.1. `brew upgrade --cask portnanny` follows the rename, your settings and history carry over, and the `portkilla` command, `PORTKILLA_*` variables, `portkilla://` links, and the old repository URL keep working. Details in [docs/FIRST-RUN.md](docs/FIRST-RUN.md#upgrading-from-portkilla).
-
-Without Homebrew, the CLI ships inside the app:
-
-```bash
-ln -s /Applications/PortNanny.app/Contents/Helpers/portnanny /usr/local/bin/portnanny
-portnanny completions zsh            # also bash and fish
-```
+Without Homebrew the CLI ships inside the app, at `PortNanny.app/Contents/Helpers/portnanny`; symlink it onto your PATH and run `portnanny completions zsh` for zsh, bash, or fish.
 
 ## The popover
 
 <img src="assets/palette.png" width="330" align="right" alt="Typing kill 4400 offers to stop the server, and says its watch-mode supervisor goes with it">
 
-- **Type what you mean.** `kill 3000`, `open 5173`, `watch 8080`, `free port`, `>` commands. Return runs it; the bar says exactly what will happen.
-- **Every row tells you enough to decide.** A type tile, the port, the process, and chips for what matters: `exposed` on all interfaces, connected clients, the agent session that started it (teal while it runs, grey once it ended), project, container, a lease, a supervisor.
-- **Two densities, three sizes.** Simple shows the essentials; Advanced adds the command, project chips, CPU with a trend line, and the process tree. Compact, Regular, or Large in Settings.
-- **Calm until you point.** Kill is always there, and Details in Advanced. Open in browser and Watch fade in on hover (VoiceOver has them as row actions). <kbd>⌥</kbd>-click force kills, <kbd>⇧</kbd>-click takes the whole tree.
-- **Supervisors understood.** pm2, launchd, Docker, nodemon, `next dev`, `uvicorn --reload`: a plain kill would be undone, so PortNanny stops it the way its supervisor expects and says so first.
-- **Watch and guard.** Watched ports sit on top with live status, including "free", and notify you when they change. A guard auto-kills whatever grabs a port, except a running agent's server.
-- **Filters and bulk kills.** All, Dev, Databases, Docker, Tests. <kbd>⌘</kbd><kbd>K</kbd> kills the current filter, skipping protected tools and supervised servers.
+<kbd>⌥</kbd><kbd>⌘</kbd><kbd>P</kbd> opens it from any app with the search field focused. Type a port, a process name, or a verb: `kill 3000`, `open 5173`, `watch 8080`, `free port`, or `>` for commands. Return runs it, and the bar above the list says exactly what will happen first.
+
+- **Rows carry what you need to decide.** A type tile, the port, the process, and chips for `exposed` on all interfaces, connected clients, and the agent session behind it (teal while it runs, grey once it ended). Advanced density adds the command, CPU with a trend line, the process tree, and chips for project, container, lease, and supervisor. Compact, Regular, or Large window, in Settings.
+- **Kill is always visible.** Open in browser appears on web rows and Watch on any row, on hover or keyboard selection, and VoiceOver has both as row actions. <kbd>⌥</kbd>-click force kills, <kbd>⇧</kbd>-click takes the whole process tree. Right-click for the rest: open the project in your editor, reveal it in Finder or Terminal, copy the port, PID, or command, stop a Docker container.
+- **Supervisors are understood.** pm2, launchd, Docker, nodemon, `next dev`, `uvicorn --reload`: a plain kill would be undone, so PortNanny runs the supervisor's own stop command and tells you before it does.
+- **Watch and guard.** Watched ports sit above the list when you have not typed or filtered, with live status including "free", and notify you when they change. Add a guard to one and it auto-kills whatever takes that port, except a running agent's server, a protected process, or a system port. A guard that fires repeatedly stands itself down rather than fighting a supervisor.
+- **Filters and bulk kill.** All, Dev, Databases, and Docker filter the list; Tests instead shows running test processes, which are not listening on anything. <kbd>⌘</kbd><kbd>K</kbd> kills the dev servers in view, or the databases or containers when you pick that filter, skipping protected tools and supervised servers.
 
 ## The Workbench
 
@@ -93,7 +72,7 @@ portnanny completions zsh            # also bash and fish
 - **Ports** as a sortable table with project, agent, supervisor, memory, CPU, trend, and age.
 - **Projects** groups servers by folder; **Agents** groups them by session, with one click to clean up what an ended session left behind.
 - **Watchlist** holds watched ports, guards, and port leases; **History** knows who started and who stopped every port, with CSV export.
-- **The inspector** shows who is connected (local, LAN, elsewhere), the evidence behind the owner, the port's history, and a one-click peek at a local web server's status and title.
+- **The inspector** shows who is connected (local, from the local network, from elsewhere), the evidence behind the owner, the port's history, and a peek at a local web server's status and title.
 
 ## For AI agents
 
@@ -101,12 +80,12 @@ portnanny completions zsh            # also bash and fish
 
 Running Claude Code, Codex, Cursor, and friends side by side means `kill -9 $(lsof -ti:3000)` eventually kills the wrong server. PortNanny attributes every dev server to the agent session that started it, from two passive signals: the process tree, and the environment markers agents leave on their children (`CLAUDECODE=1` and the like), which survive `nohup`, pm2, and reparenting. No launcher, no registry.
 
-**One rule everywhere.** An agent that asks to stop another agent's running server, or a server nobody claims, is refused and told why. You get a notification and decide. People are warned, never refused. Ended sessions and editor terminals never lock a port.
+**One rule.** An agent that asks to stop another agent's running server is refused and told why. So is a server nobody claims, which you can switch off in Settings > Agents. Ended sessions never lock a port. People are warned rather than refused, except from an editor's integrated terminal against another agent's live server, where `--force` settles it. When the menu bar app is running, a refusal also raises a notification so you can decide.
 
-```bash
+```console
 $ portnanny kill 3000
 :3000 (PID 812) is owned by Cursor (session 812), not Claude Code (session 46200)
-Refusing to kill another agent's server. Ask the user, or start yours on a free port.
+Refusing to kill another agent's server. Ask the user, or start yours on a free port. Pass --force only if the user says so; run `portnanny whoami` to check how you are identified.
 ```
 
 Set the tools up in one go, or piece by piece:
@@ -118,11 +97,11 @@ portnanny mcp --setup                            # MCP registration for Claude C
 claude plugin marketplace add mukes555/PortNanny && claude plugin install portnanny@portnanny
 ```
 
-The MCP server (`portnanny mcp`) exposes `list_ports`, `whois_port`, `kill_port`, `free_port`, `reserve_port`, `release_port`, `whoami`, and `wait_for_port_free`, so the guard is a tool the agent has rather than a habit it must remember. Ports can be leased before use: `portnanny exec --free-port -- npm run dev` picks a free port, leases it, sets `PORT`, and labels the server; `reserve 3000 --for 10m` holds one by hand. Tools without a session id can export `PORTNANNY_OWNER` and `PORTNANNY_SESSION`. The full compatibility matrix is in [docs/AGENTS.md](docs/AGENTS.md).
+The MCP server gives an agent the guard as a tool rather than a habit it must remember: `list_ports`, `whois_port`, `kill_port`, `free_port`, `reserve_port`, `release_port`, `whoami`, `wait_for_port_free`. Ports can also be leased before use, and `portnanny exec --free-port -- npm run dev` picks a free one, leases it, sets `PORT`, and labels the server. Which tools are recognised and what each should export: [docs/AGENTS.md](docs/AGENTS.md).
 
 ## The CLI
 
-Starts in a few milliseconds, no AppKit, and every command has `--json` and a documented schema (`portnanny schema kill`).
+Starts in a few milliseconds and links no AppKit. The commands that report take `--json`, each with a documented shape (`portnanny schema kill`).
 
 ```bash
 portnanny list [--json] [--mine | --agent <name> | --unowned | --orphaned]
@@ -134,41 +113,43 @@ portnanny whoami                                 # how the guard sees the caller
 portnanny history --port 3000 [--all]            # kills, and refusals with --all
 portnanny free-port --prefer 3000                # first free port in 3000-3999
 portnanny exec --free-port -- npm run dev        # leased, attributed, PORT set
-portnanny reserve 3000 --for 10m                # hold a free port; release, reservations
+portnanny reserve 3000 --for 10m                 # hold a free port; release, reservations
 portnanny drift                                  # servers off the port their config names
 portnanny kill --orphaned                        # left behind by ended agent sessions
 portnanny doctor --agents                        # how every AI tool is recognised here
 ```
 
-Exit codes: `0` done, `1` nothing listening, `2` usage, `3` refused, `4` kill failed, `5` still running after the wait, `6` a supervisor would undo the kill and its tool is not on PATH (the command to run is printed), `70` PortNanny itself failed (for example, the JSON could not be encoded). There is a URL scheme too: `open "portnanny://kill/3000"` (add `?force=1` for SIGKILL; both ask first) or `portnanny://show`.
+Also `open`, `release`, `reservations`, `setup`, `agent-docs`, `mcp`, `schema`, `completions`, and `version`. Scripts get distinct exit codes: `0` done, `1` nothing listening, `3` refused, `5` still running after the wait, `6` a supervisor would undo the kill, and `portnanny help kill` lists the rest. There is a URL scheme too: `open "portnanny://kill/3000"` (add `?force=1` for SIGKILL; both ask first) or `portnanny://show`.
 
 ## Keyboard
+
+In the popover.
 
 | Keys | Action |
 | --- | --- |
 | <kbd>⌥</kbd><kbd>⌘</kbd><kbd>P</kbd> | Open PortNanny from anywhere (changeable in Settings) |
-| <kbd>↑</kbd> <kbd>↓</kbd>, <kbd>→</kbd> <kbd>←</kbd> | Move the selection, expand or collapse the tree |
-| <kbd>⏎</kbd>, <kbd>⌘</kbd><kbd>⏎</kbd> | Kill the selection, force kill |
-| <kbd>⌘</kbd><kbd>O</kbd>, <kbd>⌘</kbd><kbd>C</kbd> | Open `localhost:<port>`, copy the port |
-| <kbd>⌘</kbd><kbd>K</kbd>, <kbd>⌘</kbd><kbd>R</kbd> | Kill the current filter, refresh |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Move the selection |
+| <kbd>→</kbd> <kbd>←</kbd> | Expand or collapse the process tree, once the search field is empty |
+| <kbd>⏎</kbd>, <kbd>⌘</kbd><kbd>⏎</kbd> | Run what you typed or kill the selection, force kill |
+| <kbd>⌘</kbd><kbd>O</kbd>, <kbd>⌘</kbd><kbd>C</kbd> | Open `localhost:<port>`, copy the port (⌘C once the search field is empty) |
+| <kbd>⌘</kbd><kbd>K</kbd>, <kbd>⌘</kbd><kbd>R</kbd> | Bulk kill the current filter, refresh |
 | <kbd>⌘</kbd><kbd>,</kbd>, <kbd>Esc</kbd> | Settings; clear the search, then close |
 
 ## Settings
 
-- **General:** launch at login, refresh interval, confirm before killing, a switch per notification (port freed, port taken, guard, refusal), watched ports and their guards, history length.
-- **Display:** popover size, row density, hide system processes, UDP sockets, and ephemeral ports, automatic peeks, the menu bar icon (traced quokka or the color app icon) and count.
-- **Agents:** the AI tools on this Mac, the guard's switch for servers nobody claims, a project setup with a click per step, and leases with their default length.
-- **Shortcuts:** the global hotkey and a list of everything else.
-- **Protected:** process names that bulk kills never touch (IDEs and tools by default).
-- **About:** updates (a daily check you can turn off, betas if you want them, downloaded by you), debug info for bug reports, reset.
+<img src="assets/menubar.png" width="210" align="right" alt="The quokka in the menu bar, next to the number of ports">
+
+Six panes: **General** (login item, refresh, confirmations, a switch per notification, watched ports), **Display** (size, density, which ports to hide, the menu bar icon and count), **Agents** (the AI tools found here, the unclaimed-server switch, per-tool setup, lease length), **Shortcuts**, **Protected** (names bulk kills never touch), and **About** (updates, debug info, reset).
+
+The menu bar shows the quokka and, if you want it, how many ports you own, leaving out system daemons and your editors. Pin the popover as a floating window when you want it to stay put.
 
 ## Privacy and safety
 
-No accounts, no telemetry. The only network request is the daily release check. Command lines are redacted (`--token=`, `KEY=`, URL passwords, bearer tokens) before they are shown, exported, or handed to an agent. Kills are verified, bulk kills skip protected names and supervised servers, and the one automation that kills without asking, the guard, never touches a running agent's server. Ports and processes come from raw kernel calls (libproc): a full scan takes about 20 ms with no subprocesses.
+No accounts, no telemetry. The only request that leaves your Mac is the daily release check, which you can turn off; the inspector's Peek is an HTTP GET to `127.0.0.1` and goes no further. Command lines are redacted (`--token=`, `KEY=`, URL passwords, bearer tokens) before they are shown, exported, or handed to an agent. Kills verify the process is still the one you meant, bulk kills skip protected names and supervised servers, and the guard, the one automation that kills without asking, never touches a running agent's server. Ports come from kernel calls (libproc) in a few milliseconds, with `lsof` and `ps` as sandbox fallbacks the footer tells you about, and `docker ps` only to name containers.
 
 ## Requirements and building
 
-macOS 13 or newer, Apple Silicon or Intel (one universal binary), nothing to install. To build it yourself:
+To build it yourself:
 
 ```bash
 git clone https://github.com/mukes555/PortNanny.git
@@ -176,7 +157,7 @@ cd PortNanny/PortNanny            # the Swift package is nested
 ./scripts/build.sh                # dist/PortNanny.app; add --dmg for a disk image
 ```
 
-`swift run PortNanny` launches the app and `swift test --disable-sandbox` runs the suite. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the module map in [ARCHITECTURE.md](ARCHITECTURE.md). How the quokka is drawn and wired up: [docs/ARTWORK.md](docs/ARTWORK.md). Security reports: [SECURITY.md](SECURITY.md). What changed when: [CHANGELOG.md](CHANGELOG.md).
+`swift run PortNanny` launches the app and `swift test --disable-sandbox` runs the suite. Then [CONTRIBUTING.md](CONTRIBUTING.md), the module map in [ARCHITECTURE.md](ARCHITECTURE.md), the quokka in [docs/ARTWORK.md](docs/ARTWORK.md), reports in [SECURITY.md](SECURITY.md), history in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

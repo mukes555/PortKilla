@@ -72,7 +72,7 @@ extension PortListView {
             }
             return false
         case KeyCode.return: // runs the typed verb, else kills the selection; ⌘⏎ force kills
-            if runPaletteAction() {
+            if runPaletteAction(force: hasCommand) {
                 return true
             }
             if filter == .tests, let test = selectedTest {

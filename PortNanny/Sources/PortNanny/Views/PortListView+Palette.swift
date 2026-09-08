@@ -81,12 +81,14 @@ extension PortListView {
         PaletteAction.resolve(paletteQuery, ports: portManager.activePorts, manager: portManager)
     }
 
-    /// True when the query had something to run.
-    func runPaletteAction() -> Bool {
+    /// True when the query had something to run. `force` carries the Command
+    /// key from Return, so a typed `kill 3000` force kills like a selected row
+    /// does; the palette bar's own button never forces.
+    func runPaletteAction(force: Bool = false) -> Bool {
         guard let action = paletteAction, action.isRunnable else { return false }
         switch action.kind {
         case .kill(let port):
-            requestKill(port, force: false, killTree: false)
+            requestKill(port, force: force, killTree: false)
         case .open(let port):
             Browser.openLocalhost(port: port)
         case .watch(let port, _):

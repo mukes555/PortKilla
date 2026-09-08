@@ -11,6 +11,22 @@ release, rename it to the version and date.
 
 ## [Unreleased]
 
+### Fixed
+- **Command-Return force killed a selected row but not a typed one.** With
+  `kill 3000` in the search field it sent a plain SIGTERM, contradicting
+  the keyboard help and the code's own comment.
+
+### Changed
+- The README was checked line by line against the code and rewritten
+  around what it found: eighteen claims were wrong or misleading, among
+  them Command-K killing "the current filter" (on All it kills dev
+  servers), "hide UDP sockets" (the switch shows them, and is on),
+  "the only network request" (the inspector's peek is a local one), and
+  a scan taking "about 20 ms with no subprocesses" (kernel calls in a few
+  milliseconds, with lsof and ps as fallbacks). It also documents the
+  right-click menu and that the Tests filter lists test processes rather
+  than ports, neither of which it mentioned before.
+
 <!-- next -->
 
 ## 2.2.0 (2026-09-08)

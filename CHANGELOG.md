@@ -11,6 +11,14 @@ release, rename it to the version and date.
 
 ## [Unreleased]
 
+<!-- next -->
+
+## 2.2.1 (2026-09-08)
+
+Two bugs that end-to-end testing found and the unit suite could not: a
+kill that could never stop a Docker container, and a force kill that only
+worked from the list. The README now describes the app that exists.
+
 ### Fixed
 - **`portnanny kill` could not stop a Docker container.** It scanned
   without asking for container names, so it never had one, and every
@@ -33,8 +41,9 @@ release, rename it to the version and date.
   milliseconds, with lsof and ps as fallbacks). It also documents the
   right-click menu and that the Tests filter lists test processes rather
   than ports, neither of which it mentioned before.
-
-<!-- next -->
+- `Tests/e2e/` holds the harness that caught the Docker bug: the guard and
+  the MCP server driven against real listeners. Manual, not in CI, since
+  it needs real processes and Docker.
 
 ## 2.2.0 (2026-09-08)
 

@@ -144,6 +144,16 @@ the menu bar glyph is traced from that crop, so its framing has rules.
 The prompts that draw the character, the rules, and how to check the
 result are in [docs/ARTWORK.md](docs/ARTWORK.md).
 
+## End-to-end checks
+
+`swift test` builds its own fixtures, so some things it cannot see: it
+missed `portnanny kill` being unable to stop a Docker container, because
+those tests construct a `ManagedRuntime` directly and never run the scan
+that feeds one. `Tests/e2e/` drives the built binary against real
+listeners instead. Manual, not in CI, worth running after a change to
+scanning, attribution, the guard, the supervisors, or the MCP server.
+See [Tests/e2e/README.md](PortNanny/Tests/e2e/README.md).
+
 ## Coding style
 
 The project favors code written **for human brains**: early returns over nested
